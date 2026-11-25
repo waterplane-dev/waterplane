@@ -158,3 +158,26 @@ The LAN identity is sealed with its desktop's token and never stored as a plain 
 The Cloud Run service uses its own key, separate from the keys of other services.
 - asked: 2026-11-22
 
+
+### R-security-033 · shipped
+A laptop's browser can open this desktop over plain Wi-Fi with real HTTPS, without Tailscale: one command on the desktop issues a certificate for one name the person chose, the person trusts it on the laptop by hand, and the desktop trusts that name only on its own encrypted port. The key that could sign another certificate is never kept, and a name the phone app dials is refused.
+- asked: 2026-11-24 (owner: the vault must work over LAN without Tailscale, R-vault-066)
+- shipped: 090dbe58a
+- note: docs/install.md has the steps, SECURITY.md the rule. Not tried in a real Windows browser.
+
+### R-security-034 · shipped
+A web page under a name the local network answers for (this desktop's own `.local` or short name, an `ALLOWED_HOSTS` alias) gets nothing from this desktop without the password or a device token, from a browser on the desktop and from a Tailscale device alike, however it points the name. The name still works as a route with a sign-in, the sign-in screen says why it asks and what to open instead, and addresses, `localhost`, the full `*.ts.net` name, `tailscale serve`, a proxy whose https origin is listed, the apps and local processes are unchanged.
+- asked: 2026-11-25 (owner: fix what the vault multi-device work found)
+- shipped: bd09a8965
+- note: the rule and its residuals are in SECURITY.md (Browser origins).
+
+### R-security-035 · shipped
+A password sign-in under a name the local network answers for ends by itself after 12 hours and works only under such a name, so whoever answers for the name cannot use its cookie for long, nor over the Wi-Fi door or Funnel. The sign-in card says so, and the paired-devices list names the name and when it ends. Sign-ins over the Wi-Fi door, the apps' device tokens and Tailscale are unchanged.
+- asked: 2026-11-25 (owner: "Create backlog items for all remaining work", remainder of R-security-034)
+- shipped: 08bc36a30
+
+### R-security-036 · shipped
+On loopback, this desktop's `*.ts.net` name is trusted only on a port a front door has (none, 80, 443, one `tailscale serve` hands to the daemon on, or one listed in `WATERPLANE_ALLOWED_ORIGINS`), so a hand-made forward on another port is not one. A `tailscale serve` port added while the daemon runs works without a restart.
+- asked: 2026-11-25 (owner: "Create backlog items for all remaining work", remainder of R-security-034)
+- shipped: 08bc36a30
+- note: where the serve config was never readable any port still counts.

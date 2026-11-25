@@ -14,6 +14,7 @@
 import type { IncomingMessage } from "node:http";
 import { isIP } from "node:net";
 import { isProxied, peerKind } from "./net.js";
+import { unverifiedName } from "./origin.js";
 
 export interface RateLimitOpts {
   /** Most requests one key may make in a burst. */
@@ -80,10 +81,19 @@ export class RateLimiter {
  *  everyone in ONE bucket (one attacker starves the rest). serve SETS (never
  *  appends) a single `X-Forwarded-For` to the real source, so when the socket is
  *  loopback AND a proxy header is present, key on that value, if it is an IP.
- *  A header on a non-loopback socket is client-supplied and never trusted. */
+ *  A header on a non-loopback socket is client-supplied and never trusted, nor is one on a request
+ *  under a name the network can fake (a page there sets any header): those share one bucket of their
+ *  own per socket address, so they neither pick their key nor spend the desktop's. */
 export function rateKey(req: IncomingMessage): string {
   const sock = (req.socket.remoteAddress ?? "unknown").replace(/^::ffff:/, "");
-  if (peerKind(sock) !== "loopback" || !isProxied(req.headers ?? {})) return sock;
+  const kind = peerKind(sock);
+  // Asked directly, not through `requestPeerKind`: that answers `public` first for a loopback socket carrying
+  // `Tailscale-Funnel-Request`, which a page under the name can add to pick its own key.
+  // With a proxy header only `Host` counts: a page under the name that rebinds it shows there, one that calls an
+  // address cannot add the header cross-origin, and a Funnel stranger must not pick this bucket with an Origin.
+  const named = isProxied(req.headers ?? {}) ? { host: req.headers.host } : req.headers ?? {};
+  if ((kind === "loopback" || kind === "tailscale") && unverifiedName(named, kind) !== null) return `name:${sock}`;
+  if (kind !== "loopback" || !isProxied(req.headers ?? {})) return sock;
   const raw = req.headers["x-forwarded-for"];
   const last = (Array.isArray(raw) ? raw.join(",") : raw ?? "").split(",").pop()?.trim().replace(/^::ffff:/, "") ?? "";
   return last && isIP(last) ? last : sock;

@@ -27,6 +27,23 @@ const RANK: Record<SessionCostLevel, number> = { fresh: 0, warm: 1, heavy: 2, st
 /** How many sessions' levels this remembers at once. Sessions are per boot. */
 const MAX_REMEMBERED = 60;
 
+/**
+ * The record's key for a session. An id is eight hex characters, so about one in
+ * forty is all digits, and an object lists integer-like keys FIRST whatever the
+ * insertion order: such a session was always "the oldest", evicted by the very
+ * write that recorded it, and its toast came back on every frame, which reads as
+ * a toast that cannot be dismissed. The `#` keeps insertion order meaning age.
+ */
+const keyOf = (id: string): string => (/^\d+$/.test(id) ? `#${id}` : id);
+
+/** `seen` with this session's entry set, the oldest dropped past the bound. */
+function withEntry(seen: Record<string, string>, id: string, value: string): Record<string, string> {
+  const next: Record<string, string> = { ...seen, [keyOf(id)]: value };
+  const ids = Object.keys(next);
+  for (const old of ids.slice(0, Math.max(0, ids.length - MAX_REMEMBERED))) delete next[old];
+  return next;
+}
+
 export interface NoticeVerdict {
   /** Whether this crossing is worth a toast. */
   notice: boolean;
@@ -48,15 +65,10 @@ export function shouldNotice(
   level: SessionCostLevel,
   seen: Record<string, string>,
 ): NoticeVerdict {
-  const already = RANK[seen[sessionId] as SessionCostLevel] ?? 0;
+  const already = RANK[seen[keyOf(sessionId)] as SessionCostLevel] ?? 0;
   if (already >= RANK[level]) return { notice: false, next: seen };
 
-  const next: Record<string, string> = { ...seen, [sessionId]: level };
-  const ids = Object.keys(next);
-  if (ids.length > MAX_REMEMBERED) {
-    for (const id of ids.slice(0, ids.length - MAX_REMEMBERED)) delete next[id];
-  }
-  return { notice: true, next };
+  return { notice: true, next: withEntry(seen, sessionId, level) };
 }
 
 /**
@@ -78,18 +90,13 @@ export function shouldNoticeAgent(
   seen: Record<string, string>,
 ): NoticeVerdict {
   if (agent == null) {
-    if (!(sessionId in seen)) return { notice: false, next: seen };
+    if (!(keyOf(sessionId) in seen)) return { notice: false, next: seen };
     const next = { ...seen };
-    delete next[sessionId];
+    delete next[keyOf(sessionId)];
     return { notice: false, next };
   }
-  if (seen[sessionId] === agent) return { notice: false, next: seen };
-  const next: Record<string, string> = { ...seen, [sessionId]: agent };
-  const ids = Object.keys(next);
-  if (ids.length > MAX_REMEMBERED) {
-    for (const id of ids.slice(0, ids.length - MAX_REMEMBERED)) delete next[id];
-  }
-  return { notice: true, next };
+  if (seen[keyOf(sessionId)] === agent) return { notice: false, next: seen };
+  return { notice: true, next: withEntry(seen, sessionId, agent) };
 }
 
 const SPEND_RANK: Record<SpendWarnLevel, number> = { warn: 1, high: 2 };
@@ -103,12 +110,7 @@ const SPEND_RANK: Record<SpendWarnLevel, number> = { warn: 1, high: 2 };
  */
 export function shouldNoticeSpend(sessionId: string, level: SpendWarnLevel | null, seen: Record<string, string>): NoticeVerdict {
   if (!level) return { notice: false, next: seen };
-  const already = SPEND_RANK[seen[sessionId] as SpendWarnLevel] ?? 0;
+  const already = SPEND_RANK[seen[keyOf(sessionId)] as SpendWarnLevel] ?? 0;
   if (already >= SPEND_RANK[level]) return { notice: false, next: seen };
-  const next: Record<string, string> = { ...seen, [sessionId]: level };
-  const ids = Object.keys(next);
-  if (ids.length > MAX_REMEMBERED) {
-    for (const id of ids.slice(0, ids.length - MAX_REMEMBERED)) delete next[id];
-  }
-  return { notice: true, next };
+  return { notice: true, next: withEntry(seen, sessionId, level) };
 }

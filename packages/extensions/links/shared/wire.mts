@@ -83,6 +83,8 @@ export interface LinksState {
   discovering: { local: boolean; cloud: boolean };
   /** Sentences about what discovery could not do (gcloud missing, a project refused). */
   notes: string[];
+  /** gcloud is signed out and the desktop names a sign-in command: a person may look with it. */
+  signIn?: { name: string; /** A look with it is under way (it may be waiting for an approval). */ looking: boolean };
   /** Where pins are kept, for the README line on the sheet. */
   file: string;
 }
@@ -100,6 +102,8 @@ export type LinksMethods = {
   state: { args: Record<string, never>; result: LinksState };
   /** Start discovery (joins a running one). `cloud: true` forces the slow half past its cache. */
   discover: { args: { cloud?: boolean }; result: LinksState };
+  /** Look at the cloud with the sign-in command. Answers at once; `changed` follows. */
+  lookSignIn: { args: Record<string, never>; result: LinksState };
   /** Probe every pin once. */
   probe: { args: Record<string, never>; result: LinksState };
   /** Pin a found link by its key — the host takes the URL and port from its own discovery. */

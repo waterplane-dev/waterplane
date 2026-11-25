@@ -99,6 +99,9 @@ export interface ConnInfo {
   hostPort: number;
   root: string;
   auth: AuthState;
+  /** The browser certificate's name and end (ms), sent only to a socket that arrived by that name. Absent otherwise. */
+  tlsName?: string;
+  tlsNameUntil?: number;
 }
 
 /** `queueBacklog`'s argument: one backlog item, queued durably. */
@@ -136,6 +139,10 @@ export interface QueueBacklogOpts {
   hold?: boolean;
   /** The app filed these words from a rescue (`shared/rescued.ts`): marks the row, counts it on the launcher. */
   rescued?: Rescued;
+  /** A fresh id the caller just minted (`queue.mintAckId`), with `track` so it can be followed
+   *  (`fireFate`). Never an id that was sent before: the host re-acks that and runs nothing. */
+  ackId?: string;
+  track?: boolean;
 }
 
 /** Ordered background-upload buffer for the session image-annotate flow. */
@@ -305,6 +312,8 @@ export interface CoreApi {
     /** The repo-readings checklist on one repo (null = the sheet's own choice), aimed; the setup feature's `openSetup`. */
     /** The skills & plugins switch on one repo, on its This repo tab or (`target: "all"`) its All repos tab; Claude Code only. */
     openSkills(repoId: string, target?: "repo" | "all"): void;
+    /** The New sheet, on its project or clone tab (`newSheetTab.ts`); no tab = its first. */
+    openNew(tab?: "repo" | "clone"): void;
     /** The Setup check sheet on a repo (null = machine and account), on a scope. */
     openSetupCheck(repoId: string | null, aim?: { scope?: "repo" | "machine" | "account"; weight?: "finding"; screen?: string }): void;
     openSetup(repoId: string | null, aim?: { region?: "setup" | "series" | "optins" | "watch" | "agents"; focus?: "findings" | "context-weight" }): void;
@@ -671,6 +680,8 @@ export interface FeatureManifest {
   hideWhen?: (core: CoreApi) => boolean;
   /** Opens this extension's screen of the phone's own apps (`appsDoor.ts`; core reads it via `useAppsDoor()`). */
   appsDoor?: AppsDoor;
+  /** Opens this extension's screen on one repo from the card of an opt-in offer, by offer id (core reads it via `useOptInDoor()`). */
+  optInDoors?: Readonly<Record<string, (core: CoreApi, repoName: string) => void>>;
 }
 
 /**

@@ -29,6 +29,7 @@ import { showToast } from "../../toast";
 import { track } from "../../usage";
 import { WheelPicker, type WheelPick } from "../../WheelChart";
 import { ModeSection, hasModeSection } from "./ModeSection";
+import { useDialogStep } from "../../backStep";
 import { Button } from "../../kit/Button";
 import { Hint } from "../../kit/Hint";
 
@@ -51,6 +52,7 @@ export interface ModelWheelProps {
 const sentSwitch = new Map<string, { commands: string[]; model?: string; effort?: Effort; at: number }>();
 
 export function ModelWheel(p: ModelWheelProps): ReactNode {
+  useDialogStep(true, p.onClose);
   // Portalled with its scrim: a tap anywhere off the wheel closes it, and is
   // not also a tap on whatever is underneath.
   return createPortal(<>

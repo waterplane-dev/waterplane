@@ -12,13 +12,16 @@
  * in again anyway, and a row with no token would be a device in the list that
  * can no longer do anything — a lie about who is paired.
  *
+ * A row made under a name only the local network vouches for (`under`) ends by itself
+ * (`deviceEndsAt`): from that moment it is as good as revoked, and the next write drops it.
+ *
  * `lastSeenAt`/`lastKind` are written at most once per `DEVICE_SEEN_THROTTLE_MS`
  * per device, so a busy socket is not a disk write per request.
  */
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { chmodSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { cleanDeviceRow, deviceSeenDue, normalizeDeviceName, sortDevices, type DeviceRow, type DeviceScope, type PeerKind } from "@waterplane/shared";
+import { cleanDeviceRow, deviceEndsAt, deviceSeenDue, normalizeDeviceName, sortDevices, type DeviceRow, type DeviceScope, type PeerKind } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
 import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
 
@@ -57,6 +60,11 @@ export class DeviceLedger {
     } catch { this.rows = []; }
   }
 
+  /** Rows that still count at `now`. */
+  private live(now: number): StoredRow[] {
+    return this.rows.filter((r) => { const end = deviceEndsAt(r); return end === null || now < end; });
+  }
+
   private persist(): void {
     mkdirSync(dirname(this.file), { recursive: true });
     writeJsonAtomic(this.file, { devices: this.rows }, { mode: 0o600 });
@@ -64,15 +72,17 @@ export class DeviceLedger {
   }
 
   /** Issue a token for a new device. The token is returned here and nowhere else.
-   *  `scope` is stored on the row (only "passive" exists; absent = full). */
-  mint(name: unknown, kind: PeerKind | null, now = Date.now(), scope?: DeviceScope): { token: string; row: DeviceRow } {
+   *  `scope` is stored on the row (only "passive" exists; absent = full); `under` makes it a name sign-in. */
+  mint(name: unknown, kind: PeerKind | null, now = Date.now(), scope?: DeviceScope, under?: string): { token: string; row: DeviceRow } {
     const token = randomBytes(32).toString("base64url");
     let id: string;
     do { id = randomBytes(9).toString("base64url"); } while (this.rows.some((r) => r.id === id));
     const row: StoredRow = {
       id, name: normalizeDeviceName(name) ?? "device", createdAt: now, lastSeenAt: now, lastKind: kind, tokenHash: hashToken(token),
       ...(scope === "passive" ? { scope } : {}),
+      ...(under !== undefined ? { under } : {}),
     };
+    this.rows = this.live(now);
     this.rows.push(row);
     if (this.rows.length > DEVICE_LEDGER_MAX) {
       this.rows.sort((a, b) => b.lastSeenAt - a.lastSeenAt);
@@ -83,19 +93,19 @@ export class DeviceLedger {
   }
 
   /** The row a token belongs to, or null. Constant-time over the whole ledger. */
-  lookup(tok: string | null | undefined): DeviceRow | null {
+  lookup(tok: string | null | undefined, now = Date.now()): DeviceRow | null {
     if (!tok || tok.length > 256) return null;
     const want = Buffer.from(hashToken(tok), "hex");
     let hit: StoredRow | null = null;
     for (const r of this.rows) {
       if (timingSafeEqual(Buffer.from(r.tokenHash, "hex"), want) && !hit) hit = r;
     }
-    return hit ? publicRow(hit) : null;
+    return hit && this.live(now).includes(hit) ? publicRow(hit) : null;
   }
 
   /** The public row for an id, or null. */
-  get(id: string): DeviceRow | null {
-    const r = this.rows.find((x) => x.id === id);
+  get(id: string, now = Date.now()): DeviceRow | null {
+    const r = this.live(now).find((x) => x.id === id);
     return r ? publicRow(r) : null;
   }
 
@@ -110,8 +120,8 @@ export class DeviceLedger {
   }
 
   /** The rows as the phone sees them (never a hash), `current` marked. */
-  list(currentId?: string | null): DeviceRow[] {
-    return sortDevices(this.rows.map((r) => {
+  list(currentId?: string | null, now = Date.now()): DeviceRow[] {
+    return sortDevices(this.live(now).map((r) => {
       const row = publicRow(r);
       if (currentId && r.id === currentId) row.current = true;
       return row;
@@ -141,5 +151,5 @@ export class DeviceLedger {
 }
 
 function publicRow(r: StoredRow): DeviceRow {
-  return { id: r.id, name: r.name, createdAt: r.createdAt, lastSeenAt: r.lastSeenAt, lastKind: r.lastKind, ...(r.scope === "passive" ? { scope: r.scope } : {}) };
+  return { id: r.id, name: r.name, createdAt: r.createdAt, lastSeenAt: r.lastSeenAt, lastKind: r.lastKind, ...(r.scope === "passive" ? { scope: r.scope } : {}), ...(r.under !== undefined ? { under: r.under } : {}) };
 }

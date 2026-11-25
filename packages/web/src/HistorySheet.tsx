@@ -10,6 +10,8 @@ import { Button } from "./kit/Button";
 import { RowSub } from "./kit/Row";
 import { Hint } from "./kit/Hint";
 import { Tag } from "./kit/Tag";
+import { copyText } from "./api";
+import { showToast } from "./toast";
 
 interface Props {
   title: string;
@@ -68,7 +70,7 @@ export function HistorySheet({ title, entries, pinnedEntryId, onClose, onResend,
                 <RowSub>{ago(e.sentAt)}</RowSub>
                 <span className="hist-actions">
                   <Button className={pinned ? "active" : undefined} title={pinned ? "unpin from overview" : "pin as overview label"} onClick={() => onPin(pinned ? null : e.id)}><Pin size={14} fill={pinned ? "currentColor" : "none"} /></Button>
-                  <Button title="copy prompt" onClick={() => void navigator.clipboard?.writeText(e.text)}><Copy size={14} /></Button>
+                  <Button title="copy prompt" onClick={() => void copyText(e.text).then((ok) => showToast(ok ? "prompt copied" : "the clipboard refused it here — press and hold the words to select them"))}><Copy size={14} /></Button>
                   <Button title="re-send" onClick={() => onResend(e.text)}><CornerUpLeft size={14} /></Button>
                 </span>
               </div>

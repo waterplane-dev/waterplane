@@ -20,7 +20,7 @@
  * point, so 2% ≈ $30 and 5% ≈ $75. A different plan moves that rate; the
  * percent pair is the one that follows it.
  */
-import { fmtUsd, fmtUsdShort } from "./pricing.js";
+import { fmtUsd } from "./pricing.js";
 
 export interface SpendWarnCfg {
   /** Draw the marks at all. */
@@ -95,6 +95,6 @@ export function spendWarnOf(costUsd: number | null | undefined, usdPerPct: numbe
   const at = level === "high" ? cfg.highUsd : cfg.warnUsd;
   return {
     level, by: "usd", at,
-    text: `This session has spent ${fmtUsd(costUsd)} at list prices — past your ${level === "high" ? "red" : "orange"} mark at ${fmtUsdShort(at)} (no weekly limit reading to measure it against).`,
+    text: `This session has spent ${fmtUsd(costUsd)} at list prices — past your ${level === "high" ? "red" : "orange"} mark at ${fmtUsd(at)} (no weekly limit reading to measure it against).`,
   };
 }

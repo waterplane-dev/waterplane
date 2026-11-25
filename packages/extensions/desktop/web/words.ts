@@ -130,6 +130,10 @@ export function streamLine(
 /** The camera button's word, as drawn in fullscreen (and its long-press title everywhere). */
 export const SHOT = "screenshot";
 export const SHOT_TITLE = "screenshot — the whole desktop at full resolution, saved into this session's repo's .claude/outbox/ (the gallery)";
+/** The second button: the same picture, left in the DESKTOP's clipboard — never this device's. */
+export const CLIP_SHOT = "copy on desktop";
+export const CLIP_SHOT_TITLE = "copy on desktop — a screenshot of the whole desktop at full resolution, into the desktop's own clipboard (not this device's): paste it in an app over there";
+export const CLIP_SHOT_BUSY = "Copying a screenshot into the desktop's clipboard…";
 /** A tap with no repo on screen: where it WOULD go, and how to give it one. */
 export const SHOT_NO_REPO = "No screenshot: there is no repo to put it in — open the desktop from a session; it goes into that repo's .claude/outbox/.";
 export const SHOT_OFFLINE = "No screenshot: no connection to the desktop.";
@@ -140,6 +144,12 @@ export function shotReceipt(r: { file: { relPath: string } } | { error: string }
   if ("file" in r) return `Screenshot saved to ${repoName}/${r.file.relPath} — full resolution, in the gallery.`;
   const why = r.error.trim().replace(/\.$/, "") || "no reason given";
   return `No screenshot: ${why}.`;
+}
+
+/** The clipboard button's receipt: whose clipboard holds it, or the desktop's reason. */
+export function clipShotReceipt(r: { error: string } | null): string {
+  if (!r) return "Screenshot is in the desktop's clipboard, full resolution — paste it in an app there.";
+  return `No screenshot: ${r.error.trim().replace(/\.$/, "") || "no reason given"}.`;
 }
 
 /** The host's capture-error line. The helper's reason is already a sentence with its own full stop —

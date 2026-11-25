@@ -336,21 +336,25 @@
    not resize the grid by existing (`.conn-banner.floating`, same argument).
    `pointer-events` is off on the group and back on for what you can actually
    press, so the corner of the terminal stays pannable between the buttons. */
+.term-zoom-anchor { position: absolute; top: 6px; right: 8px; width: 0; height: 0; }
+.screen:has(> .term-zoom) { position: relative; }
+/* `top`/`right` are `useCornerDrag.ts`'s: at the anchor, or where it was dragged to. */
 .term-zoom {
-  position: absolute; top: 6px; right: 8px; z-index: 5;
+  position: absolute; z-index: 5;
   display: flex; align-items: center; gap: var(--sp-4);
   pointer-events: none;
 }
+.term-zoom[data-off] { display: none !important; }
 .term-zoom > * { pointer-events: auto; }
 /* Whole or not drawn (`useWholeBars.ts`): with the keyboard up the terminal can
    be a strip shorter than these keys, and the row was drawn cut across the
    output. Under ~two key heights of terminal the corner is not drawn at all.
    `term-wrap` is sized by the flex column, so size containment costs nothing. */
 .term-wrap { container: termwrap / size; }
-@container termwrap (max-height: 96px) { .term-zoom { display: none; } }
+@container termwrap (max-height: 96px) { .term-zoom-anchor { display: none; } }
 /* Below the floating connection banner while it is up: under it the buttons were half covered
    and untappable (owner's 11-18 screenshot). The banner is one line, so one line down. */
-.term-wrap:has(> .conn-banner.floating) .term-zoom { top: calc(6px + 2 * var(--sp-6) + 1.5 * var(--fs-12) * var(--ui-font, 1)); }
+.term-wrap:has(> .conn-banner.floating) .term-zoom-anchor { top: calc(6px + 2 * var(--sp-6) + 1.5 * var(--fs-12) * var(--ui-font, 1)); }
 /* The reader's subtree carries its own `--ui-font`, so the wrapper must not be
    a box: `display: contents` keeps `.tr`'s `height: 100%` resolving against
    `.term-wrap` while still passing the inherited property down. */
@@ -361,7 +365,7 @@
    controls stacked in one place is one control you can hit and one you cannot.
    Keyed on `data-typing`, which `App` already stamps on <html> for this mode,
    so nothing has to be threaded through the terminal to know. */
-html[data-typing="1"] .term-zoom { top: calc(env(safe-area-inset-top) + 48px); }
+html[data-typing="1"] .term-zoom-anchor { top: calc(env(safe-area-inset-top) + 48px); }
 /* One height and one minimum width for every button in the group (owner's
    ask: lower and more even). `.key`'s 44px fingertip is for header rows; this
    group floats over the terminal, where every pixel of height hides output.
@@ -488,6 +492,10 @@ html[data-typing="1"] .term-zoom { top: calc(env(safe-area-inset-top) + 48px); }
   position: fixed; inset: 0; z-index: 90; background: var(--bg); color: var(--fg); display: flex; overflow-y: auto;
   padding: calc(24px + env(safe-area-inset-top)) var(--sp-16) calc(24px + env(safe-area-inset-bottom));
 }
+/* What the card says is its subject, not a footnote: body size and colour, and a name that fits stays whole. */
+.auth-gate p.set-note { font-size: calc(var(--fs-14) * var(--ui-font, 1)); color: var(--fg); }
+.auth-gate p.set-note code { font-size: calc(var(--fs-13) * var(--ui-font, 1)); overflow-wrap: anywhere; display: inline-block; max-width: 100%; box-sizing: border-box; }
+.auth-card .auth-input { min-height: 44px; }
 .auth-title { font-size: calc(var(--fs-18) * var(--ui-font, 1)); font-weight: var(--fw-semibold); margin-bottom: var(--sp-10); }
 .auth-input {
   width: 100%; box-sizing: border-box; padding: var(--sp-10) var(--sp-12); font-size: calc(var(--fs-15) * var(--ui-font, 1));

@@ -133,3 +133,11 @@ On a desktop browser the device label reads as this device, not 'on this phone'.
 - asked: 2026-11-12
 - shipped: 9d10580f5, 54ebaf81b
 
+### R-desktop-022 · shipped
+The live desktop's screenshot button works whenever the live view does: when macOS refuses the host's own screenshot tool (node lost Screen Recording, as after a node upgrade), the desktop helper takes the picture with its own grant. When neither can, the receipt says which permission is missing in words, not the failed command.
+- asked: 2026-11-24 (owner, marked screenshot of "could not create image from display")
+- shipped: 8f9f99428
+
+### R-desktop-023 · shipped
+Beside the live desktop view's camera button, in the toolbar and in fullscreen, a second button takes the same full-resolution screenshot of the whole desktop into the desktop's own clipboard, never the watching device's. A line says it is there, or why not. R-desktop-020 (one place to take a screenshot, this view) still holds.
+- asked: 2026-11-24 (owner, a screenshot of the view)

@@ -314,6 +314,35 @@ export function staleTaskNote(taskArgs: string, names: Pick<LauncherNames, "lega
 /** `packages/host/dist/cli` → the install root, a checkout's or the npm package's. */
 const ROOT = resolve(import.meta.dirname, "../../../..");
 
+/**
+ * `lan-cert`'s arguments as WSL reads them. The command runs in the install's folder inside WSL, so the
+ * folder `ca.cer` goes to is spelled out: `--out`, or the folder the person is in, as a `/mnt` path.
+ */
+export function lanCertWslArgs(args: string[], cwd: string): string[] | { error: string } {
+  const toDir = (p: string): string | null => {
+    if (p.startsWith("/")) return p; // already WSL's spelling
+    const abs = win32.resolve(cwd, p);
+    return /^[a-z]:\\/i.test(abs) ? toWsl(abs) : null;
+  };
+  const refuse = (p: string) => ({ error: `${p} is not a folder on a drive. Pass --out with one, C:\\Users\\you, or as WSL spells it, /mnt/c/Users/you.` });
+  const out: string[] = [];
+  let given = false;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    const split = a === "--out" && args[i + 1] !== undefined && !args[i + 1]!.startsWith("--");
+    if (!split && !a.startsWith("--out=")) { out.push(a); continue; }
+    const raw = split ? args[++i]! : a.slice("--out=".length);
+    given = true;
+    if (!raw) { out.push(a); continue; } // the command itself says that --out needs a value
+    const dir = toDir(raw);
+    if (dir === null) return refuse(raw);
+    out.push("--out", dir);
+  }
+  if (args[0] !== "issue" || given || args.includes("--out")) return out;
+  const here = toDir(cwd);
+  return here === null ? refuse(cwd) : [...out, "--out", here];
+}
+
 const HELP = (kind: InstallKind): string => `${BRAND.slug} on Windows — the host runs inside WSL2, driven from here.
 
 usage: ${kind === "npm" ? BRAND.slug : "node scripts/windows/host.mjs"} <command>
@@ -323,6 +352,9 @@ usage: ${kind === "npm" ? BRAND.slug : "node scripts/windows/host.mjs"} <command
   doctor [--json]       the preflight, run inside WSL where the host runs
   autostart [--remove]  start at logon, come back on wake, unlock and within 10 minutes of a crash
 ${kind === "npm" ? "  update                stop, npm install -g " + BRAND.slug + "@latest, start again if it was up\n" : "  dev                   the built host in WSL + Vite dev here\n"}  pair [--json]         a pairing code for a phone, from the running host
+  lan-cert issue|show|remove   a certificate for this desktop that a laptop's browser on the same
+                        network can trust (\`lan-cert help\`; --out takes a folder on a drive, C:\\Users\\you,
+                        or as WSL spells it, /mnt/c/Users/you)
   version | help
 `;
 
@@ -343,6 +375,8 @@ export interface LauncherMachine {
   sleep: (ms: number) => Promise<void>;
   /** PIDs of the keepers running for this install. */
   keepers: () => number[];
+  /** The folder the person is in. */
+  cwd: string;
   /** The caller has just built (`scripts/windows/host.mjs`'s first build): this run builds no second time. */
   justBuilt: boolean;
 }
@@ -643,6 +677,11 @@ export async function run(argv: string[], root: string = ROOT, machine: Partial<
         if (!existsSync(join(root, "packages/host/dist/main.js"))) build();
         return wsl(`${ENV_PREFIX}node packages/host/dist/main.js --doctor ${rest.map(shq).join(" ")}`).status ?? 1;
       case "pair": return inWsl(["pair", ...rest]);
+      case "lan-cert": {
+        const a = lanCertWslArgs(rest, machine.cwd ?? process.cwd());
+        if ("error" in a) { console.error(`${tag} ${a.error}`); return 1; }
+        return inWsl(["lan-cert", ...a]);
+      }
       case "update": {
         if (kind !== "npm") die("a checkout updates with `git pull` and `npm run restart`.");
         // Up, or a keeper between two restarts of it: either way it comes back after the update.

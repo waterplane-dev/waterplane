@@ -46,6 +46,8 @@ export function wireFns(c: QueueCtx): WireFns {
   function onBacklogAck(msg: Msg<"backlog.ack">): void {
     const timer = ackTimers.current.get(msg.ackId);
     if (timer != null) { clearTimeout(timer); ackTimers.current.delete(msg.ackId); }
+    // Before the row is retired, as `onOpAck` does (`fireFate.ts`).
+    noteFireAck(msg.ackId, msg.ok, undefined, msg.reason);
     if (msg.ok) { noteReceiptRemoval(msg.ackId); writeOutbox(outboxRef.current.filter((e) => e.ackId !== msg.ackId)); }
     else failOutbox(msg.ackId, msg.reason || "could not queue");
     releaseLane();

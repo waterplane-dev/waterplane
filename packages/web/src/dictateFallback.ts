@@ -21,6 +21,19 @@ export interface FallbackFacts {
   status?: DictateStatus;
 }
 
+/** A framed page (a VS Code tab) is refused the microphone by its frame: no engine can listen, and no
+ *  permission the person could give changes that. Said at the tap. */
+export const MIC_REFUSED_BY_FRAME = "this window is not given the microphone — use your computer's own dictation in the box, or open the app in a browser";
+
+/** False only when the page policy names the microphone and refuses it; no policy API = allowed. */
+export function frameAllowsMic(doc: unknown): boolean {
+  try {
+    const d = doc as { permissionsPolicy?: Policy; featurePolicy?: Policy } | undefined;
+    return (d?.permissionsPolicy ?? d?.featurePolicy)?.allowsFeature("microphone") !== false;
+  } catch { return true; }
+}
+type Policy = { allowsFeature(feature: string): boolean };
+
 /** The pill's face while the phone's recogniser is listening. */
 export const FALLBACK_FACE = "phone recogniser";
 

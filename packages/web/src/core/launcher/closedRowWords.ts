@@ -10,9 +10,8 @@
  * drops the line) rather than guessing. An old row renders exactly as before:
  * its title, and nothing else from here.
  *
- * `isAutoClosed` is the ONE bucketing function behind both the
- * "closed automatically · N" chip and the cut it opens (a count on a control
- * is a filter).
+ * `closedCut` is the ONE bucketing function behind both a chip's number and
+ * the cut it opens (a count on a control is a filter).
  *
  * No React, no DOM — tested by `closedRowWords.test.mjs` under `node --test`.
  */
@@ -53,9 +52,16 @@ export function isAutoClosed(c: ClosedSession): boolean {
   return c.closedBy === "auto-done" || c.closedBy === "auto-slot";
 }
 
-/** `quiet` is the everyday case (said small), `auto` the host's own close
- *  (marked), `note` an end worth a second look (exit, limit). */
-export type ClosedTone = "quiet" | "auto" | "note";
+/** Nobody closed it: the desktop restarted under it, or it ended while
+ *  the host was not running to see it. */
+export function isCutOff(c: ClosedSession): boolean {
+  return c.closedBy === "reboot" || c.closedBy === "lost";
+}
+
+/** `quiet` is the everyday case (said small), `auto` the host's own close and
+ *  `cut` one nobody chose (both marked with a pill), `note` an end worth a
+ *  second look (exit, limit). */
+export type ClosedTone = "quiet" | "auto" | "cut" | "note";
 
 /** Why it ended, in words; absent `closedBy` ⇒ nothing. */
 export function closedReason(c: ClosedSession): { text: string; tone: ClosedTone } | undefined {
@@ -71,6 +77,8 @@ export function closedReason(c: ClosedSession): { text: string; tone: ClosedTone
     }
     case "limit":
       return { text: c.resumedAs ? "stopped at usage limit — reopened" : "stopped at usage limit", tone: "note" };
+    case "reboot": return { text: "stopped by a desktop restart", tone: "cut" };
+    case "lost": return { text: "ended while the desktop was not watching", tone: "cut" };
     default: return undefined;
   }
 }
@@ -110,16 +118,30 @@ export function closedMeta(c: ClosedSession, now: number): string[] {
   return out;
 }
 
-/** The one filter this list has: everything, or only the host's own closes. */
-export type ClosedFilter = "auto" | null;
+/** This list's filters: what the person marked, the sessions nobody closed, the host's own closes. */
+export const CLOSED_FILTERS = ["starred", "flagged", "cut", "auto"] as const;
+export type ClosedFilterKey = (typeof CLOSED_FILTERS)[number];
+export type ClosedFilter = ClosedFilterKey | null;
+// closed: the keys are this screen's own chips, never on the wire
+export const CLOSED_FILTER_LABEL: Record<ClosedFilterKey, string> = {
+  starred: "starred",
+  flagged: "flagged",
+  cut: "stopped unexpectedly",
+  auto: "closed automatically",
+};
 
-/** The rows a filter shows — through `isAutoClosed`, the same function the
- *  chip's number is counted with. */
+/** The rows a filter shows — and, by length, the number on its chip. */
 export function closedCut(rows: readonly ClosedSession[], f: ClosedFilter): ClosedSession[] {
-  return f === "auto" ? rows.filter(isAutoClosed) : [...rows];
+  switch (f) {
+    case "starred": return rows.filter((c) => !!c.starred);
+    case "flagged": return rows.filter((c) => !!c.followUp);
+    case "cut": return rows.filter(isCutOff);
+    case "auto": return rows.filter(isAutoClosed);
+    case null: return [...rows];
+  }
 }
 
 /** "2 of 7 shown — closed automatically": what the filtered view hides. */
-export function closedFilterWords(shown: number, total: number): string {
-  return `${shown} of ${total} shown — closed automatically`;
+export function closedFilterWords(shown: number, total: number, f: ClosedFilterKey): string {
+  return `${shown} of ${total} shown — ${CLOSED_FILTER_LABEL[f]}`;
 }

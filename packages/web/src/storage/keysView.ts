@@ -55,6 +55,8 @@ export const LS_VIEW = {
    * fix is not to send it).
    */
   launchLast: lsKey("launchLast"),
+  /** The new-project sheet boxes this person changed (`newProjectPicks.ts`): desktop-scoped, since the boxes are that desktop's. */
+  newProjectPicks: lsKey("newProjectPicks"),
   /** Models taken OFF the model wheel (`WheelPicker`): hidden, not shown, so a new one appears by itself. */
   wheelHidden: lsKey("wheelHidden"),
   /** Give the terminal the chrome's rows back while the compose box has focus
@@ -72,7 +74,8 @@ export const LS_VIEW = {
   widePanelW: lsKey("widePanelW"), // the wide side panel (`.ws-panel`, `BesideGrip.tsx`), px; absent = CSS default
   sessChromeH: lsKey("sessChromeH"), // the session header + status line's dragged height cap (`chromeCap.ts`), px; absent = all of it
   launcherChromeH: lsKey("launcherChromeH"), // the launcher's top bar + strips, dragged height cap (`LauncherChrome.tsx`), px; absent = all of it
-  agentListH: lsKey("agentListH"), // the reader's agent list, dragged height cap (`useDragCap.ts`), px; absent = all of it
+  agentListH: lsKey("agentListH"), // the reader's agent rows + outline count line, dragged height cap (`TvTop.tsx`), px; absent = all of it
+  outlineH: lsKey("outlineH"), // the reader's outline drawer, dragged height (`TvOutline.tsx`), px; absent = its usual 45%
   /** Drop the keyboard after a send · the hold card (`ShortcutCard.tsx`): "0" off, absent = on + toast unsaid. */
   closeKbOnSend: lsKey("closeKbOnSend"), shortcutCard: lsKey("shortcutCard"),
   busySend: lsKey("busySend"), // Send on a working session: "" ask, else the remembered "now"/"idle"

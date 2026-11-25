@@ -3,11 +3,12 @@
  * engine (`engine.mts`). Contributed through the same `HostPluginApi` an external plugin gets.
  *
  * Spends nothing: `lsof`, `tailscale serve status`, `gcloud … list`, `git grep` and one HEAD per pin,
- * each with a time bound and no shell. Nothing runs until the phone asks — no poller.
+ * each with a time bound and no shell. A look with a sign-in command (`signin.mts`) is a tap. Nothing runs until the phone asks — no poller.
  */
 import { access, constants } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { BRAND, handleAll, makeEnvReader, type HostPluginApi } from "@waterplane/shared";
 import { PUSH_CHANGED, type LinksMethods } from "../shared/wire.mjs";
 import { createEngine, type Engine, type Roots } from "./engine.mjs";
@@ -37,9 +38,14 @@ export async function defaultRoots(): Promise<Roots> {
   return {
     root: (env("ROOT") || "").trim() || join(home, "dev"),
     file: join(configDir, "links.json"),
+    cloudFile: join(configDir, "links-cloud.json"),
     lsofBin: (await findBin("lsof", ["/usr/sbin/lsof", "/usr/bin/lsof"])) ?? "lsof",
     tailscaleBin: await findBin("tailscale", ["/opt/homebrew/bin/tailscale", "/usr/local/bin/tailscale", "/Applications/Tailscale.app/Contents/MacOS/Tailscale"]),
     gcloudBin: await findBin("gcloud", ["/opt/homebrew/bin/gcloud", "/usr/local/bin/gcloud", join(home, "google-cloud-sdk", "bin", "gcloud")]),
+    signInFile: join(configDir, "links-signin.json"),
+    scanCli: fileURLToPath(new URL("./cloudscan-cli.mjs", import.meta.url)),
+    // Not a repo: a cwd inside one would name whichever session works there as the one that asked.
+    lookCwd: configDir,
     gitBin: (await findBin("git", ["/usr/bin/git", "/opt/homebrew/bin/git"])) ?? "git",
     run,
     fetch: globalThis.fetch,
@@ -54,6 +60,7 @@ export function serve(api: Pick<HostPluginApi, "handle" | "push">, engine: Engin
   return handleAll<LinksMethods>(api, {
     state: () => engine.state(),
     discover: (a) => engine.discover({ cloud: (a as { cloud?: unknown } | null)?.cloud === true }),
+    lookSignIn: () => engine.lookSignIn(),
     probe: () => engine.probe(),
     pin: (a) => engine.pin(String((a as { key?: unknown } | null)?.key ?? "")),
     add: (a) => engine.add((a ?? {}) as Parameters<Engine["add"]>[0]),
@@ -67,6 +74,7 @@ let off: (() => void) | null = null;
 export async function activate(api: HostPluginApi): Promise<void> {
   const engine = createEngine(await defaultRoots(), () => { api.push(PUSH_CHANGED, { at: Date.now() }); });
   off = serve(api, engine);
+  api.optIn("links", async ({ worktree }) => engine.optIn((await api.repo(worktree))?.name ?? null));
 }
 
 export function deactivate(): void {

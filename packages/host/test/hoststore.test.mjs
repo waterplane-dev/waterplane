@@ -207,14 +207,14 @@ test("peer-jobs.json is a named ledger, not 'not in this catalogue'", () => {
   assert.equal(rowOf(rep, "live").count, 1);
 });
 
-test("the LAN identity, LAN TLS key and update key are live state, not 'not in this catalogue'", () => {
+test("the LAN identity, LAN TLS key, browser certificate and update key are live state, not 'not in this catalogue'", () => {
   const dir = mkdtempSync(join(tmpdir(), "hoststore-lan-"));
   const store = join(dir, BRAND.stateDirName);
   mkdirSync(store, { recursive: true });
-  for (const n of ["lan-identity.json", "lan-tls.json", "update-key.json"]) writeFileSync(join(store, n), "{}");
+  for (const n of ["lan-browser.json", "lan-identity.json", "lan-tls.json", "update-key.json"]) writeFileSync(join(store, n), "{}");
   const rep = hostStoreReport(dir);
   assert.equal(rowOf(rep, "unknown").count, 0);
-  assert.equal(rowOf(rep, "live").count, 3);
+  assert.equal(rowOf(rep, "live").count, 4);
 });
 
 test("agent readings: the shard directory is live, the pre-shard file is live until migrated, then a clearable leftover", () => {

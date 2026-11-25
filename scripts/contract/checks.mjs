@@ -117,7 +117,13 @@ export const CHECKS = [
       // blocking call); the demo has no loop worth timing, so it is optional.
       assert.ok(h.loopDelayP99Ms === undefined || Number.isInteger(h.loopDelayP99Ms),
         `loopDelayP99Ms is whole ms when present (${h.loopDelayP99Ms})`);
-      const keys = Object.keys(h).filter((k) => k !== "loopDelayP99Ms").sort().join(",");
+      // `install` + `version` say WHICH install answers on the port (the Windows launcher's restart
+      // asks); the demo is no install, so it has neither — both or none, never one of the two.
+      assert.equal(h.install === undefined, h.version === undefined, "install and version come together");
+      assert.ok(h.install === undefined || (typeof h.install === "string" && h.install !== "" && typeof h.version === "string" && h.version !== ""),
+        `install and version are named when present (${h.install}, ${h.version})`);
+      const optional = ["loopDelayP99Ms", "install", "version"];
+      const keys = Object.keys(h).filter((k) => !optional.includes(k)).sort().join(",");
       assert.equal(keys, "ok,protocol,ptys,root,sessions", "no field one desktop has and the other lacks");
     },
   },

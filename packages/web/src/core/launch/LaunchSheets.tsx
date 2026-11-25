@@ -43,6 +43,7 @@ export interface LaunchSheetCtx {
   submitInput(id: string, cwd: string, text: string, kind: "prompt" | "command", holdUntilIdle?: boolean): boolean;
   refreshRepos(): void;
   openCwd(cwd: string, title: string): void;
+  openMade(cwd: string, title: string, offerSetup?: boolean): void;
   pickBackend(id: string | undefined): void;
   relaunch(s: SessionInfo, patch: Partial<LaunchOpts>): void;
   sessionCan(s: { backend?: string } | null | undefined, cap: Parameters<typeof hasCap>[2]): boolean;
@@ -67,7 +68,7 @@ export function launchSheets(c: LaunchSheetCtx): LaunchSheets {
       // The backend picker rides along ONLY where there is a choice to make:
       // `showBackendPicker` is false on a host that never described one, and
       // then this sheet renders exactly what it always did.
-      return <NewMenu root={c.root} repos={c.repos} onClose={() => setOverlay(null)} onChanged={c.refreshRepos} onOpen={c.openCwd}
+      return <NewMenu root={c.root} repos={c.repos} onClose={() => setOverlay(null)} onChanged={c.refreshRepos} onOpen={c.openMade}
         backends={showBackendPicker(backends) ? [...agentBackends(backends)!] : undefined}
         backend={launch.backend}
         onBackend={c.pickBackend}

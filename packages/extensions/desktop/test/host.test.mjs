@@ -612,6 +612,29 @@ test("stream: refused off macOS, and when the helper cannot start", async () => 
   assert.equal(missing.openCount(), 0);
 });
 
+// R-desktop-022: the screenshot still works when macOS refuses node, through the helper's own grant.
+test("still: the first JPEG at native size, and the helper is gone afterwards", async () => {
+  const h = fakeHelper("still", {});
+  const r = await rig(h).desk.still();
+  assert.equal(r.jpeg?.byteLength, 3000, JSON.stringify(r));
+  assert.ok(await until(() => h.lines().some((l) => l.t === "config")));
+  const { t: _t, ...cfg } = h.lines().find((l) => l.t === "config");
+  assert.deepEqual(cfg, { codec: "jpeg", source: { kind: "display" }, maxWidth: 0, fps: 5, jpegQuality: 95, cursor: false });
+  const pid = h.lines().find((l) => l.start).start;
+  assert.ok(await until(() => !alive(pid)), "EOF ended the helper");
+});
+
+test("still: a refused, dying, missing or unbuilt helper is a sentence, and nothing is built", async () => {
+  assert.equal((await rig(fakeHelper("still-ns", { FAKE_MODE: "noscreen" })).desk.still()).note, "Screen Recording is not granted to wp-desktop.");
+  const base = { platform: "darwin", stateDir: WORK, sourceDir: null, synthetic: false, log: () => {}, control: () => false };
+  const gone = createDesktop({ ...base, prebuilt: join(WORK, "no-such-helper") });
+  assert.match((await gone.still()).note, /could not be started: .*ENOENT/);
+  const unbuilt = createDesktop(base);
+  unbuilt.bin.build = () => { throw new Error("must not build"); };
+  assert.match((await unbuilt.still()).note, /not built and current/);
+  assert.equal((await createDesktop({ ...base, platform: "linux", prebuilt: null }).still()).note, K.NOT_MAC);
+});
+
 test("summary: the open log line's params", () => {
   assert.equal(summary(W.cleanDesktopParams({ codec: "jpeg", source: { kind: "window", id: 7 }, maxWidth: 0, fps: 2, auto: false, jpegQuality: 40, grayscale: true })),
     "codec=jpeg source=window:7 maxWidth=native fps=2 4000kbps q=40 gray");

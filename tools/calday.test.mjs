@@ -81,6 +81,11 @@ const ALLOWED = {
     ["PRICE_STALE_MS = 7 * DAY_MS", "a read over a week of elapsed time old is called stale"],
   ],
   "packages/host/src/doctor.ts": [["Math.floor((expiry - Date.now()) / 86_400_000)", "certificate validity left, elapsed"]],
+  "packages/web/src/certExpiry.ts": [["CERT_WARN_DAYS * DAY_MS", "certificate validity left, elapsed"]],
+  "packages/host/src/lanca.ts": [
+    ["BROWSER_CERT_DAYS * DAY_MS", "certificate validity is an elapsed span"],
+    ["Math.floor((notAfter.getTime() - now.getTime()) / DAY_MS)", "certificate validity left, elapsed"],
+  ],
   "packages/host/src/lantls.ts": [
     ["VALID_DAYS * DAY_MS", "certificate validity is an elapsed span"],
     ["RENEW_DAYS * DAY_MS", "certificate renewal threshold, elapsed"],

@@ -153,6 +153,10 @@ export function ultraCommand(on: boolean): string {
 /** Fast mode as words. Absent is NOT off: the CLI never confirmed either way. */
 export function fastText(f: boolean | undefined, refused?: string): string {
   const st = ultraState(f);
+  // 2.1.331 says exactly this, and no more, when its own switch is set.
+  if (st === "off" && refused === "Fast mode is not available") {
+    return "unavailable — the CLI says: Fast mode is not available. Usually CLAUDE_CODE_DISABLE_FAST_MODE is set on the desktop (~/.claude/settings.json)";
+  }
   if (st === "off" && refused) return `unavailable — the CLI says: ${refused}`;
   if (st === "on") return "on for this session — the CLI confirmed it";
   if (st === "off") return "off — the CLI confirmed it";

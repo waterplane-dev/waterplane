@@ -565,6 +565,10 @@ button.notif-dl:active { background: var(--raise); border-radius: var(--r-8); }
    prose and scrolls with the sheet body. */
 .git-explain { display: flex; flex-direction: column; gap: var(--sp-8); overflow-y: auto; }
 .git-explain-foci { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0 var(--sp-8); }
+.new-option { display: flex; align-items: flex-start; gap: var(--sp-8); min-height: 44px; padding: 0 var(--gutter) 0 calc(var(--gutter) * 2); font-size: calc(var(--fs-14) * var(--ui-font, 1)); }
+.new-option input { flex: none; width: 18px; height: 18px; margin: 2px 0 0; }
+.new-option > span { display: flex; flex-direction: column; min-width: 0; }
+.new-option .form-hint { padding: 0; }
 .git-explain-focus { display: flex; align-items: center; gap: var(--sp-8); min-height: 44px; }
 .git-explain-text { border-top: 1px solid var(--line); padding-top: var(--sp-8); }
 /* A running push's steps and latest lines, under the note. */

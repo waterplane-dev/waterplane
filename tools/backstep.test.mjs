@@ -88,3 +88,28 @@ test("every exemption still names a file that would otherwise fail", () => {
     assert.ok(!/\buseBackStep\(/.test(src), `${rel} uses useBackStep now — drop its exemption`);
   }
 });
+
+// ── What is drawn OVER the screen (R-navigation-025) ────────────────────────
+//
+// A confirm, a hint card, a popover is not a route, and its host is mounted beside `App`: Back moved the
+// screen underneath and left the question up. `scripts/ui/journey-back-lands-overlays.mjs` takes Back over
+// each; this names the next one that has no step.
+
+/** Draws something over the screen: a backdrop, or a panel that says it is a dialog or a floating menu. */
+const OVER = /className="[^"]*(?:-backdrop|-pop)"|role="dialog"|className="retime-layer"/;
+/** Overlays that deliberately take no step — with why. */
+const OVER_EXEMPT = {
+  "web/src/features/appLock/LockScreen.tsx": "the lock holds Back itself (`holdBack`)",
+};
+
+test("what is drawn over the screen answers Back", () => {
+  const missing = [];
+  for (const f of ROOTS.flatMap(tsxFiles)) {
+    const rel = relative(PKGS, f);
+    const src = readFileSync(f, "utf8");
+    if (!OVER.test(src) || OVER_EXEMPT[rel] || /\b(?:useBackStep|useDialogStep)\(/.test(src)) continue;
+    missing.push(rel);
+  }
+  assert.deepEqual(missing, [], "draws over the screen with no Back step: Back would move the screen under it (`useDialogStep`, `backStep.ts`)");
+  for (const rel of Object.keys(OVER_EXEMPT)) assert.match(readFileSync(join(PKGS, rel), "utf8"), OVER, `${rel} draws no overlay now — drop its exemption`);
+});

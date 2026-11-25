@@ -465,16 +465,16 @@ export function costOfRequest(t: Priceable, model: string | null | undefined, da
 }
 
 /**
- * `$1,284` / `$4.21` / `$0.50` / `$0.0042` / `$0.00042` / `$0`.
+ * `$1,284.40` / `$374.00` / `$4.21` / `$0.50` / `$0.0042` / `$0.00042` / `$0.00`.
  *
- * The one dollar formatter: two decimals from a cent up, two significant
- * digits below a cent — a quiet day's figure is genuinely fractions of a cent,
- * and "$0.00" beside a visible bar reads as "free". Zero is "$0"; from $1,000
- * whole dollars with separators.
+ * The one dollar formatter: two decimals at every size from a cent up (R-cost-029),
+ * two significant digits below a cent — a quiet day's figure is genuinely
+ * fractions of a cent, and "$0.00" beside a visible bar reads as "free". From
+ * $1,000 a comma separates thousands.
  */
 export function fmtUsd(n: number): string {
   if (!Number.isFinite(n)) return "—";
-  if (n === 0) return "$0";
+  if (n === 0) return "$0.00";
   const a = Math.abs(n), sign = n < 0 ? "-" : "";
   if (a < 0.01) {
     const out = a.toFixed(Math.min(12, 1 - Math.floor(Math.log10(a))));
@@ -482,12 +482,12 @@ export function fmtUsd(n: number): string {
     return Number(out) >= 0.01 ? `${sign}$${a.toFixed(2)}` : `${sign}$${out}`;
   }
   if (a < 1000) return `${sign}$${a.toFixed(2)}`;
-  // en-US on purpose: a German phone's toLocaleString() writes $16.956 for
+  // en-US on purpose: a German phone's toLocaleString() writes $16.956,00 for
   // sixteen thousand, which reads as sixteen dollars beside "$455.77".
-  return `${sign}$${Math.round(a).toLocaleString("en-US")}`;
+  return `${sign}$${a.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-/** The same, compact enough for a chart axis: `$1.2k` / `$421` / `$4.21`. */
+/** Compact, for chart AXIS TICKS only (an amount is `fmtUsd`): `$1.2k` / `$421` / `$4.21`. */
 export function fmtUsdShort(n: number): string {
   if (!Number.isFinite(n)) return "—";
   const a = Math.abs(n);
@@ -667,9 +667,9 @@ export function priceGapText(g: PriceGap, where: string): string {
 export function fmtMoney(n: number, currency: string): string {
   if (currency === "USD") return fmtUsd(n);
   if (!Number.isFinite(n)) return "—";
-  if (n === 0) return `0 ${currency}`;
+  if (n === 0) return `0.00 ${currency}`;
   const a = Math.abs(n);
-  return `${a < 0.01 ? n.toFixed(4) : a < 1000 ? n.toFixed(2) : Math.round(n).toLocaleString()} ${currency}`;
+  return `${a < 0.01 ? n.toFixed(4) : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
 }
 
 /**

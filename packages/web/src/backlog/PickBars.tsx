@@ -134,7 +134,7 @@ export function PickBars({ m }: { m: BacklogModel }) {
           onChoose={() => setChoosing(true)} /></div>
       )}
       {choosing && retimeIds.length > 0 && (
-        <RetimeLayer>{p.nav.renderRetime(retimeIds, {
+        <RetimeLayer onCancel={() => setChoosing(false)}>{p.nav.renderRetime(retimeIds, {
           onSent: () => { setChoosing(false); setPicking(false); setPicked(new Set()); },
           onCancel: () => setChoosing(false),
         })}</RetimeLayer>

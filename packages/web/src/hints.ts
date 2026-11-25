@@ -20,6 +20,9 @@
  *    Explaining all ~290 buttons would turn a fresh install into a click-
  *    through; those ~30 are the ones whose icon cannot be guessed.
  *
+ * Plus one `askAgain` entry (the logo): its card asks "show it again / don't show again" and
+ * interrupts until the second is chosen.
+ *
  * Plus `explainMode`, a global "the next tap explains instead of acting"
  * toggle — the relearn path once everything has been dismissed, and the reason
  * a permanent dismissal is safe to offer at all.
@@ -154,12 +157,12 @@ export function closeHint(remember: boolean): void {
   show(null);
 }
 
-/** Dismiss and run the action the tap was going to run. */
-export function proceedHint(): void {
+/** Dismiss and run the action the tap was going to run. `again` = explain it on the next tap too (`askAgain`). */
+export function proceedHint(again = false): void {
   const h = current;
   show(null);
   if (!h) return;
-  markSeen(h.id); // confirming IS having read it — never ask for this one again
+  if (!again) markSeen(h.id); // confirming IS having read it — never ask for this one again
   h.proceed?.();
 }
 

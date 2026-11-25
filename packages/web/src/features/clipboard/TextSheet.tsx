@@ -7,6 +7,7 @@ import { useRef } from "react";
 import { AtSign, Copy, ExternalLink, Quote, RotateCw } from "lucide-react";
 import { findUrlsInText } from "@waterplane/shared";
 import { useCore, useStore } from "../../sdk";
+import { copyText } from "../../api";
 import { SheetHead } from "../../Sheet";
 import { TextDumpLines, type TextDumpHandle } from "../../TextDumpLines";
 import { quoteBlock } from "./logic";
@@ -25,8 +26,7 @@ export function TextSheet() {
   const getSel = (): string => textRef.current?.pick().text ?? textDump;
   const copy = async () => {
     const t = getSel();
-    try { await navigator.clipboard.writeText(t); core.say.toast(`copied ${t.length} chars`); }
-    catch { core.say.toast("clipboard unavailable (needs https)"); }
+    core.say.toast(await copyText(t) ? `copied ${t.length} chars` : "the clipboard refused it here — select the text and copy by hand");
   };
   const quote = () => {
     const block = quoteBlock(getSel());

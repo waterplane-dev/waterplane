@@ -24,6 +24,8 @@ export const manifest: FeatureManifest = {
   // pinnable into the header), and a line in the launcher's ☰ menu.
   menuItems: [{ id: "links", label: "Links", icon: Link2, open: () => openLinks(null) }],
   launcherItems: [{ id: "links", label: "Links", icon: Link2, order: 20, open: () => openLinks(null) }],
+  // The Opt-ins card opens the sheet cut to its repo, as the chip does (core asks `useOptInDoor`).
+  optInDoors: { links: (_core, repoName) => openLinks({ repo: repoName }) },
   repoChips: [{
     id: "links",
     icon: Link2,

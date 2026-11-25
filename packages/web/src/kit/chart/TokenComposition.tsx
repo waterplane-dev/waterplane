@@ -134,7 +134,7 @@ export function KindBar({ bag, whole, fmt = fmtCount, exact = fmtExact, children
  * shape of the same traffic and the only way to lower it is to re-send that
  * context at full price. The two ratios underneath it are: reads per written
  * token against what a write has to earn back, and the context an average turn
- * carried against the ~200k where this desktop's own logs found the spend
+ * carried against the ~200k where one measured desktop's logs found the spend
  * concentrating.
  *
  * `scope` changes two sentences and no arithmetic — see `CacheScope`. On one

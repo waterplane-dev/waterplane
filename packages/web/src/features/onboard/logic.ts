@@ -68,6 +68,19 @@ export function existingReposLine(repos: number): string | null {
   return `Or tap New session on one of your ${repos} repo${repos === 1 ? "" : "s"} below to open a session in it.`;
 }
 
+/** The buttons on the first-run card, in order. */
+export type FirstRunWay = "build" | "project" | "clone" | "folder" | "demo";
+
+/**
+ * Which buttons the card draws. With repos listed under it the card says so in words (`existingReposLine`)
+ * and keeps its two ways in. With NONE, "open an existing repo" had nothing to open and only toasted, so
+ * the ways to GET a repo take its place: a new project, a clone, another code folder. Whether this
+ * connection may change the folder is the code-folder sheet's own sentence, not a reason to hide the door.
+ */
+export function firstRunWays(repos: number): FirstRunWay[] {
+  return repos > 0 ? ["build", "demo"] : ["build", "project", "clone", "folder", "demo"];
+}
+
 // ── Question 1: the name ─────────────────────────────────────────────
 
 /** Short, lower-case, one word each: the folder and the package segment take them as they are. */

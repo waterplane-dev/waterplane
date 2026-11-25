@@ -129,6 +129,19 @@ const age = (p, ms) => { const t = new Date(Date.now() - ms); utimesSync(p, t, t
   check(ids.includes(B), "the live session was rediscovered");
   check(!ids.includes(A) && !ids.includes(D), "no gone session came back");
 
+  const rows = () => JSON.parse(readFileSync(join(ROOT, STATE, "closed.json"), "utf8"));
+  check(["lost", "reboot"].includes(rows().find((r) => r.id === A)?.closedBy), "R-sessions-071: the reclaimed session is listed as closed, marked");
+
+  // A REBOOT: the tmux server is gone, `tmux ls` fails, and every record was
+  // last written before this machine came up.
+  await stopHost();
+  killServer();
+  for (const id of [B, D]) age(rec(id), 10 * 365 * 86_400_000);
+  host = bootHost();
+  await waitForHost(PORT);
+  check(!existsSync(rec(B)) && !existsSync(rec(D)), "after a reboot the records are retired with no tmux server to ask");
+  check([B, D].every((id) => rows().find((r) => r.id === id)?.closedBy === "reboot"), "R-sessions-071: …and both sessions are listed as stopped by it");
+
   await stopHost();
   cleanup();
   process.exit(failed ? 1 : 0);

@@ -1,6 +1,6 @@
 /** Every sentence of the findings: the money label, the saving, the backends, the checked-off rows. */
 import type { BillingProfile } from "../billing.js";
-import { priceListSource, priceSourceText } from "../pricing.js";
+import { fmtUsd, priceListSource, priceSourceText } from "../pricing.js";
 import { fmtCount } from "../tokens.js";
 import type { Finding, FindingSaving, FindingSeen, NotChecked, PassedCheck } from "./types.js";
 
@@ -10,13 +10,11 @@ export function moneyLabel(profile: BillingProfile | undefined, source = priceSo
   return `${bill} (${source})`;
 }
 
-const usdText = (n: number): string => (n < 1 ? `$${n.toFixed(2)}` : n < 100 ? `$${n.toFixed(1)}` : `$${Math.round(n)}`);
-
-/** "about $1.2 and about 3.4M tokens a week at list price, not a bill; errs low". The approximately sign only on an estimate. */
+/** "about $1.20 and about 3.4M tokens a week at list price, not a bill; errs low". The approximately sign only on an estimate. */
 export function savingWords(s: FindingSaving, profile?: BillingProfile): string {
   const approx = s.basis === "estimate" ? "≈" : "";
   const parts: string[] = [];
-  if (s.usd !== undefined) parts.push(`${approx}${usdText(s.usd)}`);
+  if (s.usd !== undefined) parts.push(`${approx}${fmtUsd(s.usd)}`);
   if (s.tokens !== undefined) parts.push(`${approx}${fmtCount(s.tokens)} tokens`);
   if (!parts.length) return "";
   let out = `${parts.join(" and ")} a week`;

@@ -26,6 +26,18 @@ export interface DeviceRow {
   /** `"passive"`: the kids'-phone scope — app updates only, everything else
    *  refused by the host until a PIN unlocks it (`passive.ts`). Absent = full. */
   scope?: DeviceScope;
+  /** The name a password sign-in was made under when only the local network vouched for it (host
+   *  `origin.ts` `unverifiedName`). Such a row ends on its own (`deviceEndsAt`) and its token counts
+   *  under such a name only. Absent = an ordinary device. */
+  under?: string;
+}
+
+/** How long a sign-in under such a name lasts. Whoever answers for the name is sent its cookie. */
+export const NAME_SIGNIN_HOURS = 12;
+
+/** When this row's token stops counting by itself, or null: until revoked. */
+export function deviceEndsAt(row: Pick<DeviceRow, "createdAt" | "under">): number | null {
+  return row.under === undefined ? null : row.createdAt + NAME_SIGNIN_HOURS * 60 * 60 * 1000;
 }
 
 /** A token's scope. Only `"passive"` is ever stored; absent means full. */
@@ -78,6 +90,8 @@ export function cleanDeviceRow(raw: unknown): DeviceRow | null {
   const row: DeviceRow = { id: r.id, name, createdAt, lastSeenAt, lastKind };
   if (r.current === true) row.current = true;
   if (r.scope === "passive") row.scope = "passive";
+  // Present and unreadable is still a name sign-in: dropping the field would make its token last.
+  if (r.under !== undefined) row.under = cleanLabel(r.under, DEVICE_NAME_MAX) ?? "?";
   return row;
 }
 

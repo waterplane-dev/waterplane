@@ -6,8 +6,8 @@
  * popstate handler's body the same way: the restore of a covered sheet's cut runs through it in
  * tests, not by hand (review R2-2b L2).
  */
-import { parseFocus, parseHash, routeFromPop, routeKey, routeToUrl, screenOfKey, type Overlay } from "../../routing.ts";
-import { adoptCarried, announceLeaves, takeAdoption, forgetKept, keepCovered, popStepsTo, pushBackDepth, restoreKept, routeLanded, routeLanding, routeStack, screenParams, stackView } from "../../backStep.ts";
+import { overlayFromKey, parseFocus, parseHash, routeFromPop, routeKey, routeToUrl, screenOfKey, VACANT, type Overlay } from "../../routing.ts";
+import { adoptCarried, announceLeaves, endPass, isRetiring, retireLanded, whenRetired, takeAdoption, forgetKept, keepCovered, mendRenamed, pass, passOn, popStepsTo, pushBackDepth, renameUnder, restoreKept, routeLanded, routeLanding, routeStack, screenParams, stackView } from "../../backStep.ts";
 import { rememberRoute } from "../../resumeRoute.ts";
 
 /**
@@ -53,6 +53,9 @@ let poppedOnto: string | null = null;
 
 /** The routing effect's body. `first` is true once per document. */
 export function landRoute(activeId: string | null, overlay: Overlay, focusRepo: string | null, first: boolean): void {
+  // A dead dialog entry is on its way out (`queueRetire`'s async history.go): a push or replace made
+  // now would be done from that entry and then undone by the traversal. Wait for its pop, then land.
+  if (isRetiring()) { whenRetired(() => landRoute(activeId, overlay, focusRepo, first)); return; }
   const before = stackView();
   const key = routeKey(activeId, overlay, focusRepo);
   const st = history.state as { navRoute?: string; navDepth?: number } | null;
@@ -97,6 +100,8 @@ export function landRoute(activeId: string | null, overlay: Overlay, focusRepo: 
     routeStack.keys.length = routeStack.depth + 1;
     forgetKept(routeStack.depth);
     pushBackDepth();
+  } else if (plan.kind === "rename" && plan.under !== undefined) {
+    renameUnder(plan.under, key, routeToUrl(activeId, overlay, focusRepo));
   } else if (plan.kind === "rename") {
     // The same entry, under the session's own id: Back from it goes where Back from the pending screen would have.
     history.replaceState({ ...(history.state ?? {}), navRoute: key, navDepth: routeStack.depth }, "", routeToUrl(activeId, overlay, focusRepo));
@@ -112,6 +117,7 @@ export function landRoute(activeId: string | null, overlay: Overlay, focusRepo: 
     routeStack.depth = depth;
     routeStack.keys[depth] = key;
     routeStack.keys.length = depth + 1;
+    if (plan.vacate !== undefined) for (let d = plan.vacate; d < depth; d++) routeStack.keys[d] = VACANT;
     pushBackDepth();
   }
   routeLanded(routeStack.depth, routeStack.keys[routeStack.depth] ?? "", plan.how);
@@ -136,13 +142,31 @@ export function landRoute(activeId: string | null, overlay: Overlay, focusRepo: 
  * it landed on a DEAD step and went back again instead.
  */
 export function landPop(): { activeId: string | null; overlay: Overlay } | null {
+  mendRenamed();
+  // The pop of our own retire: the stack is already moved and the app's route is the one it chose.
+  if (retireLanded()) return null;
   const before = stackView();
   const st = history.state as { navRoute?: string; navDepth?: number } | null;
   const r = routeFromPop(st, { ...parseHash(), focusRepo: parseFocus() }, routeStack.keys, routeStack.depth);
   // Steps above where we landed were closed by this very Back. Landing on
   // a DEAD one — its view went away with no Back of ours — is not a screen:
   // keep going, or the press looks like it did nothing.
-  if (!r.adopt && popStepsTo(r.depth) && r.depth > 0) { routeStack.depth = r.depth; announceLeaves(before); history.back(); return null; }
+  // The same for a Back FROM dead entries not retired yet (dialogs just answered): passing them closed
+  // nothing, so the first live screen it reaches is the one it leaves (`pass.owed`).
+  if (pass.depth === null) pass.owed = before.depth - 1 === r.depth && before.keys[before.depth] === VACANT;
+  // After a reload: a sheet the URL cannot bring back shows the screen under it, whose own entry is next down.
+  const lost = routeStack.keys[r.depth] === undefined && !r.overlay && !!st?.navRoute && !!overlayFromKey(screenOfKey(st.navRoute));
+  // ONE Back per entry passed: a landing whose hash differs fires popstate AND hashchange, both read here
+  // before the Back lands, and the second one's Back went past the screen underneath (out of the app).
+  if (!r.adopt && pass.depth === r.depth) return null;
+  const dead = popStepsTo(r.depth, st?.navRoute) || lost;
+  if (!r.adopt && (dead || pass.owed) && r.depth > 0) {
+    if (!dead) pass.owed = false;
+    routeStack.depth = r.depth; announceLeaves(before); passOn(r.depth);
+    return null;
+  }
+  endPass();
+  pass.owed = false;
   routeStack.depth = r.depth;
   poppedOnto = r.adopt ? null : r.key;
   if (r.key) routeStack.keys[r.depth] = r.key;

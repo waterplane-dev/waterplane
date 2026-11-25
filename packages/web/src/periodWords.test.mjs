@@ -11,24 +11,24 @@ const now = Date.UTC(2026, 9, 11, 12); // Oct 11, 12:00 UTC
 const state = (spentUsd, period = month) => ({ ...periodStates([period], now)[0], ...(spentUsd === undefined ? {} : { spentUsd }) });
 const budget = (max) => ({ enabled: true, sessionMax: 90, weeklyMax: null, leftoverMax: 20, periods: [month], ceilings: max == null ? [] : [{ periodId: "month", max, unit: "usd" }] });
 
-test("usdWords: whole dollars from a hundred, cents below", () => {
-  assert.equal(usdWords(412.4), "$412");
-  assert.equal(usdWords(2000), "$2000");
+test("usdWords: two decimals at every size", () => {
+  assert.equal(usdWords(412.4), "$412.40");
+  assert.equal(usdWords(2000), "$2,000.00");
   assert.equal(usdWords(0.48), "$0.48");
-  assert.equal(usdWords(0), "$0");
+  assert.equal(usdWords(0), "$0.00");
 });
 
 test("the chip reads month, spend, cap and pace", () => {
   // Day 10.5 of 31 against 2000: the straight line is ~677, 412 is well under it.
-  assert.equal(periodChip(state(412), 2000, now).text, "Oct $412 / $2000 · under pace");
-  assert.equal(periodChip(state(700), 2000, now).text, "Oct $700 / $2000 · on pace");
-  assert.equal(periodChip(state(900), 2000, now).text, "Oct $900 / $2000 · ahead of pace");
-  assert.equal(periodChip(state(2100), 2000, now).text, "Oct $2100 / $2000 · over the cap");
+  assert.equal(periodChip(state(412), 2000, now).text, "Oct $412.00 / $2,000.00 · under pace");
+  assert.equal(periodChip(state(700), 2000, now).text, "Oct $700.00 / $2,000.00 · on pace");
+  assert.equal(periodChip(state(900), 2000, now).text, "Oct $900.00 / $2,000.00 · ahead of pace");
+  assert.equal(periodChip(state(2100), 2000, now).text, "Oct $2,100.00 / $2,000.00 · over the cap");
 });
 
 test("no cap: spend only, no pace word; hot only near a cap", () => {
   const c = periodChip(state(412), null, now);
-  assert.equal(c.text, "Oct $412");
+  assert.equal(c.text, "Oct $412.00");
   assert.equal(c.hot, false);
   assert.equal(periodChip(state(1700), 2000, now).hot, true);
 });

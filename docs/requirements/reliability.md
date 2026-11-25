@@ -72,3 +72,7 @@ Host ready-waits, prompt asks and prompt delivery share one injected wait clock,
 - asked: 2026-11-13
 - shipped: 4e73af3bd, 341fdb1ce
 
+### R-reliability-017 · shipped
+A write the disk takes only part of is never taken for a whole one. The browser certificate is complete or the command says it failed and the folder is as it was; the update lock holds a full process id or does not exist, so one still being written reads as another update and never as a dead one, and one its holder has let go never refuses an update for longer than a minute; a wire recording keeps whole lines only and stops out loud at the first it cannot write, and never cuts a line another host wrote to the same file.
+- asked: 2026-11-25, 2026-11-25 (the review's lows)
+- shipped: 095f652eb, 52fe4403c

@@ -637,7 +637,7 @@ With the on-screen keyboard up, every bar between the terminal and the prompt bo
 ### R-ui-142 · shipped
 Repo colour is a register card in both light and dark mode: a plain neutral card with a thick, clean coloured left edge (no notches at corners or dividers), rounded corners and plain uncoloured repo names, on the main screen, session tabs and open-tabs list.
 - asked: 2026-11-18, 2026-11-19
-- shipped: 742b52a6f, 674837d14, 1d787ca7c, 57467fb49, e71df6bd3, 410bb4512, d61a9d7f1
+- shipped: 742b52a6f, 674837d14, 1d787ca7c, 57467fb49, e71df6bd3, 410bb4512, d61a9d7f1, dde489d3f, 6e36f9e6a
 
 ### R-ui-143 · shipped
 The Capture feature is removed from the app, including its button.

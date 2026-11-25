@@ -58,6 +58,7 @@ import { manifest as halt } from "./halt";
 import { manifest as askRules } from "./askRules";
 import { manifest as appLock } from "./appLock";
 import { manifest as cliRestart } from "./cliRestart";
+import { manifest as repoSetup } from "./repoSetup";
 import { manifest as repoSync } from "./repoSync";
 import { manifest as whatsnew } from "./whatsnew";
 import { manifest as skills } from "./skills";
@@ -111,6 +112,7 @@ export const FEATURES: readonly FeatureManifest[] = [
   askRules,
   appLock,
   cliRestart,
+  repoSetup,
   repoSync,
   whatsnew,
   skills,

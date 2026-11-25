@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   NAME_WORDS, BROWSER_CANT_INSTALL, aboutBytes, answersFrom, artifactFile, checklist, clockText, consentRows, consentToSend,
-  defaultPath, existingReposLine, firstRunCard, fixLabel, neverRanSession, goBlocker, handOff, initialTicks, plannedSteps, progressHead, questionsBlocker,
+  defaultPath, existingReposLine, firstRunCard, firstRunWays, fixLabel, neverRanSession, goBlocker, handOff, initialTicks, plannedSteps, progressHead, questionsBlocker,
   suggestName, withAllowed,
 } from "./logic.ts";
 
@@ -161,4 +161,8 @@ test("existingReposLine: repos listed below are pointed at in words, with their 
   assert.equal(existingReposLine(0), null);
   assert.equal(existingReposLine(1), "Or tap New session on one of your 1 repo below to open a session in it.");
   assert.match(existingReposLine(34), /34 repos below/);
+});
+test("R-onboarding-037: firstRunWays: no repos offers the ways to get one, in order; repos listed keep the two ways in", () => {
+  assert.deepEqual(firstRunWays(0), ["build", "project", "clone", "folder", "demo"]);
+  assert.deepEqual(firstRunWays(3), ["build", "demo"]);
 });

@@ -9,7 +9,7 @@
  * banner that cannot be dismissed.
  */
 import { type ReactNode, useEffect, useState } from "react";
-import { Download, Loader, OctagonX, RefreshCcw, RotateCw, ShieldAlert, Smartphone, X } from "lucide-react";
+import { Download, KeyRound, Loader, OctagonX, RefreshCcw, RotateCw, ShieldAlert, Smartphone, X } from "lucide-react";
 import type { ClientMessage, LaunchOpts, SessionInfo, UpdateInfo } from "@waterplane/shared";
 import { cliRestartDue, cliRestartView } from "@waterplane/shared";
 import { askConfirm } from "../Confirm";
@@ -17,6 +17,7 @@ import { CantInline } from "../Unavailable";
 import { resumeIdOf } from "../sessionFacts";
 import { createStore, useStore } from "../sdk";
 import { setPref, usePref } from "./prefs";
+import { certExpiryLine } from "../certExpiry";
 import { updateBarView } from "../updateBar";
 import { track } from "../usage";
 import { LS, lsGet, lsSet } from "../storage";
@@ -110,6 +111,24 @@ export function InsecureBanner({ httpsUrl }: { httpsUrl: string | null }): React
           }}>
           <X size={ICON} />
         </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The certificate of this address ends soon. Drawn only on the hostname the browser certificate is for,
+ * within 30 days of its end (`certExpiry.ts`); nothing otherwise. No dismiss: the next visit to the
+ * desktop is the way out, and it is gone once the new certificate is served.
+ */
+export function CertExpiryBanner({ tlsName, tlsNameUntil }: { tlsName?: string; tlsNameUntil?: number }): ReactNode {
+  const line = typeof location === "undefined" ? null : certExpiryLine({ tlsName, tlsNameUntil }, location.hostname, Date.now());
+  if (!line) return null;
+  return (
+    <div className="update-bar-wrap">
+      <div className="update-bar">
+        <KeyRound size={ICON} />
+        <span className="update-text">{line}</span>
       </div>
     </div>
   );

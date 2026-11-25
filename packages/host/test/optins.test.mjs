@@ -6,13 +6,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { OPT_INS, optInMarker } from "@waterplane/shared";
+import { BRAND, DEFAULT_AUTOPULL, OPT_INS, OPT_IN_PICKS_FILE, OPT_IN_PICKS_MAX_BYTES, optInMarker } from "@waterplane/shared";
 
-const { inspectOptIns, standingPromptsOf, optInSightings, noteOptInSends, sentOf } = await import("../dist/optins.js");
-const { SetupPrefsStore, setSetupPrefsStore, setOptInChoice, optInChoices } = await import("../dist/setupprefs.js");
+const { inspectOptIns, standingPromptsOf, optInSightings, noteOptInSends, sentOf, readOptInPicks } = await import("../dist/optins.js");
+const { SetupPrefsStore, setSetupPrefsStore, setOptInChoice, optInChoices, setupUnseen, markSetupSeen, noteOptInSent } = await import("../dist/setupprefs.js");
+const { discoverTargets, listTargets, cachedTargets } = await import("../dist/repos.js");
 const { inspectRepo } = await import("../dist/compliance.js");
 
 const git = (cwd, ...a) => execFileSync("git", ["-C", cwd, "-c", "user.name=t", "-c", "user.email=t@t", ...a], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
@@ -43,6 +44,15 @@ test("requirements: unfit without the fix, off, then on", async () => {
   const on = (await row(wt, "requirements"));
   assert.equal(on.state, "on");
   assert.equal(on.relevant, true);
+});
+
+test("links: the extension's own answer; off when no extension answers (R-onboarding-032)", async () => {
+  const wt = repo("links");
+  const none = await row(wt, "links", deps({ plugin: async () => null }));
+  assert.deepEqual([none.relevant, none.state], [true, "off"]);
+  assert.match(none.detail, /extension is off/);
+  const on = await row(wt, "links", deps({ plugin: async (id) => ({ state: "on", detail: `asked ${id}` }) }));
+  assert.deepEqual([on.state, on.detail], ["on", "asked links"]);
 });
 
 test("repo-health-own: uncommitted is off, committed with readings is on", async () => {
@@ -260,4 +270,95 @@ test("local-ci-status: relevant only for unpinned required local-ci with a hook"
   assert.equal(off.relevant, true); assert.equal(off.state, "off");
   git(wt, "config", "waterplane.localCiStatus", "true");
   assert.equal((await row(wt, "local-ci-status", d(R()))).state, "on");
+});
+
+test("apk offers: no app is unfit; the download rule and the install list decide, unread is unknown", async () => {
+  const bare = repo("noapk");
+  assert.equal((await row(bare, "apk-download")).relevant, false);
+  assert.equal((await row(bare, "apk-install")).relevant, false);
+
+  const wt = repo("apk");
+  put(wt, "android/app/build.gradle", 'apply plugin: "com.android.application"\nandroid { defaultConfig { applicationId "a.b.c" } }');
+  put(wt, ".claude/outbox/app.apk", "12345");
+  const rule = (o) => deps({ pullRule: () => ({ ...DEFAULT_AUTOPULL, ...o }) });
+  assert.equal((await row(wt, "apk-download")).state, "unknown");
+  assert.equal((await row(wt, "apk-download", rule({}))).state, "off");
+  assert.equal((await row(wt, "apk-download", rule({ enabled: true }))).state, "on");
+  const left = await row(wt, "apk-download", rule({ enabled: true, match: ["*.zip"] }));
+  assert.deepEqual([left.state, left.partial], ["off", true]);
+  assert.match(left.detail, /app\.apk.*patterns/);
+  assert.match((await row(wt, "apk-download", rule({ enabled: true, maxBytes: 2 }))).detail, /size cap/);
+
+  const allow = (l) => deps({ installAllow: () => l });
+  assert.equal((await row(wt, "apk-install", allow(null))).state, "unknown");
+  assert.equal((await row(wt, "apk-install", allow([]))).state, "off");
+  assert.equal((await row(wt, "apk-install", allow(["a.b.c"]))).state, "on");
+});
+
+test("apk-install: a build variant on the list counts, a package behind a variable is unknown", async () => {
+  const wt = repo("apkv");
+  put(wt, "android/app/build.gradle", 'android { defaultConfig { applicationId "a.b.c" } buildTypes { debug { applicationIdSuffix ".debug" } } }');
+  assert.equal((await row(wt, "apk-install", deps({ installAllow: () => ["a.b.c.debug"] }))).state, "on");
+  put(wt, "android/app/build.gradle", "android { defaultConfig { applicationId = appId } }");
+  assert.equal((await row(wt, "apk-install", deps({ installAllow: () => [] }))).state, "unknown");
+});
+
+test("setup seen: unseen until marked, chosen or sent; the first mark stands, by realpath, across a restart", () => {
+  const root = tmp("seen");
+  const [a, b, c] = [repo("seena"), repo("seenb"), repo("seenc")];
+  const link = join(root, "link-to-a");
+  symlinkSync(a, link);
+  assert.equal(setupUnseen(a), false, "no store: nothing is said");
+  assert.equal(markSetupSeen(a).ok, false);
+  setSetupPrefsStore(new SetupPrefsStore(root));
+  try {
+    for (const wt of [a, b, c, link]) assert.equal(setupUnseen(wt), true);
+    assert.deepEqual(markSetupSeen(link, 100), { ok: true });
+    assert.deepEqual(markSetupSeen(a, 200), { ok: true });
+    setOptInChoice(b, "local-ci", "declined");
+    noteOptInSent(c, "local-ci", 5);
+    for (const wt of [a, b, c, link]) assert.equal(setupUnseen(wt), false);
+    const again = new SetupPrefsStore(root);
+    assert.equal(again.setupUnseen(a), false);
+    assert.equal(again.setupUnseen(c), false);
+  } finally { setSetupPrefsStore(null); }
+});
+
+test("setupUnseen rides every listing of a primary checkout and is read at answer time, never off the last scan", async () => {
+  const root = tmp("seenlist");
+  const wt = join(root, "app");
+  mkdirSync(wt);
+  git(wt, "init", "-q");
+  put(wt, "f", "x");
+  commit(wt);
+  git(wt, "worktree", "add", "-q", join(root, "linked"));
+  const flags = (ts) => Object.fromEntries(ts.map((t) => [t.isPrimary ? "primary" : "linked", t.setupUnseen]));
+  assert.deepEqual(flags(await discoverTargets(root)), { primary: undefined, linked: undefined });
+  setSetupPrefsStore(new SetupPrefsStore(tmp("seenlist-state")));
+  try {
+    assert.deepEqual(flags(await discoverTargets(root)), { primary: true, linked: undefined });
+    assert.deepEqual(flags(await listTargets(root)), { primary: true, linked: undefined });
+    markSetupSeen(wt);
+    assert.deepEqual(flags(await cachedTargets(root)), { primary: undefined, linked: undefined });
+  } finally { setSetupPrefsStore(null); }
+});
+
+test("picks: the repo's own file, cleaned; missing, broken, oversized or a link is none", () => {
+  const wt = repo("picks");
+  const rel = `${BRAND.stateDirName}/${OPT_IN_PICKS_FILE}`;
+  assert.deepEqual(readOptInPicks(wt), []);
+  const good = JSON.stringify({ picks: [{ id: "local-ci", want: true, why: "has tests" }, { id: "nope", want: true, why: "x" }] });
+  put(wt, rel, good);
+  assert.deepEqual(readOptInPicks(wt), [{ id: "local-ci", want: true, why: "has tests" }]);
+  for (const bad of ["not json", "null", "[]", "{}", good + " ".repeat(OPT_IN_PICKS_MAX_BYTES)]) {
+    put(wt, rel, bad);
+    assert.deepEqual(readOptInPicks(wt), [], bad.slice(0, 12));
+  }
+  const linked = repo("pickslink");
+  const outside = join(tmp("picksout"), "picks.json");
+  writeFileSync(outside, good);
+  mkdirSync(join(linked, BRAND.stateDirName));
+  symlinkSync(outside, join(linked, rel));
+  assert.deepEqual(readOptInPicks(linked), []);
+  assert.equal(readFileSync(outside, "utf8"), good);
 });

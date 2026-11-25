@@ -12,7 +12,7 @@
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { parseFocus, parseHash, type Overlay } from "../../routing.ts";
-import { isBackHeld, pushBackDepth, routeStack, screenAsks, subscribeScreenParams } from "../../backStep.ts";
+import { isBackHeld, pushBackDepth, routeStack, screenAsks, setRouted, subscribeScreenParams } from "../../backStep.ts";
 import { landPop, landRoute } from "./landRoute.ts";
 import { defineShellGlobal } from "../../shellBridge.ts";
 import { viewerHandles } from "../../docKind.ts";
@@ -114,7 +114,8 @@ export function useRoute() {
     };
     window.addEventListener("popstate", onPop);
     window.addEventListener("hashchange", onPop);
-    return () => { window.removeEventListener("popstate", onPop); window.removeEventListener("hashchange", onPop); };
+    setRouted(true); // a dialog may take a Back step from now on (`useDialogStep`)
+    return () => { setRouted(false); window.removeEventListener("popstate", onPop); window.removeEventListener("hashchange", onPop); };
   }, []);
   // The native shell's Back handler asks US whether there is a screen to go back
   // to, rather than reading the WebView's history: that history also holds the

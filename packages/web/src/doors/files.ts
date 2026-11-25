@@ -8,6 +8,7 @@ export const area: DoorArea = {
     { label: "Images & documents", from: "toolbar menu", to: "gallery", title: TITLE.gallery },
     { label: "Browse files", from: "repo menu", to: "browse", title: TITLE.browse, task: "Read a file in the repo", taps: 2 },
     { label: "Browse files", from: "sheet:git", to: "browse", title: TITLE.browse },
+    { label: "Browse files", from: "sheet:gallery", to: "browse", title: TITLE.browse },
     { label: "Changes", from: "repo row", to: "git", title: TITLE.git, task: "Commit and push", taps: 1 },
     { label: "Changes", from: "toolbar menu", to: "git", title: TITLE.git },
     { label: "Commits", from: "sheet:git", to: "git", title: TITLE.commits },

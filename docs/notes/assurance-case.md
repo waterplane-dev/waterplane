@@ -66,7 +66,7 @@ The principles are Saltzer and Schroeder's, as the OpenSSF criteria name them.
 | --- | --- | --- |
 | Path traversal (CWE-22) | Containment guards on every file and git route, realpath-resolved | `packages/host/src/paths.ts`, `scripts/e2e-api.mjs` |
 | Cross-site requests and cross-site WebSocket hijacking (CWE-352, CWE-1385) | `Origin`, `Host` and `Sec-Fetch-Site` checks. Side-effecting routes are never GET. | `packages/host/src/origin.ts`, `scripts/e2e-origin.mjs` |
-| DNS rebinding (CWE-350) | `Host` allowlist, `*.ts.net` never widened, `*.local` never a wildcard | same |
+| DNS rebinding (CWE-350) | `Host` allowlist, `*.ts.net` never widened, `*.local` never a wildcard. A name the local network answers for has no trust of its own: it needs a token from loopback and Tailscale too. | `packages/host/src/origin.ts` (`unverifiedName`), `scripts/e2e-rebind.mjs` |
 | Command injection (CWE-78) | Host processes start from argument lists rather than a shell; the Windows launcher's fixed commands are the exception. A shell metacharacter in a build parameter refuses the run. | `packages/host/src/builds.ts` |
 | Cross-site scripting (CWE-79) | Agent-written Markdown renders as React nodes, never raw HTML. Served files carry `nosniff` and a CSP. | `packages/web/src/Markdown.tsx`, `packages/host/src/routes/apiio.ts` |
 | Missing or broken authentication (CWE-306, CWE-287) | Token gate by peer kind, deny until set, tokens per paired device | `packages/host/src/auth.ts`, `scripts/e2e-lan.mjs`, `scripts/e2e-pair.mjs`, `scripts/e2e-passive.mjs`, `scripts/e2e-peer.mjs` |

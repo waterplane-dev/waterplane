@@ -3,6 +3,8 @@ package dev.waterplane.app;
 import android.app.AlertDialog;
 import android.app.DownloadManager;
 import android.content.ActivityNotFoundException;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
@@ -891,9 +893,21 @@ public class MainActivity extends BridgeActivity {
         new AlertDialog.Builder(this)
                 .setTitle("Open in your browser?")
                 .setMessage(url.toString() + "\n\nThis leaves the app. The app itself keeps running.")
+                .setNeutralButton("Copy link", (d, w) -> copyLink(url))
                 .setNegativeButton("Stay here", null)
                 .setPositiveButton("Open", (d, w) -> openOutside(url))
                 .show();
+    }
+
+    /** Android 13+ shows its own "copied" card; a toast there would say it twice. */
+    private void copyLink(Uri url) {
+        ClipboardManager clips = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        if (clips == null) {
+            toast("could not copy: this phone gave no clipboard");
+            return;
+        }
+        clips.setPrimaryClip(ClipData.newPlainText("link", url.toString()));
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) toast("link copied");
     }
 
     private void openOutside(Uri url) {

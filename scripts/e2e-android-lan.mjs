@@ -29,7 +29,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Transform } from "node:stream";
 import { WebSocket } from "ws";
-import { freePort, waitForHost } from "./lib-e2e.mjs";
+import { freePort, setupPagesSeen, waitForHost } from "./lib-e2e.mjs";
 import { COMPOSER, closeSessions, delivered, personInput, tmuxPanes } from "./lib-android-input.mjs";
 import { E, SLUG, STATE, WS_PROTOCOL, rootEnv, LS } from "./lib-brand.mjs";
 import { BRAND, devApplicationId } from "../packages/shared/dist/brand.js";
@@ -126,8 +126,9 @@ async function bootHost(knobs = {}) {
   H.proc.stdout.on("data", (d) => { H.log += d; });
   H.proc.stderr.on("data", (d) => { H.log += d; });
   await waitForHost(H.port);
+  await setupPagesSeen(`http://127.0.0.1:${H.port}`);
 }
-const stopHost = () => new Promise((r) => { if (!H.proc || H.proc.exitCode !== null) return r(); H.proc.once("exit", r); H.proc.kill(); });
+const stopHost = () => new Promise((r) => { if (!H.proc || H.proc.exitCode !== null || H.proc.signalCode !== null) return r(); H.proc.once("exit", r); H.proc.kill(); });
 async function hostSays(re, ms = 20_000) {
   const end = Date.now() + ms;
   while (Date.now() < end) { if (re.test(H.log)) return true; await sleep(100); }

@@ -135,6 +135,9 @@
 .row-wrap:is([data-sid], .closed-card) .row-gist { grid-area: gist; }
 .row-wrap:is([data-sid], .closed-card) .row-stat { grid-area: stat; justify-self: end; align-self: center; display: flex; }
 .row-wrap:is([data-sid], .closed-card) .row-ctl { grid-area: ctl; justify-self: end; align-self: start; margin: 0; }
+/* Four verbs in a line took half a closed card and cut its title to three
+   words; two by two they are as narrow as the "closed …" pill above them. */
+.row-wrap.closed-card .row-ctl { display: grid; grid-template-columns: repeat(2, auto); justify-content: end; gap: var(--sp-6); }
 .row-wrap:is([data-sid], .closed-card) .row-side { grid-area: side; justify-self: end; align-self: end; margin: 0; }
 .row-wrap:is([data-sid], .closed-card) .row-tags { grid-area: tags; align-self: end; }
 .row-wrap:is([data-sid], .closed-card) .row-tags:empty { display: none; }

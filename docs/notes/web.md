@@ -1205,7 +1205,7 @@ verbs split in two, and the words say which:
 The row used to be the folder title, the launch label and "reopen · closed 3h ago" — every row from one repo looked the same, and a session the host had closed ON ITS OWN (close-when-done after its item finished, or reaped early to free a slot for a waiting item) was indistinguishable from one you closed. The host now records the facts on `ClosedSession` (`shared/closed.ts`, all optional, absent = unknown); the words are `core/launcher/closedRowWords.ts`, pure and node-tested (named so, not `closedRows.ts`, because macOS's case-insensitive filesystem makes that the same file as `ClosedRows.tsx` and `tsc` refuses it).
 
 - **Headline** is the item it ran, else its ≤4-word tab name, else the folder title; the folder title then follows as a small line, and only when it is not already the headline.
-- **Auto-closed rows** carry a bordered pill on its own line under the headline — the `Bot` icon plus *closed automatically — work finished* / *closed automatically to make room for a waiting item*. Icon and words, never colour alone. A chip *closed automatically · N* above the list cuts to exactly those (`isAutoClosed` counts it and cuts it), with "n of N shown — show all" while the cut is on. The chip is drawn only when N > 0: a standing "· 0" on every launcher is noise, and the cut falls back to everything if its rows go.
+- **Auto-closed rows** carry a bordered pill on its own line under the headline — the `Bot` icon plus *closed automatically — work finished* / *closed automatically to make room for a waiting item*. Icon and words, never colour alone. A chip *closed automatically · N* above the list cuts to exactly those (`isAutoClosed` counts it and cuts it), with "n of N shown — show all" while the cut is on. A second pill and chip, *stopped unexpectedly · N*, hold the sessions nobody closed (`isCutOff`: *stopped by a desktop restart* / *ended while the desktop was not watching*). Two more, *starred · N* and *flagged · N*, hold what the person marked; the row carries both toggles, the star only when the host says `starred` at all (an older one would ignore the tap). Each chip is drawn only when its N > 0: a standing "· 0" on every launcher is noise, and the cut falls back to everything if its rows go.
 - **Kind chip** (by hand / backlog / scheduled / agent / fan-out / fork / reopened after limit), **reason** ("closed by you" small; "ended on its own (exit N)" only when non-zero; "stopped at usage limit — reopened" once `resumedAs` exists), the item's **outcome** with its detail, the **gist** (summary, else last prompt) clamped to two lines, and the **small print**: open-for duration, last active, "N prompts sent from here" (a FLOOR — desk-typed prompts are not counted, so the words say *from here*), model.
 - **An old row draws exactly what it drew before** — every function answers nothing for an absent field. The reopen tap is unchanged.
 
@@ -1368,6 +1368,26 @@ original paragraph, and CLAUDE.md's per-entry links point at these headings.
   both hooks, because the Android shell is told ONE depth. `tools/backstep.test.mjs` fails a file
   that draws two sheet heads closing differently without `useBackStep`; `PadSheet` is exempt because
   its editor's arrow DISCARDS the draft, and a swipe must never delete typed words.
+  **What is drawn OVER the screen is a step too (`useDialogStep(open, dismiss)`).** A confirm, an ask
+  dialog, a hint card, explain mode, the session's popovers: their hosts sit beside `App`, so Back moved
+  the screen underneath and left the question up, and on the repo list it left the app. Back is the
+  backdrop's answer. The entry is retired differently from a sub-view's: an answer runs on in promise
+  continuations that may move the route, and the retiring `history.go(-1)` is async, so started first it
+  stepped off the screen the answer had just pushed. The entry goes `VACANT` at once and is popped 50 ms
+  later; a Back in between passes it (`landPop`). While that pop is in flight `landRoute` parks its landing (`isRetiring`, `whenRetired`) and the pop itself is housekeeping (`retireLanded`), so a route that moves in that moment is not undone by it. One retire traversal runs at a time (a second waits: the first's popstate would release the parked
+  landings while it still ran), and a step opened while one runs, or while a Back of ours passes dead entries (`passOn`), takes its entry after it. A screen that is finished under such a step (a Send
+  sheet whose Start went through a hint card) cannot be replaced from above, so the push marks it vacant as
+  well (`Landing`'s `vacate`). A pending session that starts under an open picker is renamed instead
+  (`renameUnder`): the stack and the entry on top say the session at once, the entries below say it when a pop
+  reaches them (`mendRenamed`), so the picker stays open and Back closes it alone. `landPop` passes a
+  dead entry ONCE (`pass.depth`): a landing whose hash differs fires popstate and hashchange, and answering
+  both sent two Backs, which is how Back from a session picked in the open-tabs list left the app. A Back
+  that STARTS on dead entries (several dialogs just answered) closed nothing by passing them, so it goes on to
+  leave the screen under them (`pass.owed`). After a reload the stack knows no key below the entry booted
+  on, so the entry's own key says it is a step (`popStepsTo`'s `entryKey`), and a sheet the URL cannot
+  bring back is passed too: it would draw the screen under it a second time. A
+  dialog holding typed words (`AskText`) stays, saying so. Before `App` mounts nobody listens for pops
+  (`setRouted`), so a dialog there takes no step.
   **A pop is one pure decision** (`routeFromPop`, node-tested), and **it reads the
   overlay off the KEY, never off the hash** (`overlayFromKey`): the hash is allowed to forget a transient overlay — that is what
   `PERSISTED_OVERLAYS` is for — but the entry for that screen still exists, so unwinding INTO one and
@@ -2398,6 +2418,16 @@ correctly line by line:
   WITHOUT giving up the caret; with full screen on it was asking one hider to let go while the other
   held on, so the ☰ appeared to do nothing and the only thing that worked was tapping it a second
   time once the keyboard had gone. Leaving the peek resumes whatever was hiding before it.
+
+##### Alt+G, and why that letter (`fullScreenKey.ts`)
+
+Asked for as *"a shortcut for full screen which is not yet occupied by the browser itself"*. The key
+has to be free in three places at once, and most are not: F11 and Alt+D/E/F are the browser's, Firefox
+adds its menu letters (English F E V S B T H, German D B A C L X H), and Alt+W, +O, +P, +T, +M, +V,
+B/D/F/Y and Alt+Return are claude's own (Alt+W was the first choice, until the CLI's binary showed
+`meta+w` bound to its workflow keyword). Alt+N is this app's. Alt+Z is a graphics overlay's on many
+Windows machines, and moves on a QWERTZ keyboard. The press is caught in the capture phase, so a focused
+terminal does not hand it to the CLI, and it runs the button's own `toggleFullScreen`.
 
 ### `outbox.ts`
 
@@ -8634,6 +8664,13 @@ The queue's one-shot migrations (`migrateGiveUps` among them) are `core/queue/mi
   BIGGER grid, and the refit's report is what resizes the PTY). **No px readout** over live output;
   at an end of the ladder that button is ABSENT with the end named, never dimmed.
 
+- **The corner group leaves the terminal box** (2026-11-24, R-toolbar-012; geometry `cornerPlace.ts`, the drag `useCornerDrag.ts`). `.term-area` clips on purpose and
+  paints below the compose box, so the group is a portal on `.screen` and an empty `.term-zoom-anchor` stays
+  in the box for CSS to move (typing room, banner) or hide (box under 96px). Dropped wholly over the terminal
+  it is an offset from that anchor, kept in the box; dropped anywhere else it is a gap to the screen's right
+  edge and its nearer top or bottom, so it rides up with the keyboard. The clamp is redone on every layout and
+  never stored. Inside `.screen`'s padding only: the always-on strips live there and paint above the group.
+
 ### Second trim pass: measured numbers and incident stories cut from the skill (verbatim)
 
 - theme.test.mjs checks token parity, 4.5:1 text, 3:1 charts, CVD separability and all 360 repo hues.
@@ -9471,6 +9508,10 @@ Drops are runs of adjacent minutes holding a no-socket probe, so one is never st
 pocket. Bytes carry their source (`noteTraffic`'s third argument) because a total without a split
 cannot answer "on what". The sheet's landing is taken twice: the charts arrive after the first scroll
 and push the target down.
+
+## What opens over a started session — `core/launch/afterStart.ts` (2026-11-23)
+
+A repo's set-up page opens over the session a person just started, and the start must stay exactly the start it was. So `openRepoWith` and `openCwd` hand a wish over AFTER the op is queued and the pending screen asked for; a deferred start (launch ask, hosted notice) carries it in its own resumption and a cancelled one drops it. The wish waits on the pending screen and is judged on the first other screen: the session that create became, with no sheet over it, or nothing (`afterStartStep`). Opened on the pending screen instead it flashed and vanished, because the create's ack focuses the session and `attach` closes any sheet; it would also cover a refusal. Core decides WHEN, the feature decides WHETHER (`offerRepoSetup`: not in the demo, not on a child's device, with a link, once per page load).
 
 ## Offline reads, offline writes, slow jobs — `resourceCache.ts`, `offlineGate.tsx`, `slowJobs.ts`, `slowJobsLogic.ts` (2026-11-13)
 

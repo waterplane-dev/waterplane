@@ -13,6 +13,7 @@
  */
 import { execFile, execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { uptime } from "node:os";
 import { basename, delimiter, join } from "node:path";
 import * as pty from "node-pty";
 import type { IPty } from "node-pty";
@@ -20,7 +21,7 @@ import type { SessionInfo, SessionNetRetry } from "@waterplane/shared";
 import { cleanSessionBudget, logTag, netRetryStalls, sessionBudgetVerdict } from "@waterplane/shared";
 import { hostStateDir } from "../branddirs.js";
 import { spawnFailure } from "../ptycap.js";
-import { ptyEnv } from "../ptyenv.js";
+import { ptyEnv, userBinEnv } from "../ptyenv.js";
 import { SESSION_ID_ENV } from "../reposkilltext.js";
 import { inCopyModeSync } from "../tmuxscroll.js";
 import { derive, knownBackend, resolveBackend, type BackendDescriptor } from "../backends/index.js";
@@ -166,16 +167,20 @@ export interface LiveRecordFacts { mtimeMs: number; tmuxSocket?: string }
  * "Provably" is every condition below, and each one keeps on doubt:
  * - `tmuxNames` is a SUCCESSFUL `tmux ls` of this host's server. Null is "the
  *   question could not be asked" (no server, a socket error, a timeout) and
- *   reclaims nothing — the same rule `sweepSessionStores` holds for its alive
- *   set, and for the same reason: this function's answer gets deleted.
+ *   names nothing on tmux's word — the same rule `sweepSessionStores` holds for
+ *   its alive set, and for the same reason: this function's answer gets deleted.
+ * - …except a record last written before this machine came up (`bootedAt`): no
+ *   process outlives a reboot, so that needs no listing and no minimum age. It
+ *   is the ONLY proof available right after one, when no tmux server exists
+ *   yet — and a listing that does name the session still wins over the clock.
  * - the id is a bare `<id>` (the store-file rule); anything else is refused.
  * - the id is not held by this host (`keep`: the session map, the parked set).
  * - the record was written on THIS server (`tmuxSocket` equal to `server.socket`),
  *   or is unstamped and this host runs on the default socket
  *   (`TMUX_SOCKET_DEFAULT` says why that is the only reading of an unstamped
  *   record that is safe). A listing of one server says nothing about another.
- * - the record has gone unwritten for longer than `minAgeMs` — a spawn whose
- *   record is on disk while its `new-session` is still in flight.
+ * - the record has gone unwritten for longer than `minAgeMs` (or predates the
+ *   boot) — a spawn whose record is on disk while its `new-session` is in flight.
  * - facts were read at all; a record that could not be stat'ed or parsed is kept.
  *
  * Pure — ids, a listing and facts in, ids out — so every one of those rules is
@@ -189,32 +194,50 @@ export function staleLiveIds(
   minAgeMs: number,
   server: { socket: string; isDefault: boolean } = { socket: TMUX_SOCKET_ID, isDefault: TMUX_SOCKET_DEFAULT },
   keep: ReadonlySet<string> = new Set(),
+  bootedAt?: number,
 ): string[] {
-  if (!tmuxNames) return [];
   const out: string[] = [];
   for (const id of liveIds) {
     if (!STORE_FILE_RE.test(`${id}.json`)) continue;
-    if (keep.has(id) || tmuxNames.has(tmuxName(id))) continue;
+    if (keep.has(id) || tmuxNames?.has(tmuxName(id))) continue;
     const f = facts.get(id);
-    if (!f || !Number.isFinite(f.mtimeMs) || now - f.mtimeMs <= minAgeMs) continue;
+    if (!f || !Number.isFinite(f.mtimeMs)) continue;
+    if (!predatesBoot(f.mtimeMs, bootedAt) && (!tmuxNames || now - f.mtimeMs <= minAgeMs)) continue;
     if (f.tmuxSocket ? f.tmuxSocket !== server.socket : !server.isDefault) continue;
     out.push(id);
   }
   return out;
 }
 
+/** Was a record last written before this machine came up? Ten seconds of slack
+ *  for the two clocks; an unknown boot time answers no. */
+export function predatesBoot(mtimeMs: number, bootedAt: number | undefined): boolean {
+  return bootedAt !== undefined && Number.isFinite(bootedAt) && mtimeMs < bootedAt - 10_000;
+}
+
+/** When this machine came up; undefined when the OS will not say. */
+function machineBootedAt(now: number): number | undefined {
+  try { const up = uptime(); return up > 0 ? Math.round(now - up * 1000) : undefined; } catch { return undefined; }
+}
+
 /**
- * `rediscover()`'s reclaim, given the listing it already holds: read each
- * record's mtime and stamp, ask `staleLiveIds`, delete what it names, say so in
- * one log line. Returns the ids deleted. A record is read with a plain parse rather than `loadLive`,
+ * `rediscover()`'s reclaim, given the listing it already holds (null = `tmux ls`
+ * failed): read each record's mtime and stamp, ask `staleLiveIds`, put a row for
+ * each on *Recently closed* (R-sessions-071), and only then delete the records,
+ * in one log line. The record is the last thing that names the session, and it
+ * used to be deleted with no row: every session open when a desktop rebooted
+ * vanished from every list but the archive. So nothing is deleted when the rows
+ * could not be written down. A session that already HAS a row (backgrounded
+ * by a person) keeps that one. Returns the ids deleted. A record is read with a plain parse rather than `loadLive`,
  * whose guard renames a corrupt file aside — a side effect that would take the
  * record out of `aliveSessionIds` without anyone having decided it was dead.
  */
-export function reclaimStaleLive(core: SessionCore, tmuxNames: ReadonlySet<string>, now = Date.now()): string[] {
+export function reclaimStaleLive(core: SessionCore, tmuxNames: ReadonlySet<string> | null, now = Date.now(), bootedAt = machineBootedAt(now)): string[] {
   let files: string[];
   try { files = readdirSync(liveDir(core)); } catch { return []; }   // no store, or unreadable: nothing to judge
   const ids: string[] = [];
   const facts = new Map<string, LiveRecordFacts>();
+  const metas = new Map<string, LiveMeta>();
   for (const f of files) {
     const m = STORE_FILE_RE.exec(f);
     if (!m) continue;
@@ -228,12 +251,28 @@ export function reclaimStaleLive(core: SessionCore, tmuxNames: ReadonlySet<strin
       if (!rec || typeof rec !== "object" || Array.isArray(rec)) continue;
       const sock = (rec as LiveMeta).tmuxSocket;
       facts.set(id, { mtimeMs: st.mtimeMs, ...(typeof sock === "string" && sock ? { tmuxSocket: sock } : {}) });
+      const m2 = rec as LiveMeta;
+      if (typeof m2.cwd === "string" && typeof m2.title === "string") metas.set(id, { ...m2, id });
     } catch { /* unreadable or unparseable ⇒ no facts ⇒ kept */ }
   }
   const keep = new Set<string>([...core.sessions.keys(), ...parkState(core).map.keys()]);
-  const stale = staleLiveIds(ids, tmuxNames, now, facts, STALE_LIVE_MIN_AGE_MS, undefined, keep);
+  const stale = staleLiveIds(ids, tmuxNames, now, facts, STALE_LIVE_MIN_AGE_MS, undefined, keep, bootedAt);
+  if (!stale.length) return [];
+  const rows = stale.flatMap((id) => {
+    const m = metas.get(id), f = facts.get(id);
+    if (!m || !f || core.closedRow(id)) return [];
+    const reboot = predatesBoot(f.mtimeMs, bootedAt);
+    return [core.closedRowOfLive(m, reboot ? "reboot" : "lost", reboot && bootedAt !== undefined ? bootedAt : now)];
+  });
+  // The one used last first: they all carry the same close time.
+  const used = (r: (typeof rows)[number]): number => r.lastActiveAt ?? r.openedAt ?? 0;
+  rows.sort((a, b) => b.closedAt - a.closedAt || used(b) - used(a));
+  if (rows.length && !core.pushClosedAll(rows)) {
+    console.error(`${logTag} ${rows.length} session(s) ended while the host was down, and their closed rows could not be written — records kept for the next boot`);
+    return [];
+  }
   for (const id of stale) deleteLive(core, id);
-  if (stale.length) console.log(`${logTag} swept ${stale.length} stale live record(s) — no tmux session left for them, kept ${ids.length - stale.length}`);
+  console.log(`${logTag} swept ${stale.length} stale live record(s) — no tmux session left for them, ${rows.length} listed under Recently closed, kept ${ids.length - stale.length}`);
   return stale;
 }
 
@@ -296,7 +335,7 @@ export function spawnBackend(core: SessionCore, id: string, cwd: string, cols: n
   // routes (`resolveFollowUpSession`) instead of being guessed from its folder,
   // which fails when several sessions run in one repo. Last, so no launch
   // overrides it. Under tmux the id is stable across a host restart (`reattach`).
-  const paneEnv = { ...backendPaneEnv(backend, launchEnv), [SESSION_ID_ENV]: id };
+  const paneEnv = { ...userBinEnv(), ...backendPaneEnv(backend, launchEnv), [SESSION_ID_ENV]: id };
   const env = { ...ptyEnv(), ...paneEnv };
   const BIN = backend.bin();
   // tmux is required (`tmuxreq.ts`): no binary ⇒ refuse in words naming the

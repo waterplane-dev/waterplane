@@ -25,6 +25,8 @@ export function DownloadsSheet() {
         "no connection — the rule lives on the desktop and was not saved");
     }}
     onDismiss={(id) => core.conn.liveSend({ t: "pull.dismiss", id }, "dismissed")}
+    onDismissAll={(ids, done) => core.conn.liveSendAll(ids.map((id) => ({ t: "pull.dismiss" as const, id })), done,
+      "no connection — the desktop's list would bring these back, so nothing was deleted")}
     rulesFor={rules ?? undefined}
     onOpenApps={door ? () => { core.say.track("overlay:apps"); door.open({ kind: "all" }); } : undefined}
     onClose={() => core.nav.close("pull")}

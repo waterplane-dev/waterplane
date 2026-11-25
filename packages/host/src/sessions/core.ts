@@ -164,6 +164,8 @@ export interface Session {
   /** True while a prompt candidate is being confirmed against the rendered screen
    *  — the VT replay is slow enough that overlapping checks could stack up. */
   promptRendering: boolean;
+  /** A check came due during that render: one more is run when it ends. */
+  promptOwed?: boolean;
   /** Consecutive strict re-detects that failed while a dialog was still on the
    *  screen — a half-drawn repaint, not a box that went away. */
   promptMisses: number;
@@ -682,6 +684,10 @@ export interface SessionCore {
   applyStar(info: SessionInfo): void;
   applyPromptLabels(s: Session): void;
   pushClosed(entry: ClosedRow): void;
+  /** Several rows at once; false ⇒ the stack did not reach the disk. */
+  pushClosedAll(rows: readonly ClosedRow[]): boolean;
+  /** The row of a session that is only a `live/` record any more. */
+  closedRowOfLive(m: LiveMeta, by: ClosedBy, closedAt: number): ClosedRow;
   /** The closed row for `s` as it is NOW (`roster.ts`): what it was, why it
    *  ended (`by`, else `s.closeBy`), and the exit code/signal for an own exit. */
   closedRowOf(s: Session, alive: boolean, exit?: { by?: ClosedBy; exitCode?: number; signal?: number }): ClosedRow;

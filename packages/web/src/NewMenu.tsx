@@ -1,18 +1,24 @@
 import { useState } from "react";
 import { Check, Loader2, Rocket } from "lucide-react";
-import type { BackendInfo, RepoTarget } from "@waterplane/shared";
+import type { BackendInfo, NewProjectOptions, RepoTarget } from "@waterplane/shared";
 import { api, isOffline } from "./api";
 import { track } from "./usage";
 import { SheetHead } from "./Sheet";
+import { newProjectPicks, tickedOptions, withPick } from "./newProjectPicks";
+import { LS, lsJson, lsSetJson } from "./storage";
+import { useRemoteResource } from "./useRemoteResource";
 import { backendDrift, backendOptionLabel } from "./backendCaps";
 import { Unavailable } from "./Unavailable";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
+import { takeNewTab } from "./newSheetTab";
 
 interface Props {
   root: string;
   repos: RepoTarget[];
-  onOpen: (cwd: string, title: string) => void; // start a session there
+  /** Start a session there. `offerSetup`: a repo just made or cloned, on a desktop that has a set-up page
+   *  for it (`setupPage` in its answer; absent on an older one). Never for a folder or a worktree. */
+  onOpen: (cwd: string, title: string, offerSetup?: boolean) => void;
   onChanged: () => void;                          // repos changed → refresh
   onClose: () => void;
   /**
@@ -35,18 +41,23 @@ interface Props {
 
 /** Create a new folder, a new git repo, a clone of a remote, or a new worktree of an existing repo. */
 export function NewMenu({ root, repos, onOpen, onChanged, onClose, backends, backend, onBackend, onBuildApp }: Props) {
-  const [tab, setTab] = useState<"repo" | "clone" | "folder" | "worktree">("repo");
+  const [tab, setTab] = useState<"repo" | "clone" | "folder" | "worktree">(() => takeNewTab() ?? "repo");
   const drift = backends ? backendDrift(backends, backend ?? "claude") : null;
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [url, setUrl] = useState("");
   /** Seed the phone-facing scaffold (gitignore, README, CLAUDE.md, inbox/outbox). */
   const [initSetup, setInitSetup] = useState(true);
+  /** What this desktop can also set up. Never cached: it carries a one-shot consent token. */
+  const extras = useRemoteResource<NewProjectOptions>("newproject", () => api.newProjectOptions(), { enabled: tab === "repo" && initSetup, cache: false });
+  const [picks, setPicks] = useState(() => newProjectPicks(lsJson(LS.newProjectPicks, null)));
+  const options = extras.data?.options ?? [];
+  const ticked = initSetup ? tickedOptions(options, picks) : [];
   const [repoId, setRepoId] = useState(repos[0]?.id ?? "");
   const [branch, setBranch] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   /** A created repo we did NOT auto-open because git had something to say. */
-  const [made, setMade] = useState<{ path: string; title: string } | null>(null);
+  const [made, setMade] = useState<{ path: string; title: string; offerSetup: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const primaryRepos = repos.filter((r) => r.isPrimary);
@@ -55,6 +66,7 @@ export function NewMenu({ root, repos, onOpen, onChanged, onClose, backends, bac
   const missing = tab === "worktree"
     ? (!primaryRepos.length ? "no repo on this desktop to branch from" : !branch ? "name the new branch first" : "")
     : tab === "clone" ? (!url.trim() ? "paste a URL first" : "")
+    : tab === "repo" && initSetup && extras.state === "loading" ? "reading the set-up choices"
     : !name ? `name the new ${tab === "repo" ? "project" : "folder"} first` : "";
 
   async function go() {
@@ -73,22 +85,23 @@ export function NewMenu({ root, repos, onOpen, onChanged, onClose, backends, bac
           onChanged();
           const title = r.path!.split("/").pop() || "clone";
           if (r.warning) {
-            setMade({ path: r.path!, title });
+            setMade({ path: r.path!, title, offerSetup: !!r.setupPage });
             setMsg(`Cloned into ${r.path}${r.branch ? ` on ${r.branch}` : ""} — ${r.warning}`);
-          } else onOpen(r.path!, title);
+          } else onOpen(r.path!, title, !!r.setupPage);
         }
       } else if (tab === "repo") {
         track(initSetup ? "action:repo.new.project" : "action:repo.new.bare");
-        const r = await api.newRepo(root, name, { setup: initSetup, description: desc });
-        if (r.error) setMsg(`Error: ${r.error}`);
+        const r = await api.newRepo(root, name, { setup: initSetup, description: desc, options: ticked, confirm: extras.data?.confirm });
+        // A refused token (the sheet sat open too long) needs a fresh one; the ticks stay.
+        if (r.error) { setMsg(`Error: ${r.error}`); extras.reload({ quiet: true }); }
         else {
           onChanged();
           // A warning (usually: no git identity, so the commit used a
           // placeholder) is worth reading before the terminal takes the screen.
           if (r.warning) {
-            setMade({ path: r.path!, title: name });
+            setMade({ path: r.path!, title: name, offerSetup: !!r.setupPage });
             setMsg(`Created ${r.path} on ${r.branch}${r.files?.length ? ` · ${r.files.join(", ")}` : ""} — ${r.warning}`);
-          } else onOpen(r.path!, name);
+          } else onOpen(r.path!, name, !!r.setupPage);
         }
       } else {
         const r = await api.newWorktree(repoId, branch);
@@ -155,6 +168,19 @@ export function NewMenu({ root, repos, onOpen, onChanged, onClose, backends, bac
                 ? "git init on main + first commit, .gitignore, README, CLAUDE.md, and the .claude/outbox drop the phone gallery reads."
                 : "bare git init + empty first commit only."}
             </Hint>
+            {initSetup && options.map((o) => (
+              <label key={o.id} className="new-option">
+                <input type="checkbox" checked={ticked.includes(o.id)} onChange={(e) => {
+                  const next = withPick(picks, o.id, e.target.checked);
+                  setPicks(next);
+                  lsSetJson(LS.newProjectPicks, next);
+                }} />
+                <span><span>{o.label}</span><Hint as="span">{o.hint}</Hint></span>
+              </label>
+            ))}
+            {initSetup && extras.state === "error" && (
+              <Hint tone="warn">The desktop could not list its other set-up choices, so the project is created without them.</Hint>
+            )}
           </>
         )}
         {tab === "worktree" && (
@@ -190,7 +216,7 @@ export function NewMenu({ root, repos, onOpen, onChanged, onClose, backends, bac
             ? <Unavailable cants={[{ label: verb, reason: missing }]} />
             : <button className="send" onClick={go}>{verb}</button>}
         {msg && <Hint>{msg}</Hint>}
-        {made && <button className="send" onClick={() => onOpen(made.path, made.title)}>Open session anyway</button>}
+        {made && <button className="send" onClick={() => onOpen(made.path, made.title, made.offerSetup)}>Open session anyway</button>}
       </div>
     </div>
   );

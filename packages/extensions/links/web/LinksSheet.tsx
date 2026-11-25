@@ -10,7 +10,7 @@
  * port shows the serve command that would give it a front door (shown, never run).
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, CircleCheck, CircleDashed, CircleX, Link2, Pencil, Pin, PinOff, Plus, SlidersHorizontal } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, CircleCheck, CircleDashed, CircleX, KeyRound, Link2, Pencil, Pin, PinOff, Plus, SlidersHorizontal } from "lucide-react";
 import { useConnStatus, useCore, useStore } from "@waterplane/sdk";
 import { CountChips, Explain, FilterBar, SearchBox, StaleHead, ago, useNow, Button, Hint, RowSub } from "@waterplane/kit";
 import { LINK_ENVS, isHttpUrl, type FoundLink, type LinkEnv, type PinnedView } from "../shared/wire.mts";
@@ -19,7 +19,7 @@ import {
   inRepo, kindWord, localWords, matching, probeWords, sharedEnv, shortUrl, whereWord, type Facets, type GroupBy,
 } from "./logic.ts";
 import {
-  addLink, clearCut, clearFacets, closeLinks, collapseAll, editLink, expandAll, links, lookOnOpen, openLink, pinFound, setFacet, setGroupBy,
+  addLink, clearCut, clearFacets, closeLinks, collapseAll, editLink, expandAll, links, lookOnOpen, lookWithSignIn, openLink, pinFound, setFacet, setGroupBy,
   setQuery, setShowHidden, toggleFold, unpinLink,
 } from "./state.ts";
 import "./links.css";
@@ -198,7 +198,7 @@ export function LinksSheet() {
 
   const head = (
     <StaleHead title={<><Link2 size={16} /> links</>} onClose={closeLinks} onRefresh={() => void lookOnOpen(true)}
-      refreshTitle="look again, cloud included" at={v.res?.ok ? v.at : null} />
+      refreshTitle={v.res?.ok && v.res.result.signIn ? "look again on this desktop" : "look again, cloud included"} at={v.res?.ok ? v.at : null} />
   );
   if (!v.res) return <div className="sheet">{head}<div className="empty">{status === "open" ? "Asking the desktop…" : "No connection — the desktop can't be asked from here."}</div></div>;
   if (!v.res.ok) return <div className="sheet">{head}<div className="empty">The desktop did not answer: {v.res.error}</div></div>;
@@ -248,6 +248,12 @@ export function LinksSheet() {
         )}
         <Hint style={PAD}>{discoveryLine(s, ago)}</Hint>
         {s.notes.map((n) => <Hint key={n} style={PAD}>{n}</Hint>)}
+        {s.signIn && (s.signIn.looking
+          ? <Hint style={PAD}>If {s.signIn.name} asks for your approval, the look starts after that.</Hint>
+          : <>
+            <Hint style={PAD}>gcloud is signed out, so ↻ looks at this desktop only. A cloud look may ask for your approval.</Hint>
+            <div className="links-more"><Button title={`look at the cloud with ${s.signIn.name}`} onClick={() => void lookWithSignIn()}><KeyRound size={14} /> look at the cloud with {s.signIn.name}</Button></div>
+          </>)}
 
         <div className="section section-head">Pinned</div>
         {pinned.length === 0

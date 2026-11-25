@@ -271,6 +271,9 @@ export * from "./autocompact.js";
  *  offer on the host, three states the person controls, counted in nothing. */
 export * from "./optins.js";
 
+/** One repo's set-up page: its rows, default ticks and footer counts, from one function. */
+export * from "./reposetup.js";
+
 /** What a pile of token counts MEANS — the derived figures and the words for
  *  them, including why a single "tokens used" number is 96% cache reads. */
 export * from "./tokens.js";

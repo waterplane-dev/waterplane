@@ -91,7 +91,7 @@ test("the preview puts the typed cap against the spend", () => {
   assert.equal(budgetPreview({ unit: "tok", max: 3e6 }, spark, null, NOW), "1.2M of 3M — 40% used");
   assert.equal(budgetPreview({ unit: "sessionPct", max: 10 }, spark, cal, NOW), "≈4.8% of 10% — 48% used");
   assert.match(budgetPreview({ unit: "usd", max: 0.4 }, spark, null, NOW), /already past it: .* held as soon as it is set/);
-  assert.equal(budgetPreview({ unit: "usd", max: 1000 }, spark, null, NOW), "$0.48 of $1,000 — under 1% used");
+  assert.equal(budgetPreview({ unit: "usd", max: 1000 }, spark, null, NOW), "$0.48 of $1,000.00 — under 1% used");
   // Unknown spend or no session: no preview (the spent line says why).
   assert.equal(budgetPreview({ unit: "weeklyPct", max: 5 }, spark, cal, NOW), null);
   assert.equal(budgetPreview({ unit: "usd", max: 2 }, null, null, NOW), null);

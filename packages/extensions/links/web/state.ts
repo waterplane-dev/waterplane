@@ -73,6 +73,12 @@ async function act<K extends "pin" | "add" | "edit" | "unpin">(m: K, args: Links
   return false;
 }
 
+/** The command may ask for an approval; the answer comes back as the `changed` push. */
+export async function lookWithSignIn(): Promise<void> {
+  if (core().conn.status !== "open") { core().say.toast("no connection — the desktop can't be asked from here"); return; }
+  take(await client.call("lookSignIn", {}));
+}
+
 export const pinFound = (key: string) => act("pin", { key }, "pinned");
 export const addLink = (a: { label: string; url: string; repo: string | null; env: LinkEnv }) => act("add", a, "pinned");
 export const editLink = (id: string, patch: { label?: string; env?: LinkEnv; repo?: string | null }) => act("edit", { id, ...patch });

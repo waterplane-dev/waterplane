@@ -15,6 +15,7 @@ import type { ReactNode } from "react";
 import { CalendarClock, Square, SquareCheck, X } from "lucide-react";
 import { RETIME_NONE_PICKED, retimeNote } from "./backlogFilter";
 import { track } from "./usage";
+import { useDialogStep } from "./backStep";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
 
@@ -71,7 +72,8 @@ export function RetimeBar({ picked, eligible, shown, onAll, onNone, onDone, onCh
 
 /** Where the When editor is drawn: over the list, so the ticks and the filter
  *  underneath are still there when it closes without a re-time. */
-export function RetimeLayer({ children }: { children: ReactNode }) {
+export function RetimeLayer({ onCancel, children }: { onCancel: () => void; children: ReactNode }) {
+  useDialogStep(true, onCancel);
   return <div className="retime-layer">{children}</div>;
 }
 

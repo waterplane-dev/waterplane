@@ -260,7 +260,8 @@ export type ClientSessionMsg =
    *  on a cap the person has since changed. Answered by `session.updated`. */
   | { t: "session.budget.set"; id: string; budget: SessionBudget | null }
   | { t: "session.remoteControl"; id: string; enabled: boolean }
-  /** Toggle the manual "prima interest" star (durable — survives restart). */
+  /** Toggle the manual "prima interest" star (durable — survives restart). `id` is a
+   *  live session id OR a conversation id (a *Recently closed* row's), as below. */
   | { t: "session.star"; id: string; starred: boolean }
   /**
    * Set or clear the follow-up flag (R-sessions-041). `id` is a live session

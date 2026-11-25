@@ -11,6 +11,7 @@ import { showToast } from "../../toast";
 import { track } from "../../usage";
 import { CLI_SHORTCUTS, CLI_SHORTCUTS_VERSION, shortcutWrites } from "./cliShortcuts";
 import { keepFocus } from "../compose/ComposeBar";
+import { useDialogStep } from "../../backStep";
 import { Button } from "../../kit/Button";
 
 const ICON = 16;
@@ -19,6 +20,7 @@ const ICON = 16;
 const SEQ_GAP_MS = 150;
 
 export function KeysPop({ sendInput, onClose }: { sendInput: (data: string) => void; onClose: () => void }): ReactNode {
+  useDialogStep(true, onClose);
   // Escape closes the list (a hardware keyboard); capture, so the terminal
   // does not also get it as a keystroke.
   useEffect(() => {

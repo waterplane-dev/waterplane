@@ -26,7 +26,13 @@ const setUpRepo = (worktree: string) => {
 
 export function activate(api: HostPluginApi): void {
   api.setupCheck(({ worktree }) => requirementsCheck(worktree));
-  api.setupFix("requirements", ({ worktree }) => setUpRepo(worktree));
+  api.setupFix("requirements", ({ worktree }) => setUpRepo(worktree), {
+    newProject: () => ({
+      label: "requirements list",
+      hint: "Writes a small skill and an empty docs/requirements/, so what you ask for can be listed later. No model call.",
+      on: false,
+    }),
+  });
 
   // Args arrive unchecked from the wire: every method names its repo or says it was not told one.
   const scope = async (a: unknown): Promise<PluginRepoScope> => {

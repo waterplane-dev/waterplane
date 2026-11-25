@@ -20,7 +20,7 @@ test("without one (an API key, or a week not calibrated yet) dollars decide", ()
   assert.equal(spendWarnOf(30, null, D).level, "warn");
   const h = spendWarnOf(80, undefined, D);
   assert.equal(h.level, "high"); assert.equal(h.by, "usd");
-  assert.match(h.text, /red mark at \$75 \(no weekly limit reading/);
+  assert.match(h.text, /red mark at \$75\.00 \(no weekly limit reading/);
 });
 
 test("unknown never trips, and off is off", () => {

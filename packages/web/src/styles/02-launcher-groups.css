@@ -14,7 +14,7 @@
    to the fallback, computes to a flat transparent and inherits that down to
    every tab. The symptom is a strip of colourless blocks and nothing in the
    stylesheet that looks wrong. */
-.repo-group, .row-wrap, .stab, .stab-row, .sess-top, .rc-row, .rc-swatch, .rc-dot {
+.repo-group, .repo-group-block, .row-wrap, .stab, .stab-row, .sess-top, .rc-row, .rc-swatch, .rc-dot {
   --repo-fill: color-mix(in srgb, var(--repo-accent, transparent) var(--repo-veil), var(--repo-card, transparent));
   --repo-fill-on: color-mix(in srgb, var(--repo-accent, transparent) var(--repo-veil-on), var(--repo-card-on, transparent));
   --repo-edge: color-mix(in srgb, var(--repo-accent, transparent) var(--repo-edge-mix, 38%), var(--repo-hair, transparent));
@@ -77,11 +77,15 @@
 }
 /* Docked, the header's rounded top corners let the rows scrolling under it show
    through (owner's screenshot, 2026-11-19). A page-coloured fill drawn OUTSIDE
-   the curve only: a ring shadow round a rounded box, clipped to that box's square. */
+   the curve only, one gradient per corner. Never a clipped ring shadow: at a
+   fractional pixel ratio (browser zoom, most phones) its cut edge drew a pale
+   hairline across the stripe, 12px down. */
 .repo-group::before {
-  content: ""; position: absolute; top: -1px; left: -1px; right: -1px; height: var(--r-12);
-  border-radius: var(--r-12) var(--r-12) 0 0; box-shadow: 0 0 0 var(--r-12) var(--bg);
-  clip-path: inset(0); pointer-events: none;
+  --corner: transparent calc(var(--r-12) - 0.25px), var(--bg) calc(var(--r-12) + 0.25px);
+  content: ""; position: absolute; top: -1px; left: -1px; right: -1px; height: var(--r-12); pointer-events: none;
+  background:
+    radial-gradient(circle at 100% 100%, var(--corner)) 0 0 / var(--r-12) var(--r-12) no-repeat,
+    radial-gradient(circle at 0 100%, var(--corner)) 100% 0 / var(--r-12) var(--r-12) no-repeat;
 }
 /* Group header left half: tap target that collapses/expands the repo's session
    rows. Carries the name plus the live-session and worktree counts. */
@@ -105,7 +109,7 @@
   background: none; border: none; color: inherit; font: inherit; text-align: left;
   /* Vertical padding is tap target, not decoration: the header row is one of the
      most-tapped things in the app and used to be a ~20 px strip. */
-  padding: var(--sp-6) var(--sp-2); margin: -7px 0; cursor: pointer;
+  padding: var(--sp-6) var(--sp-2); min-height: 40px; cursor: pointer;
 }
 /* Basis auto (its own text), so the toggle's base size is the name's real width —
    that is the measurement the wrap above is decided on. It shrinks only once it
@@ -137,7 +141,8 @@
    the right edge, under the buttons' own column, instead of restarting at the
    left under the name. */
 .repo-group-toggle { order: 0; }
-.repo-group-acts { order: 1; flex: none; margin-left: auto; display: flex; align-items: center; gap: var(--sp-2); }
+/* The toggle's 40px keeps ⋯ and × on the name's line; the icons wrapped under it move up into its slack, boxes whole. */
+.repo-group-acts { order: 1; flex: none; align-self: flex-end; margin: -20px 0 0 auto; display: flex; align-items: center; gap: var(--sp-2); }
 /* ⋯ and × are PINNED top-right: they sit outside `.repo-group-line`, which holds
    the name plus files/git/build and is the only part that wraps. Before, the whole
    strip dropped under a long name and the close button wandered to the second
@@ -160,8 +165,11 @@
 /* Two columns: New session with what waits in the repo stacked under it on the
    LEFT, the count chips wrapping in their own block on the right. One wrapping
    row would have put every chip after the tall left column on a line BELOW it. */
-.repo-group-stats { order: 2; flex: 1 0 100%; display: flex; align-items: flex-start; gap: var(--sp-6); }
-.repo-group-chips { flex: 1 1 0; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--sp-6) var(--sp-6); }
+.repo-group-stats { order: 2; flex: 1 0 100%; display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--sp-8) var(--sp-6); container-type: inline-size; }
+/* The chips go UNDER New session when less than a wide chip's room is left beside it (their basis, or all of
+   them in one line if that is less); drawn beside it regardless, they covered it (owner's screenshot,
+   2026-11-25). Left-aligned in a pane that narrow. */
+.repo-group-chips { flex: 9999 1 9em; max-width: max-content; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--sp-6) var(--sp-6); }
 /* Group-header buttons sit next to each other AND next to a destructive one, so
    they need real finger-sized boxes (44 px is the platform minimum) rather than
    the icon's own bounds — mis-taps here close sessions. */
@@ -183,7 +191,8 @@
    (`margin-right: auto` splits the row). Worded, not icons: it is the verb a
    person opens the launcher for. Outlined in the repo accent like the chips, so
    it reads as part of the header, not as a second toolbar. */
-.repo-start { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-4); flex: none; }
+.repo-start { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-4); flex: 1 0 auto; }
+@container (max-width: 19em) { .repo-group-chips { justify-content: flex-start; } }
 /* "8 modified files" / "17 to commit" / "86 to push": one fact per line under New
    session, each a tap into its screen. Quiet text, not pills: they are what the
    repo holds, the pills on the right are filters over the rows below. */
@@ -227,22 +236,41 @@
   border-bottom: 1px solid var(--line); border-left: 3px solid var(--repo-accent, transparent);
 }
 .repo-group-empty svg { color: var(--muted); }
-/* A repo's rows hang under its card: the same inset and the same 7px edge, so the
-   edge reads as one register running from the card down its sessions. */
-.repo-group-block .row-wrap, .repo-group-block > .repo-group-empty {
-  /* The header's 1px frame continues down the sides, so the edge lines up with
-     the header's to the pixel and the card has sides all the way down. */
-  margin: 0 var(--card-edge); padding-left: 7px; padding-right: 7px; /* mirrors the band */
-  border-left: 1px solid var(--repo-edge); border-right: 1px solid var(--repo-edge);
-  box-shadow: inset 7px 0 0 var(--repo-stripe, var(--repo-accent, transparent));
+/* A repo's rows hang under its card. The frame and the 7px edge down them are drawn
+   ONCE, by the block, over its rows: painted per row, every row border cut the edge
+   (the top line, the 8px gap, the header's divider) and the gap's thick border met
+   the thin side frame on a slant (owner's screenshots, 2026-11-19; R-ui-142). */
+.repo-group-block { position: relative; }
+.repo-group-block .row-wrap, .repo-group-block > :is(.repo-group-empty, .wt-leftover-head) {
+  /* Room for the 1px frame and the 7px band, mirrored on the right; the block paints both. */
+  margin: 0 var(--card-edge); padding-left: 7px; padding-right: 7px;
+  border-left: 1px solid transparent; border-right: 1px solid transparent; box-shadow: none;
+}
+.repo-group-block > :is(.repo-group-empty, .wt-leftover-head) { padding-left: calc(7px + var(--sp-10)); padding-right: calc(7px + var(--sp-10)); }
+.repo-group-block:has(> :is(.row-wrap, .repo-group-empty, .wt-leftover-head))::after {
+  /* Starts behind the header (z-index 2, opaque, always taller than this). */
+  content: ""; position: absolute; z-index: 1; top: var(--sp-24); bottom: 0; left: var(--card-edge); right: var(--card-edge);
+  border: 1px solid var(--repo-edge); border-top: 0; border-radius: 0 0 var(--r-12) var(--r-12);
+  box-shadow: inset 7px 0 0 var(--repo-stripe, var(--repo-accent, transparent)); pointer-events: none;
 }
 /* Inside the card the frame already holds the text off the screen edge; a row's own
    padding is the card's inner padding, not a second page gutter. */
 .repo-group-block .row-wrap .row { padding-left: var(--sp-10); padding-right: var(--sp-10); }
-/* Header and rows are ONE card: an open repo's header loses its lower corners and
-   its last row takes them, so the edge runs straight from the name to the end. */
-.repo-group-block:has(> .row-wrap, > .repo-group-empty) > .repo-group { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
-.repo-group-block > :is(.row-wrap, .repo-group-empty):nth-last-child(2) { border-bottom-left-radius: var(--r-12); border-bottom-right-radius: var(--r-12); border-bottom: 1px solid var(--repo-edge); }
+/* Header and rows are ONE card: an open repo's header loses its lower corners and its last
+   row takes them. The divider is a shadow UNDER the edge, so it does not cut it, and the
+   first row brings no second line. */
+.repo-group-block:has(> :is(.row-wrap, .repo-group-empty, .wt-leftover-head)) > .repo-group {
+  border-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; padding-bottom: calc(var(--sp-8) + 1px);
+  box-shadow: inset 7px 0 0 var(--repo-stripe, var(--repo-accent, transparent)), inset 0 -1px 0 var(--repo-edge);
+}
+/* The header's lower edge lands between device pixels at a fractional ratio: its edge
+   laps the rows' by a pixel, or a pale seam crosses the stripe there. */
+.repo-group-block:has(> :is(.row-wrap, .repo-group-empty, .wt-leftover-head)) > .repo-group::after {
+  content: ""; position: absolute; left: 1px; bottom: -1px; width: 6px; height: 3px; pointer-events: none;
+  background: var(--repo-stripe, var(--repo-accent, transparent));
+}
+.repo-group-block > .repo-group + :is(.row-wrap, .repo-group-empty, .wt-leftover-head) { border-top: 0; }
+.repo-group-block > :is(.row-wrap, .repo-group-empty, .wt-leftover-head):nth-last-child(2):not(:first-child) { border-bottom: 0; border-bottom-left-radius: var(--r-12); border-bottom-right-radius: var(--r-12); }
 .repo-group-toggle:disabled { cursor: default; }
 /* The branch a sessionless repo is on: the one fact its old row carried under
    the name. Quiet — it is identification, not a count. */

@@ -36,6 +36,8 @@ function fixture() {
   put(join(wt, ".claude", "inbox", "upload.png"));
   put(join(wt, ".claude", "worktrees", "agent-x", "docs", "shot.png"));
   put(join(wt, "node_modules", "pkg", "logo.png"));
+  put(join(wt, "android", ".gradle", "8.9", "fileHashes", "fileHashes.bin"));
+  put(join(wt, ".kotlin", "sessions", "s.bin"));
   // Leaving the worktree: a committed `docs/home -> ~`, a file link, and the same inside the outbox.
   symlinkSync(out, join(wt, "docs", "home"));
   symlinkSync(join(out, "home.png"), join(wt, "docs", "linked-out.png"));

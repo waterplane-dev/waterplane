@@ -1,5 +1,5 @@
 /**
- * The view's toolbar row: the input-mode segment (Touch · Trackpad · View only), screenshot, fullscreen, and the stats
+ * The view's toolbar row: the input-mode segment (Touch · Trackpad · View only), the two screenshot buttons, fullscreen, and the stats
  * chip — then, under it, every line that says why something is not happening: control blocked, the
  * cellular start, stills instead of video. Each says what to do about it; nothing is greyed.
  */
@@ -13,7 +13,8 @@ import { presetLabel } from "./quality.ts";
 import { askGrant, choice, grantNote, setChoice, turnOnControl } from "./state.ts";
 import { controlBlock, controlSteps, stepsHead } from "./words.ts";
 import type { DesktopController, Ui } from "./controller.ts";
-import { ShotButton } from "./Shot.tsx";
+import { ClipShotButton, ShotButton } from "./Shot.tsx";
+import "./desktop.css";
 
 const MODES: readonly { id: InputMode; label: string; title: string; icon: typeof Hand }[] = [
   { id: "touch", label: "Touch", title: "Touch — a tap clicks where your finger is, a long press right-clicks, a drag drags, two fingers scroll, three fingers move the zoomed view", icon: Hand },
@@ -34,7 +35,7 @@ export function Toolbar({ ctl, ui, onFull }: { ctl: DesktopController; ui: Ui; o
   const asked = useStore(grantNote);
   return (
     <>
-      <div className="segmented" style={SEG}>
+      <div className="desk-bar"><div className="segmented" style={SEG}>
         {MODES.map((m) => (
           <button key={m.id} className={`seg${ui.mode === m.id ? " on" : ""}`} style={SEG_BTN} title={m.title} aria-pressed={ui.mode === m.id}
             onClick={() => setChoice({ mode: m.id })}><m.icon size={15} /> {m.label}</button>
@@ -42,8 +43,9 @@ export function Toolbar({ ctl, ui, onFull }: { ctl: DesktopController; ui: Ui; o
         {/* Fullscreen, not fit: this icon reads as fullscreen, and a fit button at fit (the default)
             did nothing on a tap. Fit is drawn over the picture while zoomed instead (DesktopSheet). */}
         <ShotButton />
+        <ClipShotButton />
         <Button title="fullscreen — the desktop gets the whole screen" aria-label="fullscreen" onClick={onFull}><Maximize size={15} /></Button>
-      </div>
+      </div></div>
       {/* raw: a button drawn as a hint line (Hint has no li/button, a button is Button) */}
       <button className="form-hint" style={{ ...LINE, background: "none", border: 0, textAlign: "left", width: "100%", cursor: "pointer" }}
         title="what this view costs — tap for the split" aria-expanded={open} onClick={() => setOpen(!open)}>

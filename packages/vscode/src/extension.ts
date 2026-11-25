@@ -28,6 +28,7 @@ import { DEFAULT_HEALTH_SECONDS, HealthRun } from "./health/healthrun.js";
 import { gitRootOf } from "./health/healthsource.js";
 import { InstructionLens } from "./codelens.js";
 import { Panel } from "./panel.js";
+import { AppPanel, OPEN_APP, OPEN_APP_IN_BROWSER, RELOAD_APP } from "./apppanel.js";
 import { NavTree, PICK, PICK_FOLDER, QUOTA, SHOW } from "./navtree.js";
 import { CopilotQuota, quotaView } from "./copilotquota.js";
 import { CopilotLocalReader, userDirOf } from "../../extensions/copilot-usage/host/vscodelocal.mts";
@@ -176,8 +177,10 @@ class Ext implements vscode.Disposable {
       saved: (folder) => this.reweigh(folder),
       command: SHOW,
     });
+    const app = new AppPanel();
     ctx.subscriptions.push(
       this,
+      app,
       this.tree,
       this.lens,
       new RestartWatch(ctx),
@@ -190,6 +193,9 @@ class Ext implements vscode.Disposable {
       vscode.commands.registerCommand(QUOTA, () => this.quota.click()),
       vscode.commands.registerCommand(`${QUOTA}Off`, () => this.quota.turnOff()),
       vscode.commands.registerCommand(`${BRAND.slug}.copyPrompt`, () => this.copyPromptCommand()),
+      vscode.commands.registerCommand(OPEN_APP, () => app.open()),
+      vscode.commands.registerCommand(OPEN_APP_IN_BROWSER, () => app.browse()),
+      vscode.commands.registerCommand(RELOAD_APP, () => app.reload()),
       vscode.window.onDidChangeActiveTextEditor(() => this.onEditor()),
       vscode.window.onDidChangeActiveTerminal(() => this.sendPrompts()),
       vscode.workspace.onDidChangeWorkspaceFolders(() => { this.sendFolders(); this.onEditor(true); }),

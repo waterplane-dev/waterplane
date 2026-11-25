@@ -10,5 +10,8 @@ export const area: DoorArea = {
   noDoor: {
     // The frame's own id: every control opens one of the merged ids below it, each on its own tab and section.
     health: "the merged screen's own id; its doors open the ids it absorbed (setupcheck, setup, repohealth, skills), each on its section",
+    // `features/repoSetup`: its one standing door is a line in each repo's own ⋯ menu, which no door list names
+    // (a door's label is the screen's title, and this title names the repo).
+    repoSetup: "opened for one repo by its path (openRepoSetup): its ⋯ menu › set up this repo, and by itself once over that repo's first session",
   },
 };

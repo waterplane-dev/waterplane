@@ -43,7 +43,7 @@ const boot = (env) => {
   host.stderr.on("data", (d) => process.stderr.write("[host] " + d));
   return host;
 };
-const stop = () => new Promise((r) => { if (!host || host.exitCode !== null) return r(); host.once("exit", r); host.kill(); });
+const stop = () => new Promise((r) => { if (!host || host.exitCode !== null || host.signalCode !== null) return r(); host.once("exit", r); host.kill(); });
 const finish = async () => { await stop(); process.exit(failed ? 1 : 0); };
 
 const nonce = () => randomBytes(18).toString("base64url");
@@ -197,7 +197,7 @@ async function phaseB(a) {
   const lan = lanAddress();
   if (!lan) { console.log("SKIP: phase B — this machine has no private LAN IPv4 to bind"); return; }
   boot({ ...baseEnv, [E.HOST]: lan, [E.ALLOW_PUBLIC]: "1" });
-  if (!(await waitLan(lan))) { check(false, `host came up on ${lan}`); return; }
+  if (!(await waitLan(lan))) { check(false, `host came up on ${lan} (its exit ${host.exitCode}, signal ${host.signalCode})`); return; }
 
   const bare = await http(lan, "/api/health");
   check(bare.status === 401 && bare.json?.authRequired === true, "LAN without a token → 401");

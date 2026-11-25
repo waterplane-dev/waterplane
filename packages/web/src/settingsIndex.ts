@@ -154,6 +154,7 @@ export const SETTING_ROWS: SettingRowMeta[] = [
   { id: "terminal-zoom", group: "appearance", label: "terminal size", keywords: "console font columns rows grid pty wrap diff cli zoom" },
   { id: "repo-colours", group: "appearance", label: "repo colours", keywords: "color hue ring pin per repo tab stripe colour blind cvd" },
   { id: "tabs", group: "appearance", label: "session tabs", keywords: "strip open sessions switch between bar top" },
+  { id: "logo-count", group: "appearance", label: "number on the logo", keywords: "open tabs count badge home main screen hide" },
   { id: "tabs-count", group: "appearance", label: "tabs that fit", keywords: "how many width narrower wider strip" },
   { id: "tabs-limit", group: "appearance", label: "most tabs shown", keywords: "limit cap max maximum how many strip hide" },
   { id: "tabs-order", group: "appearance", label: "tab order", keywords: "sort opened frequent recent where was i" },
@@ -296,7 +297,7 @@ export const ROW_SETS: Readonly<Record<string, { name: string; rows: readonly st
   // asked of any of them, and the other two lines' switches are the next.
   strips: {
     name: "the lines at the top",
-    rows: ["net-pulse", "local-rt", "agent-warn", "agent-alarm", "tabs", "tabs-count", "tabs-limit", "tabs-order", "tabs-sync"],
+    rows: ["net-pulse", "local-rt", "agent-warn", "agent-alarm", "tabs", "logo-count", "tabs-count", "tabs-limit", "tabs-order", "tabs-sync"],
   },
 };
 

@@ -1,10 +1,11 @@
 # Links
 
-Keeps one list of the web addresses that belong to your projects, so you do not have to remember them. It finds the dev servers running on your desktop and your Cloud Run and Firebase Hosting sites, and you pin the ones worth keeping. Each pinned link shows whether it is up or down. Needs the desktop to have `lsof` and, for the cloud sites, `gcloud` signed in. It is off until you switch it on under Plugins, because the cloud search uses that `gcloud` sign-in and looks through every project it can see.
+Keeps one list of the web addresses that belong to your projects, so you do not have to remember them. It finds the dev servers running on your desktop and your Cloud Run and Firebase Hosting sites, and you pin the ones worth keeping. Each pinned link shows whether it is up or down. Needs the desktop to have `lsof` and, for the cloud sites, `gcloud`, signed in or with a sign-in command. It is off until you switch it on under Plugins, because the cloud search uses that `gcloud` sign-in and looks through every project it can see.
 
 ## Where to find it
 - **Home menu › Links** — the list: pinned links with up or down, then found links you have not pinned. Tap a link to open it outside the app. The search box and count chips narrow the list. The + beside the search pins an address by hand.
 - **Session menu › links** — the same list, from inside a session.
+- **Repo menu › opt-ins › Links** — says whether the repo has a pinned link and opens the list cut to that repo, where one is pinned or typed in.
 - **Repo row** — a small chip on a repo's title line. It counts that repo's pinned links ("links 3"). If the repo has none pinned, it counts links found for it ("found 2"). A tap opens the list cut to that repo only.
 
 
@@ -28,7 +29,8 @@ how many rows it holds and how many are down, and *fold all* collapses every gro
 2. **Found, not pinned** — what the host found and nobody pinned:
    - **running here**: every TCP listener (`lsof -iTCP -sTCP:LISTEN`) whose process's working
      directory is inside a repo under the code root (`WATERPLANE_ROOT`) — so ollama, LM Studio and
-     IDE helpers drop out by themselves. Its phone URL is the `tailscale serve` front door that
+     IDE helpers drop out by themselves. A server an agent runs from its session's scratch folder
+     counts for that session's repo when a `tailscale serve` front door points at it. Its phone URL is the `tailscale serve` front door that
      proxies to it, else `http://<tailnet ip>:<port>` when it binds every interface, else **none**:
      the row says so and shows the `tailscale serve --bg --https=<free port> http://127.0.0.1:<port>`
      that would make one. Shown, never run. Ports ≥ 32768 (OS-picked) are hidden.
@@ -37,6 +39,11 @@ how many rows it holds and how many are down, and *fold all* collapses every gro
      service are found but hidden — the list says "n of N shown" with a button for the rest.
      A project is tied to a repo by its `.firebaserc` first, else by the repo whose tracked files
      mention the project id most (`git grep -o -F`); a tie is **no repo**, never a guess.
+   - With `gcloud` signed out and a **sign-in command** named in `<config dir>/links-signin.json`, the
+     sheet shows **look at the cloud with …**. Only that tap runs the command. The result is kept in `links-cloud.json` beside the pins, so it survives a restart and the
+     sheet says how old it is. Opening or refreshing the sheet never runs the command.
+     The file is `{ "name": "the keychain", "run": ["some-tool", "exec", …, "--"] }`: the command runs the
+     words appended to it with a Google access token in each `LINKS_GCLOUD_TOKEN_<n>` of their environment.
 3. **Pin a link by hand** (the + beside the search) — a name, an `http(s)://` address, env and repo.
 
 A pin of a running-here row keeps the **port**, not today's URL: the phone URL is looked up again
@@ -63,10 +70,13 @@ its last result is over 10 min old or on the refresh button. Each half pushes `c
 
 | path | what |
 |---|---|
-| `shared/wire.mts` | the methods (`state`, `discover`, `probe`, `pin`, `add`, `edit`, `unpin`), the push, the row shapes |
+| `shared/wire.mts` | the methods (`state`, `discover`, `lookSignIn`, `probe`, `pin`, `add`, `edit`, `unpin`), the push, the row shapes |
 | `host/parse.mts` | the pure readers of lsof, serve status, Cloud Run, Hosting; the project → repo vote |
 | `host/engine.mts` | the two discoveries, the probes, the serial pin writes |
 | `host/store.mts` | `links.json`: read, validate, refuse to write over a broken file |
+| `host/cloudscan.mts` | one look at Google Cloud with one sign-in; several looks merged |
+| `host/signin.mts` | the sign-in command's file, and the one run a tap starts |
+| `host/cloudscan-cli.mts` | the child that `exec` starts: the only process here that holds a token from it |
 | `host/run.mts` | `execFile` with a time bound, the pool |
 | `web/` | the sheet, the ☰ line, the launcher button, the repo chip, the words and the search (`logic.ts`) |
 | `test/links.test.mjs` | parsers over recorded output, the engine over a fake runner (in `npm run test:host`) |
@@ -77,6 +87,7 @@ its last result is over 10 min old or on the refresh button. Each half pushes `c
 Ships in the release, **off** (`deploy/ship.json`: `{ "ship": true, "on": false,
 "experimental": true }`): switch it on under **Plugins › links**. It is off by default because its
 cloud discovery runs `gcloud` with this desktop's own sign-in and lists every project that sign-in
-can see. Without `gcloud`, or signed out, it lists the local dev servers only and says why. In this
+can see. Without `gcloud`, or signed out with no sign-in command, it lists the local dev servers
+only and says why. In this
 dev checkout it loads and starts on (`optional`, no `release.json`); `npm run restart` builds the
 host half, the next web build carries the sheet.

@@ -41,9 +41,9 @@ import { sameKeyHints, sourceModeProblem, type ModeSource, type PermissionMode, 
 import { liveSourceFor } from "../livesources.js";
 import { sourceKeysProblem } from "../sourceanswer.js";
 import { readKeyHints } from "../keyhints.js";
-import { permModeWords, readFastMode, readFastRefusal, readPermMode, readUltracode, ultracodeVerdict } from "../permmode.js";
+import { fastAnswerRows, permModeWords, readFastMode, readFastRefusal, readPermMode, readUltracode, ultracodeVerdict } from "../permmode.js";
 import type { Session, SessionCore } from "./core.js";
-import { MODE_MAX_PRESSES, MODE_POLL_MS, MODE_PRESS_WAIT_MS } from "./knobs.js";
+import { FAST_ANSWER_POLL_MS, FAST_ANSWER_WAIT_MS, MODE_MAX_PRESSES, MODE_POLL_MS, MODE_PRESS_WAIT_MS } from "./knobs.js";
 import { derive } from "../backends/derive.js";
 
 /** shift+tab, as the terminal sends it. */
@@ -138,6 +138,32 @@ function readNow(core: SessionCore, s: Session): PermissionMode | null {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Around a `/fast on|off`: called BEFORE the send (it counts the answers already
+ * on screen), and the function it returns, called after, looks for a NEW one for
+ * a few seconds instead of waiting for the quiet tick. At a working session the
+ * answer is a notice that is gone before the session is next quiet, so a refusal
+ * was never read. Publishes what it finds; resolves with the refusal, or null
+ * when the CLI said on/off or nothing new.
+ */
+export function watchFast(core: SessionCore, id: string): () => Promise<string | null> {
+  const s = core.sessions.get(id);
+  if (!s || !readsFooter(s)) return async () => null;
+  const before = fastAnswerRows(gridOf(s));
+  return async () => {
+    const until = Date.now() + FAST_ANSWER_WAIT_MS;
+    while (Date.now() < until && s.info.running) {
+      const grid = gridOf(s);
+      if (fastAnswerRows(grid) > before) {
+        checkMode(core, s);
+        return readFastRefusal(grid);
+      }
+      await sleep(FAST_ANSWER_POLL_MS);
+    }
+    return null;
+  };
+}
 
 /**
  * After one press: the first READABLE footer that differs from `from`, or the

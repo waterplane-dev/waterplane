@@ -83,5 +83,20 @@ test("the auto chip's count and its cut are one function", () => {
   assert.deepEqual(closedCut(rows, "auto").map((r) => r.id), ["a", "c"]);
   assert.equal(closedCut(rows, null).length, 4);
   assert.equal(closedCut(rows, "auto").length, rows.filter(isAutoClosed).length);
-  assert.equal(closedFilterWords(2, 4), "2 of 4 shown — closed automatically");
+  assert.equal(closedFilterWords(2, 4, "auto"), "2 of 4 shown — closed automatically");
+});
+
+test("R-sessions-072: the person's own marks are cuts too", () => {
+  const rows = [row({ id: "a", starred: true }), row({ id: "b", starred: false, followUp: { by: "hand", at: 1 } }), row({ id: "c", starred: true, followUp: { by: "agent", at: 1 } }), old];
+  assert.deepEqual(closedCut(rows, "starred").map((r) => r.id), ["a", "c"]);
+  assert.deepEqual(closedCut(rows, "flagged").map((r) => r.id), ["b", "c"]);
+  assert.equal(closedFilterWords(2, 4, "starred"), "2 of 4 shown — starred");
+});
+
+test("R-sessions-071: a session nobody closed says so, and has its own cut", () => {
+  assert.deepEqual(closedReason(row({ closedBy: "reboot" })), { text: "stopped by a desktop restart", tone: "cut" });
+  assert.deepEqual(closedReason(row({ closedBy: "lost" })), { text: "ended while the desktop was not watching", tone: "cut" });
+  const rows = [row({ id: "a", closedBy: "reboot" }), row({ id: "b", closedBy: "you" }), row({ id: "c", closedBy: "lost" }), row({ id: "d", closedBy: "auto-done" }), row({ id: "e", closedBy: "exited" }), old];
+  assert.deepEqual(closedCut(rows, "cut").map((r) => r.id), ["a", "c"]);
+  assert.equal(closedFilterWords(2, 6, "cut"), "2 of 6 shown — stopped unexpectedly");
 });

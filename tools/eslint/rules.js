@@ -102,6 +102,32 @@ const noSecondSocket = {
 };
 
 /** @type {import("eslint").Rule.RuleModule} */
+const oneCopyPath = {
+  meta: {
+    type: "problem",
+    docs: { description: "the clipboard is written through copyText() only" },
+    schema: [],
+    messages: {
+      direct:
+        "Write the clipboard through `copyText()` (`webapi/webapiClipboard.ts`, `api.ts`; `@waterplane/sdk` for an extension). " +
+        "A webview such as a VS Code tab denies `navigator.clipboard.writeText` but allows its execCommand fallback, " +
+        "and a direct write skips `scrubTickets`. Only a secret that must not be altered is excepted (see eslint.config.js).",
+    },
+  },
+  create(ctx) {
+    return {
+      MemberExpression(node) {
+        const o = node.object;
+        const isWrite = !node.computed && node.property.type === "Identifier" && node.property.name === "writeText";
+        if (isWrite && o.type === "MemberExpression" && !o.computed && o.property.type === "Identifier" && o.property.name === "clipboard") {
+          ctx.report({ node, messageId: "direct" });
+        }
+      },
+    };
+  },
+};
+
+/** @type {import("eslint").Rule.RuleModule} */
 const noStorageKeyLiteral = {
   meta: {
     type: "problem",
@@ -432,6 +458,7 @@ export default {
     "no-functional-setoutbox": noFunctionalSetOutbox,
     "no-raw-optional-cap": noRawOptionalCap,
     "no-second-socket": noSecondSocket,
+    "one-copy-path": oneCopyPath,
     "no-raw-storage": noRawStorage,
     "no-storage-key-literal": noStorageKeyLiteral,
     "total-wire-words": totalWireWords,

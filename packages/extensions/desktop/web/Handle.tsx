@@ -1,7 +1,7 @@
 /**
  * Fullscreen's one control on the glass: a small round handle the person can drag anywhere, so it
  * never sits on the same part of the desktop for good. A tap shows the view's controls (exit,
- * close, screenshot, fit, the key row); another tap hides them. Its place is remembered per host.
+ * close, screenshots, fit, the key row); another tap hides them. Its place is remembered per host.
  */
 import { useRef, useState } from "react";
 import { Ellipsis } from "lucide-react";
@@ -23,7 +23,7 @@ export function Handle({ open, onToggle }: { open: boolean; onToggle(): void }) 
   };
   return (
     <Button className={open ? "active" : undefined} aria-pressed={open} aria-label="controls"
-      title={open ? "hide the controls — drag to move this button" : "show the controls (exit, close, screenshot, keys) — drag to move this button"}
+      title={open ? "hide the controls — drag to move this button" : "show the controls (exit, close, screenshots, keys) — drag to move this button"}
       style={{
         position: "absolute", zIndex: 3, width: SIZE, height: SIZE, minWidth: SIZE, padding: 0, borderRadius: SIZE / 2,
         left: `calc(${spot.x * 100}% - ${SIZE / 2}px)`, top: `calc(${spot.y * 100}% - ${SIZE / 2}px)`,

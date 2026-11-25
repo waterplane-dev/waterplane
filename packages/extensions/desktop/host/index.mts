@@ -4,6 +4,7 @@
  *
  * Contributes, through the same `HostPluginApi` an external plugin gets:
  * - the stream `screen` (`api.stream`): one `wp-desktop serve` per open view, at most two;
+ * - the screenshot's second way (`api.screenCapture`, `still.mts`), for when macOS refuses node;
  * - `probe`, `windows` and `grant` (`plugin.call`; `grant` is the view's button for a missing
  *   grant, the same fix the checklist row runs);
  * - the setup rows (helper built, Screen Recording, Accessibility, who macOS asks, control) on the
@@ -47,6 +48,8 @@ export function activate(api: HostPluginApi): void {
   });
   const offs: (() => void)[] = [];
   offs.push(api.stream(STREAM_NAME, desktop.handlers));
+  // The screenshot button when node itself is refused the screen: wp-desktop holds its own grant.
+  offs.push(api.screenCapture("wp-desktop", { still: () => desktop.still() }));
   // `DesktopMethods` is an interface (no index signature), so each method is registered by name.
   const probe: () => Promise<DesktopMethods["probe"]["result"]> = () => desktop.prober.probe();
   const windows: () => Promise<DesktopMethods["windows"]["result"]> = () => desktop.prober.windows();

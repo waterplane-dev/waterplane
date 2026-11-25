@@ -6,14 +6,22 @@
 //
 //   node scripts/screenshot.mjs [file.vsix]   (default: the newest waterplane-*.vsix here)
 //
-// Writes media/listing-<view>.png (not shipped in the .vsix; README links them by URL). Same
+// With `--app <dir>` (a `vite build --outDir <dir>` of packages/web, never packages/web/dist) it adds
+// `listing2-app.png`: the app tab over a stand-in host on loopback that answers `/api/health` and
+// serves that bundle in its own demo mode, so every repo and session in it is fictional.
+// `--only a,b` re-shoots just those views.
+//
+// Writes media/listing2-<view>.png (not shipped in the .vsix; README links them by URL, on the mirror's
+// `main`, so a published listing shows whatever file has that name there: pictures of a version that is
+// not out yet get a new set name, and the old set stays while its version is the live one). Same
 // launch as test/integration/run.mjs; the window is posed by scripts/screenshot-suite.cjs and
 // captured over DevTools.
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { createServer as createHttpServer } from "node:http";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { E } from "../../../scripts/lib-brand.mjs";
 
@@ -31,12 +39,12 @@ const ARGS = { _: [] };
 for (let i = 2; i < process.argv.length; i++) {
   const a = process.argv[i];
   if (a === "--real-home") ARGS.realHome = true;
-  else if (["--workspace", "--out", "--views"].includes(a)) ARGS[a.slice(2)] = process.argv[++i];
+  else if (["--workspace", "--out", "--views", "--app", "--only"].includes(a)) ARGS[a.slice(2)] = process.argv[++i];
   else ARGS._.push(a);
 }
 const REAL = Boolean(ARGS.workspace && ARGS.realHome);
 if (ARGS.workspace && !ARGS.realHome) { console.error("--workspace needs --real-home (it reads your real ~/.claude)"); process.exit(2); }
-const VIEWS = REAL ? (ARGS.views ?? "findings,findings-end,tree,all,always-on,session").split(",") : ["session", "all", "health"];
+const VIEWS = REAL ? (ARGS.views ?? "findings,findings-end,tree,all,always-on,session").split(",") : ["session", "prompts", "all", "health", ...(ARGS.app ? ["app"] : [])].filter((v) => !ARGS.only || ARGS.only.split(",").includes(v));
 const WIDTH = 1600, HEIGHT = 1000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -175,6 +183,24 @@ async function workbench(port) {
   }
 }
 
+/** The stand-in host for the app tab: health, the demo bundle, nothing else. Loopback, gone with this run. */
+async function demoHost(dir) {
+  const root = realpathSync(dir);
+  const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2", ".webmanifest": "application/manifest+json" };
+  const demo = `<script>try{var u=new URL(location.href);if(!u.searchParams.has("demo")){u.searchParams.set("demo","first-look");history.replaceState(null,"",u)}}catch(e){}</script>`;
+  const srv = createHttpServer((req, res) => {
+    const path = new URL(req.url, "http://127.0.0.1").pathname;
+    if (path === "/api/health") { res.setHeader("content-type", "application/json"); return res.end(JSON.stringify({ ok: true, protocol: 1, root: "/demo" })); }
+    const file = join(root, path === "/" ? "index.html" : path);
+    if (!file.startsWith(root + sep) || !existsSync(file) || !statSync(file).isFile()) { res.statusCode = 404; return res.end(); }
+    res.setHeader("content-type", types[extname(file)] ?? "application/octet-stream");
+    res.end(file.endsWith("index.html") ? readFileSync(file, "utf8").replace("<head>", `<head>${demo}`) : readFileSync(file));
+  });
+  await new Promise((ok) => srv.listen(0, "127.0.0.1", ok));
+  return { url: `http://127.0.0.1:${srv.address().port}`, close: () => srv.close() };
+}
+
+const host = ARGS.app && VIEWS.includes("app") ? await demoHost(ARGS.app) : null;
 const vsix = vsixFile();
 const bin = vscodeBin();
 const root = realpathSync(mkdtempSync(join(tmpdir(), "wp-vscode-shot-")));
@@ -265,7 +291,7 @@ writeFileSync(join(dirs.user, "User", "settings.json"), JSON.stringify({
 }));
 
 const port = await new Promise((res) => { const s = createServer().listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => res(p)); }); });
-const env = { ...process.env, ...(REAL ? { WP_SHOT_REAL: "1" } : {}), ...(REAL ? {} : { CLAUDE_CONFIG_DIR: dirs.claude }), WP_SHOT_SIG: dirs.sig, WP_SHOT_VIEWS: VIEWS.join(","), WP_SHOT_EXT: manifest.name, WP_SHOT_PUBLISHER: manifest.publisher,
+const env = { ...process.env, ...(REAL ? { WP_SHOT_REAL: "1" } : {}), ...(REAL ? {} : { CLAUDE_CONFIG_DIR: dirs.claude }), WP_SHOT_SIG: dirs.sig, ...(host ? { WP_SHOT_APP_URL: host.url } : {}), WP_SHOT_VIEWS: VIEWS.join(","), WP_SHOT_EXT: manifest.name, WP_SHOT_PUBLISHER: manifest.publisher,
   WP_SHOT_STORAGE: join(dirs.user, "User", "globalStorage", `${manifest.publisher}.${manifest.name}`.toLowerCase()) };
 for (const k of Object.keys(env)) if (k.startsWith("VSCODE_") || k === "ELECTRON_RUN_AS_NODE") delete env[k];
 
@@ -301,6 +327,32 @@ async function inWebview(expression) {
   }
   return null;
 }
+/** In the framed demo: start todo-garden's session the way a person does, then wait for its terminal. */
+async function openDemoSession() {
+  const end = Date.now() + 60_000;
+  let started = false, openSince = null;
+  while (Date.now() < end) {
+    const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
+    const t = targets.find((x) => x.url.startsWith(host.url) && x.webSocketDebuggerUrl);
+    if (t) {
+      const f = await attach(t.webSocketDebuggerUrl);
+      await f.call("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: "dark" }] });
+      const state = (await f.call("Runtime.evaluate", { returnByValue: true, expression: `(() => {
+        if (document.querySelector(".xterm-screen")) return document.body.innerText.includes("New screenshot in") ? "toast" : "open";
+        const b = document.querySelector('button.repo-start-btn[title^="new session in todo-garden "]');
+        if (b && !${started}) { b.click(); return "clicked"; }
+        return "waiting"; })()` })).result?.result?.value;
+      if (state === "clicked") started = true;
+      // Ten seconds lets the reply finish; a toast over the picture is waited out. `f` stays open
+      // until the picture is taken: the dark emulation ends with it.
+      if (state === "open") openSince ??= Date.now();
+      if (state === "open" && Date.now() - openSince > 10_000) return f;
+      f.close();
+    }
+    await sleep(500);
+  }
+  console.error("the demo session never opened in the app tab"); process.exit(1);
+}
 for (const view of VIEWS) {
   while (!existsSync(join(dirs.sig, `${view}.req`))) await sleep(200);
   await sleep(Number(process.env.WP_SHOT_SETTLE_MS ?? 6000)); // the scan, the charts' first draw
@@ -319,14 +371,19 @@ for (const view of VIEWS) {
       ? ((await s.call("Runtime.evaluate", { expression: `document.querySelector(".part.sidebar")?.innerText ?? ""`, returnByValue: true })).result?.result?.value ?? "")
       : (await inWebview(webText)) ?? "";
   }
+  const demo = view === "app" ? await openDemoSession() : null;
+  // The per-prompt list is what the listing promises first: bring it up, with the dearest one picked.
+  if (view === "prompts") { await inWebview(`(() => { const d = document.querySelector("iframe#active-frame")?.contentDocument; const h = d?.querySelector(".turns"); if (!h) return null; const usd = (e) => Number(/\\$([\\d.]+)/.exec(e.textContent)?.[1] ?? 0); const rows = [...h.querySelectorAll(".turn-row")]; rows.sort((a, b) => usd(b) - usd(a))[0]?.click(); h.scrollIntoView({ block: "start" }); return h ? "ok" : null; })()`); await sleep(600); }
   const shot = await s.call("Page.captureScreenshot", { format: "png", clip: { x: 0, y: top, width: w, height: h - top, scale: 1 } });
   if (!shot.result?.data) { console.error(`no picture for ${view}: ${JSON.stringify(shot.error)}`); process.exit(1); }
-  const file = join(out, REAL ? `vscode-setupcheck-${view}.png` : `listing-${view}.png`);
+  const file = join(out, REAL ? `vscode-setupcheck-${view}.png` : `listing2-${view}.png`);
   writeFileSync(file, Buffer.from(shot.result.data, "base64"));
   console.log(`wrote ${file} (${shot.result.data.length * 0.75 | 0} bytes)`);
   if (REAL) console.log(`  text[${view}]: ${JSON.stringify(seen.replace(/\s+/g, " ").trim().slice(0, 300))}`);
+  demo?.close();
   writeFileSync(join(dirs.sig, `${view}.done`), "");
 }
+host?.close();
 s.close(); browser.close();
 await new Promise((res) => proc.on("close", res));
 clearTimeout(killer);

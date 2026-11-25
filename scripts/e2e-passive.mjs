@@ -40,7 +40,7 @@ host.stderr.on("data", (d) => process.stderr.write("[host] " + d));
 const open = new Set();
 const finish = async () => {
   for (const ws of open) { try { ws.terminate(); } catch { /* gone */ } }
-  await new Promise((r) => { if (host.exitCode !== null) return r(); host.once("exit", r); host.kill(); });
+  await new Promise((r) => { if (host.exitCode !== null || host.signalCode !== null) return r(); host.once("exit", r); host.kill(); });
   process.exit(failed ? 1 : 0);
 };
 

@@ -294,11 +294,11 @@ export function repoGroupsOf(shown: readonly SessionInfo[], visibleRepos: readon
 }
 
 /** What the launcher says in place of the repo list, or null when it has rows to draw. An unread
- *  list is not a claim — a first boot said "No repos under host root." before the host was asked
+ *  list is not a claim — a first boot said "No repos in the code folder yet." before the host was asked
  *  (design round 2026-10-30 W4); the git screen's no-repo sheet reads the same `listRead`. */
 export function noReposWords(list: ListRead): string | null {
   if (list === "rows") return null;
-  return list === "unread" ? "Waiting for the desktop's repo list." : "No repos under host root.";
+  return list === "unread" ? "Waiting for the desktop's repo list." : "No repos in the code folder yet.";
 }
 
 /**

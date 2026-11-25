@@ -47,8 +47,12 @@ async function run() {
   for (const view of views) {
     if (view === "health") await measure(ext);
     // Real-folder mode adds two poses: findings-end (the runner scrolls) and tree (the sidebar tree focused).
-    const tab = view === "findings-end" ? "findings" : view === "tree" ? "all" : view;
-    await vscode.commands.executeCommand(`${ext}.show`, tab);
+    const tab = view === "findings-end" ? "findings" : view === "tree" ? "all" : view === "prompts" ? "session" : view;
+    if (view === "app") {
+      await vscode.workspace.getConfiguration(ext).update("desktopUrl", process.env.WP_SHOT_APP_URL, vscode.ConfigurationTarget.Global);
+      await vscode.commands.executeCommand("workbench.action.closeSidebar");
+      await vscode.commands.executeCommand(`${ext}.openApp`);
+    } else await vscode.commands.executeCommand(`${ext}.show`, tab);
     // A live session makes the panel follow it a moment after startup; over a real folder, pose again.
     if (process.env.WP_SHOT_REAL === "1" && view !== "tree") { await sleep(4000); await vscode.commands.executeCommand(`${ext}.show`, tab); }
     if (view === "tree") await vscode.commands.executeCommand(`${ext}.sidebar.focus`);

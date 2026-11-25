@@ -39,7 +39,7 @@ import { createCallLedger } from "./pluginrpc.js";
 import type {
   AnswerSuggestion, ComplianceCheck, DecisionLogEntry, DetectedPrompt, HandToAgentResult, HostPluginModule,
   PluginHookHold, PluginPromptEvent, PluginQuestionEvent, PluginStatus, PluginValue, PluginView, RepoTarget,
-  SetupFixOutcome, SetupSubject, UsageInfo,
+  NewProjectOffer, NewProjectOption, OptInAnswer, SetupFixOutcome, SetupSubject, UsageInfo,
 } from "@waterplane/shared";
 import { forgetRules, isBlocked } from "../answergate.js";
 import { unregisterBackend } from "../backends/index.js";
@@ -99,6 +99,10 @@ export interface PluginEntry {
   setupFindings: Set<(s: SetupSubject) => Finding[] | Promise<Finding[]>>;
   /** Contributed fixes by fix id — the ids its rows name in `fix`. */
   setupFixes: Map<string, (s: SetupSubject) => SetupFixOutcome>;
+  /** The contributed fixes also offered on the new-project sheet, by fix id (`setupFix`'s `newProject`). */
+  newProject: Map<string, () => NewProjectOffer | null>;
+  /** Answers to core's opt-in offers by offer id (`api.optIn`). */
+  optIns: Map<string, (s: SetupSubject) => OptInAnswer | Promise<OptInAnswer>>;
   /** `handle(method, fn)` — what `call()` routes to. */
   methods: Map<string, (args: unknown, caller: PluginCaller) => unknown>;
   /** Backend ids this activation registered (`api.backend`) — unregistered when it is switched off. */
@@ -236,7 +240,7 @@ export class PluginRegistry {
     return {
       ...p, state: "off", status: null, mod: null, gen: 0,
       handlers: { prompt: new Set(), question: new Set(), action: new Set() }, onSettings: new Set(),
-      setupChecks: new Set(), setupFindings: new Set(), setupFixes: new Map(), methods: new Map(),
+      setupChecks: new Set(), setupFindings: new Set(), setupFixes: new Map(), newProject: new Map(), optIns: new Map(), methods: new Map(),
       backends: new Set(), readers: new Set(), hook: null, routes: [], holds: new Set(),
     };
   }
@@ -469,7 +473,7 @@ export class PluginRegistry {
 
   private clearHandlers(e: PluginEntry): void {
     e.handlers.prompt.clear(); e.handlers.question.clear(); e.handlers.action.clear(); e.onSettings.clear();
-    e.setupChecks.clear(); e.setupFindings.clear(); e.setupFixes.clear(); e.methods.clear();
+    e.setupChecks.clear(); e.setupFindings.clear(); e.setupFixes.clear(); e.newProject.clear(); e.optIns.clear(); e.methods.clear();
     // Its backends leave the launcher with it (a live session keeps running on
     // the descriptor it was spawned with; the next create is refused in words),
     // and every response it was holding is answered `{}` now — the CLI then
@@ -752,6 +756,40 @@ export class PluginRegistry {
   /** The fix ids active plugins answer, in load order. */
   setupFixIds(): string[] {
     return this.entries.filter((e) => e.state === "active").flatMap((e) => [...e.setupFixes.keys()]);
+  }
+
+  /**
+   * The fixes active plugins offer on the new-project sheet, in load order, their words cleaned. An
+   * offer that throws or is no offer is left out (a throw is the plugin's status line).
+   */
+  newProjectOffers(): NewProjectOption[] {
+    const out: NewProjectOption[] = [];
+    for (const e of this.entries) {
+      if (e.state !== "active") continue;
+      for (const [id, ask] of e.newProject) {
+        try {
+          const o = ask();
+          if (!o || typeof o.label !== "string" || !o.label || typeof o.hint !== "string") continue;
+          out.push({ id, from: e.manifest.name, label: o.label.slice(0, 60), hint: o.hint.slice(0, 300), on: o.on === true });
+        } catch (err) { this.handlerFailed(e, `new-project offer "${id}"`, err); }
+      }
+    }
+    return out;
+  }
+
+  /** One opt-in offer as the first active plugin answering it sees this worktree; null when none does.
+   *  A throw or a malformed answer is `unknown`, never a guessed on/off. */
+  async optInAnswer(id: string, s: SetupSubject): Promise<OptInAnswer | null> {
+    for (const e of this.entries) {
+      const fn = e.state === "active" ? e.optIns.get(id) : undefined;
+      if (!fn) continue;
+      try {
+        const a = await fn({ worktree: s.worktree });
+        if (a && (a.state === "on" || a.state === "off" || a.state === "unknown") && typeof a.detail === "string") return { state: a.state, detail: a.detail.slice(0, 300) };
+      } catch (err) { this.handlerFailed(e, `opt-in "${id}"`, err); }
+      return { state: "unknown", detail: `${e.manifest.name} could not say whether this is on.` };
+    }
+    return null;
   }
 
   /**

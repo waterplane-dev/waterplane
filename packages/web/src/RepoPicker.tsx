@@ -108,7 +108,7 @@ interface PickerProps extends CommonProps {
 }
 
 export function RepoPicker({
-  repos, home, worktreeFilter = true, emptyText = "No repos under host root.",
+  repos, home, worktreeFilter = true, emptyText = "No repos in the code folder yet.",
   multi, selected = [], onChange, onPick, value, icon, hint, label, countHint, note, subLead,
   listClass = "list",
 }: PickerProps) {

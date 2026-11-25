@@ -24,6 +24,7 @@
  * mark it done, and that is stored as THEIR word (`choice: "done"`) and shown as
  * such, never as a probe that passed.
  */
+import { CONFIRM_GATED_FIXES } from "./autocompact.js";
 import { BRAND } from "./brand.js";
 import type { ScheduleRule } from "./schedule.js";
 
@@ -59,15 +60,36 @@ export type OptInAction =
   /** Run the host's own setup fix with this id (`POST …/compliance/fix`). */
   | { kind: "fix"; fix: string }
   /** Open the screen that already does this job. */
-  | { kind: "open"; to: "series" }
+  | { kind: "open"; to: "series" | "install" | "links" }
+  /** Turn this repo's download rule on, keeping the rest of it (`pull.save` — the same write the
+   *  Apps and Downloads screens make). */
+  | { kind: "download" }
   /** Seed the Send sheet: these words, a new session in this repo. */
   | { kind: "agent" }
   /** Seed the Send sheet with a standing weekly rule and a model. */
   | { kind: "schedule"; days: number[]; hour: number; minute: number; graceMin: number; model: string };
 
+/** What an offer gives, in the order the set-up page draws the groups. */
+export type OptInGroup = "phone" | "safer" | "track" | "quality";
+
+export const OPT_IN_GROUPS: readonly { id: OptInGroup; title: string }[] = [
+  { id: "phone", title: "On your phone" },
+  { id: "safer", title: "Safer" },
+  { id: "track", title: "Keep track" },
+  { id: "quality", title: "Quality" },
+];
+
+/** The longest `OptInDef.short` (a test holds it). */
+export const SHORT_MAX = 70;
+
 export interface OptInDef {
   id: string;
+  group: OptInGroup;
+  /** Ticked in advance on the set-up page. Only ever a free tick (`optInKind`). */
+  preset?: true;
   title: string;
+  /** One plain line (at most `SHORT_MAX` characters): what the person gets. The set-up page draws this and nothing else until a tap. */
+  short: string;
   /** What it is and why someone would want it — one or two sentences. */
   pitch: string;
   /** What it spends, said plainly. Never a dollar figure nobody measured. */
@@ -105,6 +127,40 @@ export interface OptInReport {
   repoName: string;
   rows: OptInRow[];
   checkedAt: number;
+  /** What an agent asked to look suggested (`optInLookPrompt`), read off the repo's own file. Shown
+   *  on the row and never applied by the host. Absent = no readable suggestion, or an older host. */
+  picks?: OptInPick[];
+  /** One-shot confirm token per `CONFIRM_GATED_FIXES` id an offer here runs, minted by this read
+   *  (`host/confirmgate.ts`). Absent = nothing gated is offered, or an older host. */
+  confirm?: Record<string, string>;
+}
+
+/** One suggestion about one offer, and why, in one line. */
+export interface OptInPick {
+  id: string;
+  want: boolean;
+  why: string;
+}
+
+/** The file in the repo's state dir the looking agent writes, and the caps its reader holds. */
+export const OPT_IN_PICKS_FILE = "setup-picks.json";
+export const OPT_IN_PICKS_MAX_BYTES = 16 * 1024;
+export const OPT_IN_PICK_WHY_MAX = 200;
+
+/**
+ * What an offer is on the set-up page, derived from its action so there is no
+ * second list: `free` runs right away, `paid` becomes its own work item, `door`
+ * opens the screen that already does the job (or has its own confirm).
+ */
+export type OptInKind = "free" | "paid" | "door";
+
+export function optInKind(d: Pick<OptInDef, "action">): OptInKind {
+  switch (d.action.kind) {
+    case "agent": case "schedule": return "paid";
+    case "download": return "free";
+    case "fix": return CONFIRM_GATED_FIXES.includes(d.action.fix) ? "door" : "free";
+    default: return "door";
+  }
 }
 
 /** `POST /api/repos/:id/optins/choice` `{ id, choice }` (`choice: null` clears). */
@@ -154,7 +210,10 @@ ${"{marker}"}`;
 export const OPT_INS: readonly OptInDef[] = [
   {
     id: "requirements",
+    group: "track",
+    preset: true,
     title: "Requirements list",
+    short: "A list of what this repo must do, checked before changes.",
     pitch: "A list of what this repo is expected to do, rebuilt from your own prompts and commits, so an agent checks it before changing behaviour you rely on.",
     cost: "Setting it up writes two files and spends nothing. Each later build is one paid run, and the setup checklist's row says when one is due.",
     verb: "set it up",
@@ -162,15 +221,19 @@ export const OPT_INS: readonly OptInDef[] = [
   },
   {
     id: "repo-health",
+    group: "quality",
     title: "Repo health series",
+    short: "A weekly trend of size, churn and tests.",
     pitch: "Size, complexity, churn and test readings for this repo, measured weekly and drawn as a trend, so a slow slide shows up before it hurts.",
-    cost: "Spends no tokens: a local tool runs once a week while the desktop is up. The first measurement is a tap on the series screen.",
+    cost: "Spends no tokens: a local tool runs once a week while the desktop is up, the first time by itself. Declining this keeps an unmeasured repo unmeasured.",
     verb: "open the series",
     action: { kind: "open", to: "series" },
   },
   {
     id: "repo-health-own",
+    group: "quality",
     title: "Your own health readings",
+    short: "Weekly numbers only this repo knows, like test count.",
     pitch: "Numbers only this repo knows about itself (test count, bundle size, open TODOs), measured beside the standard ones in the same weekly series.",
     cost: "One agent session to propose them. The readings themselves spend no tokens.",
     verb: "propose readings",
@@ -187,16 +250,20 @@ Show me the readings you propose and the small scripts behind them before writin
   },
   {
     id: "security-review",
+    group: "safer",
     title: "Weekly security review",
+    short: "A weekly security look at what changed.",
     pitch: "Every Monday a session reads the week's changes and dependency bumps and writes its findings to the outbox. It changes nothing; you decide what to fix.",
-    cost: "One Fable session a week, the most capable and most expensive model, picked on purpose. You can change the model, day and time before you save it, and each run's cost shows on its row.",
+    cost: "One Fable session a week, the most capable and most expensive model, picked on purpose. You can change the model, day and time, and each run's cost shows on its row.",
     verb: "schedule it",
     action: { kind: "schedule", days: [1], hour: 9, minute: 0, graceMin: 12 * 60, model: "fable" },
     prompt: SECURITY_PROMPT,
   },
   {
     id: "local-ci",
+    group: "quality",
     title: "Checks before every push",
+    short: "Tests and lint run on your desktop before each push.",
     pitch: "A git pre-push hook that runs this repo's tests and lint on your desktop, so a broken push is caught without paying for hosted CI minutes.",
     cost: "One agent session to set it up. After that the hook runs locally and spends no tokens.",
     verb: "set it up",
@@ -213,7 +280,9 @@ Do not change the tests or the lint rules themselves.
   },
   {
     id: "npm-supply-chain",
+    group: "safer",
     title: "Safer npm installs",
+    short: "Blocks install-time code and brand-new package versions.",
     pitch: "An .npmrc that stops dependencies running code at install time and waits a few days before taking a freshly published version, when most hijacked releases are caught.",
     cost: "One short agent session. It spends nothing afterwards.",
     verb: "set it up",
@@ -229,7 +298,9 @@ Show me the file and the list before writing. \`npm ci\` from the lockfile is un
   },
   {
     id: "gcp-cleanup",
+    group: "track",
     title: "Registry cleanup policy (GCP)",
+    short: "Stops old deploy images piling up as a storage bill.",
     pitch: "Cloud Run scales to zero; its Artifact Registry does not. One image per deploy piles up and bills as storage until a cleanup policy deletes the old ones.",
     cost: "One agent session. The policy usually lowers the storage bill. The desktop cannot check it from here, so mark it done once it is set.",
     verb: "set it up",
@@ -246,15 +317,51 @@ Apply with \`--no-dry-run\` only after I agree. The size metric lags about 24h a
   },
   {
     id: "exposure-watch",
+    group: "safer",
+    preset: true,
     title: "Exposure watch",
+    short: "A daily look for new advisories on this repo.",
     pitch: "Once a day this desktop looks up what the outside world now says about this repo: published advisories on its dependencies, deprecations and, for a private repo, a local Scorecard run. Findings land under watch.",
     cost: "Spends no tokens and makes no AI call: a daily job runs gh and npm audit-type lookups and, for a private repo, Scorecard locally. A tap only adds this repo to the list it reads.",
     verb: "watch this repo",
     action: { kind: "fix", fix: "exposure-watch" },
   },
   {
+    id: "links",
+    group: "phone",
+    title: "Links",
+    short: "This repo's sites one tap away, with up or down.",
+    pitch: "This repo's web addresses (dev server, live site, admin console, store page) one tap from its row, each with up or down. The desktop finds what it can; you pin the ones worth keeping, or type one in.",
+    cost: "Spends no tokens. Looking runs a few local commands, and gcloud where it is signed in.",
+    verb: "open this repo's links",
+    action: { kind: "open", to: "links" },
+  },
+  {
+    id: "apk-download",
+    group: "phone",
+    preset: true,
+    title: "Android app: download by itself",
+    short: "New Android builds arrive on your phone by themselves.",
+    pitch: "Each new build of this repo's app comes to your phone as soon as the desktop has finished it, and continues where it stopped when the connection drops.",
+    cost: "Spends no tokens. It uses the phone's data: one APK per build, up to the size cap in this repo's download rule.",
+    verb: "turn it on",
+    action: { kind: "download" },
+  },
+  {
+    id: "apk-install",
+    group: "phone",
+    title: "Android app: install by itself",
+    short: "Downloaded builds install without a tap.",
+    pitch: "A downloaded build installs without a tap. Android asks once, the first time the app is installed from here; every update after that is quiet.",
+    cost: "Spends no tokens. The phone has to allow installs; the app's card checks that and asks for it. Turning it on there also turns the download on.",
+    verb: "open the app's card",
+    action: { kind: "open", to: "install" },
+  },
+  {
     id: "local-ci-status",
+    group: "quality",
     title: "Report local checks to GitHub",
+    short: "Tells GitHub your local checks passed after a push.",
     pitch: "This repo's rules require a local-ci status before a pull request can merge. After a push from this phone's push button, the desktop tells GitHub the checks passed. It is the honor system: the status says the pre-push hook did not fail the push, not that anyone verified the tests. It covers pushes from this phone's push button, not pushes an agent or a terminal makes.",
     cost: "One GitHub API call after each push from the phone; no tokens.",
     verb: "report it",
@@ -332,14 +439,14 @@ export function optInActiveWords(r: OptInRow): string {
  * all of them, which would re-send every earlier step on every turn of the
  * next (`sessioncost.ts`).
  *
- * Only `agent`/`schedule` offers can be posted by an agent; `fix`/`open` ones
+ * Only `agent`/`schedule` offers can be posted by an agent; the others
  * are a tap on the phone, so they are named as such and left alone.
  */
 export function optInWalkPrompt(offered: readonly OptInRow[], repoName: string): string | null {
   const defs = offered.map((r) => BY_ID.get(r.id)).filter((d): d is OptInDef => !!d);
   if (defs.length === 0) return null;
   const postable = defs.filter((d) => d.action.kind === "agent" || d.action.kind === "schedule");
-  const taps = defs.filter((d) => d.action.kind === "fix" || d.action.kind === "open");
+  const taps = defs.filter((d) => d.action.kind !== "agent" && d.action.kind !== "schedule");
   const lines: string[] = [
     `Walk me through the optional features ${BRAND.displayName} offers for ${repoName}. Do NOT set any of them up in this session.`,
     "",
@@ -359,6 +466,53 @@ export function optInWalkPrompt(offered: readonly OptInRow[], repoName: string):
     for (const d of taps) lines.push(`- ${d.title}: ${d.pitch}`);
   }
   return lines.join("\n").trimEnd();
+}
+
+/**
+ * *Let an agent look first*: read the repo, write one file of suggestions, set
+ * nothing up. Only offers the page draws with a tick are asked about, and no
+ * offer's own prompt is quoted, so nothing here reads as that offer being sent
+ * (`optInMarkedIds`). `null` = nothing to suggest about.
+ */
+export function optInLookPrompt(offered: readonly OptInRow[], repoName: string): string | null {
+  const defs = offered.map((r) => BY_ID.get(r.id)).filter((d): d is OptInDef => !!d && optInKind(d) !== "door");
+  if (defs.length === 0) return null;
+  return [
+    `Look at ${repoName} and suggest which of the optional ${BRAND.displayName} features below fit it. Set NONE of them up: this is read-only, and I decide on my phone.`,
+    "",
+    "- Change no file except the one named below, install nothing, run no build or script of this repo, commit nothing, push nothing.",
+    "- Read what you need to judge the fit (README, manifests, CI config, recent commits), briefly.",
+    `- Then write \`${BRAND.stateDirName}/${OPT_IN_PICKS_FILE}\` in this repo's root, replacing it if it is there, with exactly this JSON and one entry per feature:`,
+    "",
+    "```json",
+    `{ "picks": [ { "id": "${defs[0]!.id}", "want": true, "why": "one plain sentence about this repo" } ] }`,
+    "```",
+    "",
+    `\`want\` is true or false. \`why\` is one line of at most ${OPT_IN_PICK_WHY_MAX} characters and names what you saw here. Use the ids exactly as written. If you cannot tell for one, leave it out.`,
+    "",
+    "The features:",
+    ...defs.map((d) => `- \`${d.id}\` ${d.title}: ${d.pitch} Cost: ${d.cost}`),
+    "",
+    "Finish by saying the file is written, in one line.",
+  ].join("\n");
+}
+
+/** Strict reader for the suggestions, from the file or off the wire: ids outside the catalog, rows
+ *  missing a part and repeats are dropped (the first stands), never repaired; `why` is one capped line. */
+export function cleanOptInPicks(x: unknown): OptInPick[] {
+  if (!Array.isArray(x)) return [];
+  const out = new Map<string, OptInPick>();
+  for (const raw of x) {
+    if (!raw || typeof raw !== "object") continue;
+    const o = raw as Record<string, unknown>;
+    if (typeof o.id !== "string" || !BY_ID.has(o.id) || out.has(o.id)) continue;
+    if (typeof o.want !== "boolean" || typeof o.why !== "string") continue;
+    const line = [...o.why.replace(/[\s\p{Cc}\p{Cf}]+/gu, " ").trim()];
+    if (!line.length) continue;
+    const why = line.length > OPT_IN_PICK_WHY_MAX ? `${line.slice(0, OPT_IN_PICK_WHY_MAX - 1).join("").trimEnd()}…` : line.join("");
+    out.set(o.id, { id: o.id, want: o.want, why });
+  }
+  return [...out.values()];
 }
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];

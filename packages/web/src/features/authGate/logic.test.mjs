@@ -5,7 +5,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { goneLead, shellCase } from "./logic.ts";
+import { askedName, goneLead, shellCase } from "./logic.ts";
 
 const card = readFileSync(new URL("./AuthGate.tsx", import.meta.url), "utf8");
 
@@ -33,4 +33,13 @@ test("the LAN says there is no password here, and the tailnet's words stay", () 
   assert.match(goneLead("lan"), /password cannot/);
   assert.equal(goneLead("tailscale"), "This phone's sign-in for this desktop is gone.");
   assert.equal(goneLead("public"), "This phone's sign-in for this desktop is gone.");
+});
+
+test("a page opened under a name says the name is why, an address or another kind never does (R-security-034)", () => {
+  assert.equal(askedName("unknown", "mac.local"), "mac.local");
+  assert.match(card, /does not trust this name, because another device on the network could answer for it: <code>\{name\}<\/code>/);
+  assert.match(card, /ends after \{NAME_SIGNIN_HOURS\} hours/, "how long a sign-in there lasts (R-security-035)");
+  for (const page of ["localhost", "127.0.0.1", "100.64.0.1", "[::1]", ""]) assert.equal(askedName("unknown", page), null, page);
+  for (const kind of ["lan", "tailscale", "public", "loopback"]) assert.equal(askedName(kind, "mac.local"), null, kind);
+  assert.equal(card.match(/\{name\n/g).length, 2, "both the form and the no-password card say it");
 });

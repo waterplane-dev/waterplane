@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  codeLeftText, countHostWords, deviceRouteText, devicesEmptyText, hostAddress, hostRows, qrPath, removeLines, revokeLines, seenAgo,
+  codeLeftText, countHostWords, deviceRouteText, deviceWhere, devicesEmptyText, hostAddress, hostRows, qrPath, removeLines, revokeLines, seenAgo,
   nextHostId, rowPairTarget, shortHostName, showHostName, switchFailText, wordsText,
 } from "./logic.ts";
 
@@ -75,6 +75,11 @@ test("the code countdown never reads 0:00 while it still works, and is null once
 test("paired devices: route words, ages, and the revoke question for this phone vs another", () => {
   assert.equal(deviceRouteText("lan"), "over the Wi-Fi (LAN)");
   assert.equal(deviceRouteText(null), "route not recorded");
+  assert.equal(deviceWhere({ lastKind: "lan", createdAt: 1 }, 1), "over the Wi-Fi (LAN)");
+  const made = new Date(2026, 0, 5, 20, 14).getTime();
+  const named = { lastKind: "unknown", createdAt: made, under: "mac.local" };
+  assert.match(deviceWhere(named, made + 11 * 3_600_000), /^under the name mac\.local, ends 0?8:14/);
+  assert.match(deviceWhere(named, made), /ends \S+ 0?8:14/, "tomorrow says its day");
   assert.equal(seenAgo(10_000), "just now");
   assert.equal(seenAgo(5 * 60_000), "5 min ago");
   assert.deepEqual(revokeLines({ name: "Pixel", current: false }), ["Pixel will need a new pairing code to connect again."]);

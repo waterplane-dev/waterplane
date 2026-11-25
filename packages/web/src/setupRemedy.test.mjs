@@ -807,3 +807,16 @@ test("the design-quality run tracks the repo's own readings, or asks for one whe
   assert.match(none, /no reading of its own yet/);
   assert.match(none, /declare it in \.waterplane-shared\/health\.json/);
 });
+
+// An opt-in card's own gated fix is confirmed on the card: without its words the armed button said nothing but its verb,
+// and without the token of the report it was drawn with the desktop refuses it.
+test("every gated fix an opt-in runs has an armed label, and its card sends the token it was drawn with", async () => {
+  const { OPT_INS } = await import("@waterplane/shared");
+  const gated = OPT_INS.filter((d) => d.action.kind === "fix" && fixNeedsConfirm(d.action.fix)).map((d) => d.action.fix);
+  assert.deepEqual(gated, ["local-ci-status"]);
+  for (const f of gated) assert.match(fixConfirmWords(f) ?? "", /\?$/, f);
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("./OptInRegion.tsx", import.meta.url), "utf8");
+  assert.match(src, /api\.complianceFix\(repoId, \[fix\], tokens\.current\?\.\[fix\]\)/);
+  assert.match(src, /if \(fixNeedsConfirm\(a\.fix\)\) \{\s*return \(\s*<ConfirmButton/);
+});

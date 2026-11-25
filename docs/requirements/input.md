@@ -98,3 +98,7 @@ Name fields on the New sheet (project, folder, branch) open a lowercase keyboard
 Wrong suggestions never appear on screen at all, rather than showing and then disappearing by themselves.
 - asked: 2026-11-07
 
+### R-input-021 · shipped
+With a physical keyboard, Alt+G (⌥G on a Mac) switches the session's full screen on and off, like the corner button: a key neither the browser nor claude uses. The button's tooltip and the hold-Alt card name it.
+- asked: 2026-11-25
+- shipped: dcf155af4

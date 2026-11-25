@@ -485,6 +485,8 @@ export function loadAdoptions(): Adoptions {
   const v = read<Adoptions>(LS.pendingAdopted, {});
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
 }
+/** The session a pending screen became, as far as this phone remembers. */
+export const adoptedId = (pendingId: string): string | null => adoptedSession(loadAdoptions(), pendingId);
 /** Remember that `pending:<createAck>` became `sessionId`, whether or not anyone stands on that screen. */
 export function noteAdopted(createAck: string, sessionId: string): void {
   write(LS.pendingAdopted, recordAdoption(loadAdoptions(), createAck, sessionId, Date.now()));

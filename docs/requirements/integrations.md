@@ -29,3 +29,13 @@ The repo skill text uses the live API address of the running host instead of a h
 VS Code shows the same findings as a tree and a tab; a remedy copies or types its prompt and never sends.
 - asked: 2026-11-16 (owner, setup check plan PLAN.md §8)
 - shipped: setup check plan 2026-11-16; tests: packages/vscode/test/findings.test.mjs
+
+### R-integrations-007 · shipped
+The VS Code extension opens the waterplane app in an editor tab, framed from the desktop already running on this machine: the same app, never a second UI. It starts no desktop, is refused in remote windows, says why when nothing answers, and links open in the browser after VS Code's own question. The microphone does not work there and a tap says so.
+- asked: 2026-11-24 (owner: "do the copyText cleanup first, then build the tab")
+- shipped: 2026-11-24; tests: packages/vscode/test/apptab.test.mjs, packages/web/src/vscodeShell.test.mjs
+
+### R-integrations-008 · shipped
+The VS Code extension's sidebar opens the waterplane app from a named row, the first one, and not from an unlabelled icon in the view's title.
+- asked: 2026-11-25 (owner, with the sidebar's screenshot: "i can not see any new functionality")
+- shipped: 2026-11-25; test: packages/vscode/test/apptab.test.mjs

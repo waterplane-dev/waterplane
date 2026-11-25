@@ -480,7 +480,7 @@ button.sched-clock:active { background: var(--raise); }
    widths and the two miniatures sit a few pixels out of line — a misalignment
    that reads as two unrelated readouts rather than one tile. */
 .row-spark .ctx-spark-val, .row-spark .ctx-spark-use {
-  min-width: 3.6em; text-align: right; justify-content: flex-end;
+  min-width: 5em; text-align: right; justify-content: flex-end;
 }
 
 /* The chart's box. It is `overflow-x: auto` because the SVG is drawn at a

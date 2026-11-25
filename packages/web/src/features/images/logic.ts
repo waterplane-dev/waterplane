@@ -45,6 +45,8 @@ export type GalleryCtx = {
   repoId?: string;
   scope?: "inbox" | "outbox" | "repo" | "all";
   allTime?: boolean;
+  /** The time window (seconds) to come back to; `allTime` wins. */
+  since?: number;
   /** The badge's own edge and number, when the gallery was opened by tapping a
    *  count. `allTime` keeps the grid from being empty; this makes the number
    *  true — the grid opens on exactly what was counted, and says so. */

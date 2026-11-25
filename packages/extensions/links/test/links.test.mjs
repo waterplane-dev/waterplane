@@ -18,6 +18,7 @@ import { join } from "node:path";
 const D = "../../../host/dist/extensions/links";
 const { createEngine, serve } = await import(`${D}/host/index.mjs`);
 const P = await import(`${D}/host/parse.mjs`);
+const { scanCloud } = await import(`${D}/host/cloudscan.mjs`);
 
 const LSOF = ["p100", "cnode", "f20", "n127.0.0.1:5180", "p100", "cnode", "f21", "n[::1]:5180",
   "p200", "cnode", "f9", "n127.0.0.1:8300", "p300", "cCode\\x20Helper", "f3", "n127.0.0.1:49503",
@@ -87,6 +88,21 @@ test("local found: repos only, front door first, tailnet bind next, else a serve
   assert.equal(emu.serveCmd, undefined);
 });
 
+test("a server in a session's scratch folder is its repo's, only behind a front door (R-onboarding-032)", () => {
+  const scratch = (slug) => `/private/tmp/claude-501/${slug}/62d55cd4-6f38-40e4-8c76-618baf21c271/scratchpad/local`;
+  const l = (port, pid) => ({ pid, proc: "node", port, addr: "127.0.0.1" });
+  const rows = P.localFound({
+    listeners: [l(5290, 1), l(5291, 2), l(5292, 3)],
+    cwd: new Map([[1, scratch("-R-notes-app")], [2, scratch("-R-notes-app")], [3, scratch("-R-elsewhere")]]),
+    repos: [{ name: "notes-app", path: "/R/notes-app" }], serve: new Map([[5290, "https://m:8781"], [5292, "https://m:8782"]]),
+    servePorts: new Set(), tailnetIp: null, tailscale: "tailscale", selfPid: 999,
+  });
+  assert.deepEqual(rows.map((r) => [r.port, r.repo, r.url]), [[5290, "notes-app", "https://m:8781"]]);
+  assert.match(rows[0].note, /scratch folder/);
+  const twins = [{ name: "a-b", path: "/R/a-b" }, { name: "a.b", path: "/R/a.b" }];
+  assert.equal(P.scratchRepoOf(scratch("-R-a-b"), twins), null, "two repos with one spelling: no repo, never a guess");
+});
+
 test("Cloud Run: functions and internal ingress are found but hidden, -stg guessed staging, no URL skipped", () => {
   const rows = P.parseRunServices(RUN("x"), "proj-1");
   assert.deepEqual(rows.map((r) => [r.label, r.kind, r.hidden, r.env]), [
@@ -144,6 +160,7 @@ function fixture({ pins } = {}) {
   let pushes = 0;
   const engine = createEngine({
     root, file, lsofBin: "lsof", tailscaleBin: "ts", gcloudBin: "gcloud", gitBin: "git", run: runner, fetch: fakeFetch,
+    cloudFile: join(base, "cfg", "links-cloud.json"), signInFile: join(base, "cfg", "links-signin.json"), scanCli: "cli.mjs", lookCwd: base,
     now: () => Date.now(), selfPid: 999, probeTimeoutMs: 2000,
   }, () => { pushes++; });
   return { root, file, engine, calls, fetched, pushes: () => pushes };
@@ -244,6 +261,7 @@ test("a desktop without tailscale or gcloud: empty sections and a sentence each,
   };
   const engine = createEngine({
     root, file: join(base, "cfg", "links.json"), lsofBin: "lsof", tailscaleBin: null, gcloudBin: null, gitBin: "git",
+    cloudFile: join(base, "cfg", "links-cloud.json"), signInFile: join(base, "cfg", "links-signin.json"), scanCli: "cli.mjs", lookCwd: base,
     run: runner, fetch: async () => { throw new Error("no network in this test"); }, now: () => Date.now(), selfPid: 999, probeTimeoutMs: 2000,
   }, () => {});
   await engine.discover({});
@@ -254,4 +272,93 @@ test("a desktop without tailscale or gcloud: empty sections and a sentence each,
   assert.ok(s.notes.some((n) => /No tailscale command/.test(n)), "the missing tailscale is said");
   assert.ok(s.notes.some((n) => /No gcloud command/.test(n)), "the missing gcloud is said");
   assert.ok(!calls.includes("gcloud") && !calls.includes("tailscale"), "a missing command is never run");
+});
+
+const SIGNED_OUT = "ERROR: (gcloud.projects.list) Your current active account [a@x.test] does not have any valid credentials\n";
+const CMD = JSON.stringify({ name: "the keychain", run: ["keytool", "exec", "--", "x"] });
+/** A desktop whose gcloud fails with `stderr`, and whose sign-in file holds `file` (null = none). */
+function signInFixture({ stderr = SIGNED_OUT, file = CMD, exec, base = realpathSync(mkdtempSync(join(tmpdir(), "wp-links-signin-"))) } = {}) {
+  const root = join(base, "dev"), cfg = join(base, "cfg");
+  mkdirSync(join(root, "shopfront", ".git"), { recursive: true });
+  mkdirSync(cfg, { recursive: true });
+  writeFileSync(join(root, "shopfront", ".firebaserc"), JSON.stringify({ projects: { default: "shop-prod" } }));
+  if (file !== null) writeFileSync(join(cfg, "links-signin.json"), file);
+  const calls = [];
+  const runner = async (bin, argv, o) => {
+    calls.push({ bin, argv, o });
+    if (bin === "gcloud") return { code: 1, stdout: "", stderr, timedOut: false };
+    if (bin === "keytool") return exec();
+    return { code: 0, stdout: "", stderr: "", timedOut: false };
+  };
+  const engine = createEngine({
+    root, file: join(cfg, "links.json"), cloudFile: join(cfg, "links-cloud.json"), signInFile: join(cfg, "links-signin.json"), lsofBin: "lsof", tailscaleBin: null, gcloudBin: "gcloud", gitBin: "git",
+    scanCli: "cli.mjs", lookCwd: base, run: runner, fetch: async () => { throw new Error("no network in this test"); }, now: () => Date.now(), selfPid: 999, probeTimeoutMs: 2000,
+  }, () => {});
+  return { base, engine, execs: () => calls.filter((c) => c.bin === "keytool") };
+}
+const LOOK = { projects: ["shop-prod"], rows: [{ key: "run:shop-prod/web", kind: "cloudrun", repo: null, label: "web", url: "https://web.a.run.app", project: "shop-prod", env: "prod", hidden: false }], notes: [], failed: null };
+const looked = () => ({ code: 0, stdout: `${JSON.stringify(LOOK)}\n`, stderr: "", timedOut: false });
+
+test("R-navigation-024: gcloud signed out, a sign-in command named: offered, run only by a tap, kept past a restart", async () => {
+  const fx = signInFixture({ exec: looked });
+  await fx.engine.discover({ cloud: true });
+  await fx.engine.idle();
+  let s = await fx.engine.state();
+  assert.deepEqual(s.signIn, { name: "the keychain", looking: false });
+  assert.equal(s.cloudAt, null, "a look that could not sign in is not a look");
+  assert.ok(!s.notes.some((n) => /gcloud/.test(n)), "the offer stands in for gcloud's error");
+  assert.equal(fx.execs().length, 0, "opening or refreshing never runs the command");
+
+  assert.equal((await fx.engine.lookSignIn()).signIn.looking, true);
+  await fx.engine.lookSignIn();
+  await fx.engine.idle();
+  assert.equal(fx.execs().length, 1, "a second tap while it looks is the same look");
+  s = await fx.engine.state();
+  assert.equal(s.found.find((f) => f.key === "run:shop-prod/web").repo, "shopfront");
+  const { argv, o } = fx.execs()[0];
+  assert.deepEqual(argv, ["exec", "--", "x", process.execPath, "cli.mjs", "gcloud"]);
+  assert.ok("TMUX_PANE" in o.env && o.env.TMUX_PANE === undefined, "no session is named as the asker");
+
+  const again = signInFixture({ base: fx.base });
+  await again.engine.discover({ cloud: true });
+  await again.engine.idle();
+  const s2 = await again.engine.state();
+  assert.equal(s2.cloudAt, s.cloudAt, "a restart keeps the look and its age, and a failing gcloud does not wipe it");
+  assert.equal(s2.found.length, 1);
+});
+
+test("a refusal is said, and what was found stays", async () => {
+  let exec = looked;
+  const fx = signInFixture({ exec: () => exec() });
+  await fx.engine.discover({});
+  await fx.engine.idle();
+  await fx.engine.lookSignIn();
+  await fx.engine.idle();
+  exec = () => ({ code: 77, stdout: "", stderr: "denied on the phone\n", timedOut: false });
+  await fx.engine.lookSignIn();
+  await fx.engine.idle();
+  const s = await fx.engine.state();
+  assert.equal(s.found.length, 1);
+  assert.ok(s.notes.some((n) => /the keychain: denied on the phone/.test(n)));
+});
+
+test("no offer without a reason for one: no file, a broken file, or gcloud failing for another reason", async () => {
+  for (const [o, said] of [[{ file: null }, /gcloud did not list projects/], [{ file: "{" }, /needs "name" and "run"/], [{ stderr: "ERROR: network is unreachable\n" }, /gcloud did not list projects/]]) {
+    const fx = signInFixture(o);
+    await fx.engine.discover({});
+    await fx.engine.idle();
+    const s = await fx.engine.state();
+    assert.equal(s.signIn, undefined);
+    assert.ok(s.notes.some((n) => said.test(n)));
+    await assert.rejects(fx.engine.lookSignIn());
+  }
+});
+
+test("a handed-in token reaches gcloud by environment only", async () => {
+  const seen = [];
+  const run = async (bin, argv, o) => { seen.push({ argv, env: o.env }); return { code: 0, stdout: argv[0] === "projects" ? "shop-prod\n" : "[]", stderr: "", timedOut: false }; };
+  const auth = [];
+  await scanCloud({ run, gcloudBin: "gcloud", fetch: async (_u, i) => { auth.push(i.headers.authorization); return new Response("{}"); } }, "tok-x");
+  assert.ok(seen.every((c) => c.env.CLOUDSDK_AUTH_ACCESS_TOKEN === "tok-x" && !c.argv.join(" ").includes("tok-x")));
+  assert.deepEqual(auth, ["Bearer tok-x"]);
 });

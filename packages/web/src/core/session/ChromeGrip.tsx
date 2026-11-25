@@ -12,7 +12,7 @@
  *
  * The terminal under it refits on its own debounce, so a drag is one SIGWINCH
  * at its end (`SideGrip.tsx`'s reasoning), not one per frame. The drag itself
- * is `useDragCap.ts`, shared with the reader's agent list.
+ * is `useDragCap.ts`, shared with the reader's two grips.
  */
 import type { ReactNode } from "react";
 import { ChevronsDown } from "lucide-react";

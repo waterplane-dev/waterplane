@@ -54,8 +54,14 @@
  * (the vault's `wp-secret devices rm`); an external plugin's call throws. 2.7 plugins load as-is.
  * **2.9** (additive): `PluginCaller.scope` — `"passive"` when the calling device is a passive (kids')
  * row, so a plugin can refuse an unlocked kid's phone (the vault does). 2.8 plugins load as-is.
+ * **2.10** (additive): `setupFix`'s third argument, `newProject` — the fix is offered as a checkbox when
+ * a person creates a project. 2.9 plugins load as-is.
+ * **2.11** (additive): `HostPluginApi.optIn` — a plugin answers whether one of core's opt-in offers is
+ * already on in a repo (the links extension's). 2.10 plugins load as-is.
+ * **2.12** (additive): `HostPluginApi.screenCapture` — a plugin whose helper holds Screen Recording takes
+ * the screenshot when the core's own tool is refused (the live desktop's). 2.11 plugins load as-is.
  */
-export const PLUGIN_API_VERSION = "2.9.0";
+export const PLUGIN_API_VERSION = "2.12.0";
 
 /** Where the 2.0 backend contract is written down; the 1.x refusal names it. */
 export const PLUGIN_API_V2_DOC = "docs/plans/backend-contract-v2.md";

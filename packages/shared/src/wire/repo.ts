@@ -287,6 +287,9 @@ export interface RepoTarget {
    * no series or an older host — never 0.
    */
   healthIndex?: RepoHealthIndex;
+  /** Nobody has seen this repo's set-up page: a primary checkout with no seen mark, opt-in choice
+   *  or sent time on this desktop. ABSENT = seen, a linked worktree, or an older host. */
+  setupUnseen?: true;
 }
 
 /**
@@ -623,6 +626,24 @@ export interface HostSetupFixResult {
   applied: string[];
   notes: string[];
   checks: ComplianceCheck[];
+}
+
+/** One checkbox on the new-project sheet: a core choice or a fix an extension or plugin offers there. */
+export interface NewProjectOption {
+  id: string;
+  label: string;
+  /** One sentence: what ticking it writes into the new project. */
+  hint: string;
+  /** Ticked until this phone chose otherwise. */
+  on: boolean;
+  /** The extension or plugin that offers it; absent = core's own. */
+  from?: string;
+}
+
+/** `GET /api/repo/options`: the boxes, and the one-shot token the create echoes (`host/confirmgate.ts`). */
+export interface NewProjectOptions {
+  options: NewProjectOption[];
+  confirm: string;
 }
 
 export interface ComplianceFixResult {

@@ -68,16 +68,42 @@ let nextId = 1;
  * A pop landed at `depth`: every step above it is closed — by the Back that
  * popped it, so its own close must not pop again. Returns whether the entry
  * landed on is DEAD (a step slot with nothing open behind it), in which case
- * the caller keeps going back.
+ * the caller keeps going back. After a reload memory holds no key for an entry
+ * below the one booted on: `entryKey`, the one the entry itself carries, answers.
  */
-export function popStepsTo(depth: number): boolean {
+export function popStepsTo(depth: number, entryKey?: string): boolean {
   for (const [d, s] of [...steps]) {
     if (d <= depth) continue;
     steps.delete(d);
     s.close();
   }
-  const k = routeStack.keys[depth];
+  const k = routeStack.keys[depth] ?? entryKey;
   return k === VACANT || (k !== undefined && k.includes("#step") && !steps.has(depth));
+}
+
+/**
+ * A Back on its way past dead entries (`landPop`): the depth of the last one passed, or null. `owed`: the press
+ * started ON a dead entry, so it closed nothing yet, and the first live screen it reaches is the one it leaves.
+ */
+export const pass: { depth: number | null; owed: boolean } = { depth: null, owed: false };
+let passGen = 0;
+
+/** Go back past the dead entry at `depth`. One that never lands ends by itself, as a retire does. */
+export function passOn(depth: number): void {
+  pass.depth = depth;
+  const gen = ++passGen;
+  setTimeout(() => { if (gen === passGen) endPass(); }, RETIRE_LANDS_MS);
+  history.back();
+}
+
+/** The Back landed on a screen. Steps that waited for it take their entries once the route it set has landed too. */
+export function endPass(): void {
+  passGen++;
+  if (pass.depth === null) return;
+  pass.depth = null;
+  pass.owed = false;
+  queueRetire();
+  setTimeout(() => { if (!retiring) runParked(); }, 0);
 }
 
 let retireQueued = false;
@@ -86,20 +112,64 @@ let retireQueued = false;
  * Deferred, because the same commit may also change the route — then the
  * routing effect has already unwound past them or pushed over them, and there
  * is nothing left for us to do.
+ *
+ * ONE traversal at a time. A second one started while the first is in flight (two dialogs answered, the
+ * first pop slow) would be taken for landed at the first's popstate, and the landings parked behind it would
+ * push while it still ran: the race `whenRetired` is for. So it waits its turn. A Back that is
+ * already passing the dead entries takes them itself.
  */
 function queueRetire(): void {
   if (retireQueued) return;
+  if (retiring) { whenRetired(queueRetire); return; }
   retireQueued = true;
   queueMicrotask(() => {
     retireQueued = false;
+    if (pass.depth !== null) return;
     let n = 0;
     while (routeStack.depth - n > 0 && routeStack.keys[routeStack.depth - n] === VACANT) n++;
     if (!n) return;
     routeStack.depth -= n;
     routeStack.keys.length = routeStack.depth + 1;
     pushBackDepth();
+    retiring = true;
+    // Safety net: a traversal that never reports (nothing to go back to) must not park a route change for good.
+    const gen = ++retireGen;
+    setTimeout(() => { if (gen === retireGen) retireLanded(); }, RETIRE_LANDS_MS);
     history.go(-n);
   });
+}
+
+const RETIRE_LANDS_MS = 1500;
+let retiring = false;
+let retireGen = 0;
+const afterRetire: Array<() => void> = [];
+
+/**
+ * True while a retire's `history.go(-n)` is in flight. The traversal is async: a push or replace made
+ * before it lands is done from the DEAD entry, and the traversal then runs from the new entry and lands
+ * back on the dead one — the screen just opened disappears. `landRoute` parks its landing with
+ * `whenRetired` until the pop has arrived.
+ */
+export const isRetiring = (): boolean => retiring;
+
+/** Run `fn` once the retire's pop has landed. */
+export function whenRetired(fn: () => void): void { afterRetire.push(fn); }
+
+/**
+ * The pop of our own retire has landed (`landPop`, or the safety timer): parked landings run now, in
+ * order. Returns whether there was a retire in flight — that pop is housekeeping, not a navigation:
+ * the stack was already moved by `queueRetire` and the route in memory is the one the app chose, so
+ * it must not be re-derived from the entry landed on.
+ */
+export function retireLanded(): boolean {
+  if (!retiring) return false;
+  retiring = false;
+  runParked();
+  return true;
+}
+
+function runParked(): void {
+  for (const fn of afterRetire.splice(0)) fn();
 }
 
 /**
@@ -144,13 +214,43 @@ function ownerOf(depth: number): { d: number; k: string } | null {
  * sheet. That is how one call covers a drill-down of any depth.
  */
 export function useBackStep(open: boolean, close: () => void): void {
+  useStep(open, close, 0);
+}
+
+/** How long a dialog's entry outlives its answer — long enough for the answer to move the route, too short for a second Back. */
+const ANSWER_MS = 50;
+
+/**
+ * Is `useRoute` listening for pops? On the screens before `App` (first pairing) nobody is, so an entry pushed
+ * there would be popped without closing anything: the dialog then takes no step.
+ */
+let routed = false;
+export function setRouted(on: boolean): void { routed = on; }
+
+/**
+ * Back for a dialog drawn OVER the app, beside the route: a confirm, "type a line", a hint card. Back
+ * answers it as its backdrop does (`dismiss`) and the screen underneath stays.
+ *
+ * Its entry is dead at once but POPPED a moment later than a sub-view's. A sub-view closes and is done; a
+ * dialog's answer runs on in promise continuations that may move the route ("Leave" closes the sheet, a
+ * picked repo opens a session). The pop is an async `history.go(-1)`: started first, the push that follows
+ * lands under it and the traversal then steps off the NEW screen. Left in place for a moment, the route
+ * lands over the dead entry or unwinds past it, which `landRoute` already does right, and there is
+ * nothing left to pop. A Back in that moment passes it (`landPop`), so no press is spent on it.
+ */
+export function useDialogStep(open: boolean, dismiss: () => void): void {
+  useStep(open && routed, dismiss, ANSWER_MS);
+}
+
+function useStep(open: boolean, close: () => void, retireMs: number): void {
   const closeRef = useRef(close);
   closeRef.current = close;
   const [armed, rearm] = useState(0);
   useEffect(() => {
     if (!open) return;
-    return armStep(() => { closeRef.current(); rearm((n) => n + 1); });
-  }, [open, armed]);
+    const retire = armStep(() => { closeRef.current(); rearm((n) => n + 1); });
+    return () => retire(retireMs);
+  }, [open, armed, retireMs]);
 }
 
 /**
@@ -161,16 +261,60 @@ export function useBackStep(open: boolean, close: () => void): void {
  * unmounts the sheet, and a step that died with the unmount left the Back from that door landing one
  * level too far down (the entry under it was a dead step, so the pop kept going).
  */
-export function armStep(close: () => void): () => void {
-  const { id, depth, key } = pushStep();
-  steps.set(depth, { id, close });
-  return () => {
-    // Closed by a Back: `popStepsTo` already took it out, and the entry is gone.
-    if (steps.get(depth)?.id !== id) return;
-    steps.delete(depth);
-    if (routeStack.keys[depth] === key) routeStack.keys[depth] = VACANT;
-    queueRetire();
+export function armStep(close: () => void): (afterMs?: number) => void {
+  let at: { id: number; depth: number } | null = null;
+  let gone = false;
+  const arm = (): void => {
+    if (gone) return;
+    // A traversal of ours in flight runs from the entry it was started on: one pushed now is what it would pop.
+    if (retiring || pass.depth !== null) { whenRetired(arm); return; }
+    at = pushStep();
+    steps.set(at.depth, { id: at.id, close });
   };
+  arm();
+  return (afterMs = 0) => {
+    gone = true;
+    // Closed by a Back: `popStepsTo` already took it out, and the entry is gone.
+    if (!at || steps.get(at.depth)?.id !== at.id) return;
+    const { id, depth } = at;
+    steps.delete(depth);
+    // By id, not by the key it was pushed under: the screen under it may have been renamed since (`renameUnder`).
+    if (routeStack.keys[depth]?.endsWith(stepKey("", id))) routeStack.keys[depth] = VACANT;
+    if (afterMs) setTimeout(queueRetire, afterMs); else queueRetire();
+  };
+}
+
+/** Entries renamed while something was drawn over them: what each still says, and what it is now. By depth. */
+const renamed = new Map<number, { from: string; key: string; url: string }>();
+
+/**
+ * The screen at `under` became `key` while steps stand over it (a pending session started under an open
+ * picker). The steps stay open: Back closes the picker first, then leaves the session. Only the entry on top
+ * can be rewritten in the browser now; the ones below are renamed here and rewritten when a pop reaches
+ * them (`mendRenamed`).
+ */
+export function renameUnder(under: number, key: string, url: string): void {
+  const old = routeStack.keys[under] ?? "";
+  const to = (k: string): string => key + k.slice(old.length);
+  for (let d = under; d <= routeStack.depth; d++) {
+    const k = routeStack.keys[d];
+    if (k === undefined || k === VACANT || screenOfKey(k) !== old) continue;
+    routeStack.keys[d] = to(k);
+    if (d < routeStack.depth) renamed.set(d, { from: k, key: to(k), url });
+  }
+  const h = held.get(under);
+  if (h && h.key === old) held.set(under, { ...h, key });
+  const st = history.state as { navRoute?: string } | null;
+  if (st?.navRoute && screenOfKey(st.navRoute) === old) history.replaceState({ ...st, navRoute: to(st.navRoute) }, "", url);
+}
+
+/** A pop reached an entry renamed from above (`renameUnder`): the entry says so too from now on. */
+export function mendRenamed(): void {
+  const st = history.state as { navRoute?: string; navDepth?: number } | null;
+  const r = renamed.get(st?.navDepth || 0);
+  if (!st || !r || st.navRoute !== r.from) return;
+  renamed.delete(st.navDepth || 0);
+  history.replaceState({ ...st, navRoute: r.key }, "", r.url);
 }
 
 /**
@@ -456,17 +600,20 @@ export function isAdoption(top: string | undefined, key: string, a: Adoption): b
  * - `stay` — the entry on top again (a re-target): files the ask with it (ML1).
  * - `go` — unwind to an entry below: the very screen the tap named is a FRESH open and forgets
  *   its kept stores; one below it (a close, a leave) is a return.
- * - `push` — a new entry over the top.
+ * - `push` — a new entry over the top. `vacate`: the depth of a screen that is finished but has a step still over
+ *   it (a spent sheet under the hint card whose "do it" was Start). It cannot be replaced from above, so it
+ *   and its steps go vacant and Back passes them.
  * - `replace` — a new entry IN PLACE of a spent sheet's (`SPENT_ON_LEAVE`).
- * - `rename` — the pending screen became its session (`noteAdoption`): same entry, the session's key.
+ * - `rename` — the pending screen became its session (`noteAdoption`): same entry, the session's key. `under`: its
+ *   depth, when something is still drawn over it (an open picker, which stays open: `renameUnder`).
  */
 export type Landing =
   | { kind: "seed"; how: "push" }
   | { kind: "known"; depth: number; how: "stay" }
   | { kind: "stay"; how: "stay" }
   | { kind: "go"; delta: number; forget: boolean; how: "open" | "return" }
-  | { kind: "push"; how: "push" }
-  | { kind: "rename"; how: "stay" }
+  | { kind: "push"; how: "push"; vacate?: number }
+  | { kind: "rename"; how: "stay"; under?: number }
   | { kind: "replace"; how: "push" };
 export function routeLanding(keys: readonly (string | undefined)[], depth: number, key: string, first: boolean, known: number, adopt: Adoption | null = null): Landing {
   if (first && known <= 0) return { kind: "seed", how: "push" };
@@ -484,5 +631,10 @@ export function routeLanding(keys: readonly (string | undefined)[], depth: numbe
   // A bare screen leaving a SPENT sheet (the session a Send sheet's Start opened) takes its entry (`SPENT_ON_LEAVE`).
   const top = keys[depth];
   if (depth > 0 && top && top === screenOfKey(top) && SPENT_ON_LEAVE.has(top.split("|")[1] ?? "") && !key.split("|")[1]) return { kind: "replace", how: "push" };
-  return { kind: "push", how: "push" };
+  let under = depth;
+  while (under > 0 && (keys[under] === VACANT || (keys[under] !== undefined && keys[under] !== screenOfKey(keys[under]!)))) under--;
+  const over = under > 0 && under < depth ? keys[under] ?? "" : "";
+  const spent = !key.split("|")[1] && SPENT_ON_LEAVE.has(over.split("|")[1] ?? "");
+  if (adopt && isAdoption(over, key, adopt)) return { kind: "rename", how: "stay", under };
+  return { kind: "push", how: "push", ...(spent ? { vacate: under } : {}) };
 }

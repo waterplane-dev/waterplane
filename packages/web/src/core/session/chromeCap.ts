@@ -23,6 +23,18 @@ export function chromeCapAfter(startPx: number, dy: number, naturalPx: number, f
   return Math.max(floorPx, v);
 }
 
+/** The height a drag leaves on a frame that has a usual height of its own
+ *  (`restPx`, less than its content) and may GROW past it: the reader's outline.
+ *  Null is the usual height, which a list short enough to fit it snaps back to;
+ *  a longer list keeps what was dragged, up to its content and `ceilPx`. */
+export function drawerHeightAfter(
+  startPx: number, dy: number, naturalPx: number, floorPx: number, restPx: number, ceilPx: number,
+): number | null {
+  const v = Math.round(startPx + dy);
+  if (floorPx >= naturalPx || (naturalPx <= restPx && v >= naturalPx)) return null;
+  return Math.max(floorPx, Math.min(v, naturalPx, Math.floor(ceilPx)));
+}
+
 /** A stored value read back: a positive finite number, else no cap. */
 export function chromeCapOf(raw: string | null): number | null {
   if (raw == null || raw === "") return null;

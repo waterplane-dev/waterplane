@@ -26,7 +26,13 @@ test("a sheet send is never routed through the launch ask: its launch goes over 
 test("every LATER new session carries the picked launch, gated by wireLaunch", () => {
   // when it's free (a backlog item), a one-off/recurring clock (the schedule's
   // backlog action), a chain (`intent.post`), one-at-a-time sweeps, a re-decided row.
-  const wired = useSend.match(/wireLaunch\(i\.target\.launch\)/g) ?? [];
+  // The item and the rule are built in `sendDurable.ts` (the set-up page posts them too): `wire` there is
+  // this `wireLaunch`, handed over.
+  const durable = read("../../sendIntent/sendDurable.ts");
+  assert.match(useSend, /repoItemOpts\(i\.target, i\.when, steps, wireLaunch\)/);
+  assert.match(useSend, /scheduleEntryOf\(i\.target, i\.when, steps, \{[\s\S]{0,300}?wire: wireLaunch/);
+  const wired = [...(useSend.match(/wireLaunch\(i\.target\.launch\)/g) ?? []),
+    ...(durable.match(/launch: (?:o\.)?wire\((?:target|t)\.launch\)/g) ?? [])];
   assert.ok(wired.length >= 6, `expected every deferred arm to carry the launch through wireLaunch, found ${wired.length}`);
   assert.match(useSend, /\(i\.target\.kind === "repos" \|\| i\.target\.kind === "repo"\) && i\.target\.launch \? \{ launch: wireLaunch/,
     "a chain into a new session drops the model");

@@ -28,8 +28,9 @@
  */
 import { randomBytes } from "node:crypto";
 import type { IncomingMessage } from "node:http";
-import { CONFIRM_GATED_FIXES, type ComplianceReport } from "@waterplane/shared";
-import { originHeaderAllowed } from "./origin.js";
+import { CONFIRM_GATED_FIXES, optInDef, type ComplianceReport, type OptInReport } from "@waterplane/shared";
+import { isProxied, tlsServerName } from "./net.js";
+import { requestOriginAllowed } from "./origin.js";
 
 export const CONFIRM_TTL_MS = 15 * 60_000;
 const MAX_LIVE = 64;
@@ -79,21 +80,26 @@ export function createConfirmGate(now: () => number = Date.now): ConfirmGate {
 /** The one gate the routes share (process-wide, per host boot — a restart drops every token). */
 export const confirmGate = createConfirmGate();
 
+/** What (a) reads. The socket is where the browser certificate's name is proved; without one that name is refused. */
+export type GateRequest = Pick<IncomingMessage, "headers"> & { socket?: object };
+
 /** (a): a browser's POST. Null = has an allowed `Origin`; else the refusal. */
-export function browserOriginRefusal(req: Pick<IncomingMessage, "headers">): string | null {
+export function browserOriginRefusal(req: GateRequest): string | null {
   const o = req.headers.origin;
   const origin = Array.isArray(o) ? o[0] : o;
   if (!origin || !origin.trim()) return "this needs the phone's confirm: a request with no Origin cannot give consent";
-  if (!originHeaderAllowed(origin)) return "origin not allowed";
+  if (!requestOriginAllowed(req.headers, { proxied: isProxied(req.headers), tlsName: tlsServerName(req.socket) })) return "origin not allowed";
   return null;
 }
 
 /** (a) then (b) in one call. */
-export function gateRefusal(req: Pick<IncomingMessage, "headers">, token: unknown, scope: string, bind: string, asked?: Iterable<string>, gate: ConfirmGate = confirmGate): string | null {
+export function gateRefusal(req: GateRequest, token: unknown, scope: string, bind: string, asked?: Iterable<string>, gate: ConfirmGate = confirmGate): string | null {
   return browserOriginRefusal(req) ?? gate.check(token, scope, bind, asked);
 }
 
 export const FIX_SCOPE = "fix";
+/** `POST /api/repo` with ticked options: the sheet that listed them is the consent screen. */
+export const NEW_PROJECT_SCOPE = "newproject";
 export const ONBOARD_START_SCOPE = "onboard.start";
 export const ONBOARD_RESUME_SCOPE = "onboard.resume";
 /** `PUT /api/askrules`, bound to the list's `rev` (`askrules.ts`). */
@@ -103,6 +109,16 @@ export const fixBind = (worktree: string, fixId: string) => `${worktree}\0${fixI
 /** A report the phone will draw: one token per confirm-gated fix it offers, for that worktree. */
 export function withFixConfirms<R extends ComplianceReport>(worktree: string, report: R, gate: ConfirmGate = confirmGate): R {
   const ids = [...new Set(report.checks.map((c) => c.fix).filter((f): f is string => !!f && CONFIRM_GATED_FIXES.includes(f)))];
+  if (!ids.length) return report;
+  return { ...report, confirm: Object.fromEntries(ids.map((id) => [id, gate.mint(FIX_SCOPE, fixBind(worktree, id))])) };
+}
+
+/** The same for the opt-ins report: one token per gated fix a row that is off offers. */
+export function withOptInConfirms(worktree: string, report: OptInReport, gate: ConfirmGate = confirmGate): OptInReport {
+  const ids = [...new Set(report.rows.flatMap((r) => {
+    const a = optInDef(r.id)?.action;
+    return r.relevant && r.state !== "on" && a?.kind === "fix" && CONFIRM_GATED_FIXES.includes(a.fix) ? [a.fix] : [];
+  }))];
   if (!ids.length) return report;
   return { ...report, confirm: Object.fromEntries(ids.map((id) => [id, gate.mint(FIX_SCOPE, fixBind(worktree, id))])) };
 }

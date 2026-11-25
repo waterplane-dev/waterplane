@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  autostartTaskXml, foreignHostSentence, installId, installKind, keeperPatternPs, launcherNames, mirroredWslConfig, parseOtherLines,
+  autostartTaskXml, foreignHostSentence, installId, installKind, keeperPatternPs, lanCertWslArgs, launcherNames, mirroredWslConfig, parseOtherLines,
   parseStopLine, resolveKnobs, run, sameInstall, staleTaskNote, stopScript, stopVerdict, toWsl,
 } from "../dist/cli/windows.js";
 import { keepTaskNames, launcherTaskName } from "../dist/doctorwsl.js";
@@ -443,4 +443,34 @@ test("run start/status: up, but another install answers ⇒ refused; this instal
   const o = await launch(["status"], coRoot, "win32", { ...old.machine, env: d.env, localAppData: d.lad, temp: d.temp });
   assert.equal(o.code, 0);
   assert.match(o.out, /too old to say which install/);
+});
+
+test("lan-cert: the folder ca.cer goes to is spelled as WSL reads it, and one it cannot reach is refused in words", () => {
+  const CWD = "C:\\Users\\me\\Desk top";
+  const args = (...a) => lanCertWslArgs(a, CWD);
+  assert.deepEqual(args("issue", "--name", "desk.home.arpa"), ["issue", "--name", "desk.home.arpa", "--out", "/mnt/c/Users/me/Desk top"], "no --out: the folder the person is in, not the install's");
+  assert.deepEqual(args("issue", "--out", "D:\\usb"), ["issue", "--out", "/mnt/d/usb"]);
+  assert.deepEqual(args("issue", "--out=e:/usb", "--yes"), ["issue", "--out", "/mnt/e/usb", "--yes"]);
+  assert.deepEqual(args("issue", "--out", "..\\x"), ["issue", "--out", "/mnt/c/Users/me/x"]);
+  assert.deepEqual(args("issue", "--out", "/mnt/c/x"), ["issue", "--out", "/mnt/c/x"]);
+  for (const bad of ["\\\\server\\share", "\\\\wsl.localhost\\Ubuntu\\home"]) assert.match(args("issue", "--out", bad).error, /not a folder on a drive.*\/mnt\/c/);
+  assert.match(lanCertWslArgs(["issue"], "\\\\server\\share").error, /--out/);
+  assert.deepEqual(args("issue", "--out"), ["issue", "--out"], "the command says that --out needs a value");
+  assert.deepEqual(args("issue", "--out", "--yes"), ["issue", "--out", "--yes"]);
+  assert.deepEqual(args("show"), ["show"]);
+  assert.deepEqual(args(), []);
+});
+
+test("run: lan-cert goes to the CLI in WSL, its folder spelled for WSL; a share is refused before anything is spawned", async () => {
+  const w = [];
+  const exec = (cmd, args) => { w.push(args.at(-1)); return { status: 0, stdout: "", stderr: "" }; };
+  const r = await launch(["lan-cert", "issue", "--name", "desk.home.arpa"], npmRoot, "win32", { exec, cwd: "C:\\Users\\me\\it's" });
+  assert.equal(r.code, 0);
+  assert.match(w.at(-1), /packages\/host\/dist\/cli\/entry\.js 'lan-cert' 'issue' '--name' 'desk\.home\.arpa' '--out' '\/mnt\/c\/Users\/me\/it'\\''s'$/);
+  w.length = 0;
+  const bad = await launch(["lan-cert", "issue", "--name", "desk.home.arpa", "--out", "\\\\server\\share"], npmRoot, "win32", { exec, cwd: "C:\\Users\\me" });
+  assert.equal(bad.code, 1);
+  assert.match(bad.err, /\/mnt\/c\/Users\/you/);
+  assert.deepEqual(w, []);
+  assert.match((await launch(["help"], npmRoot)).out, /lan-cert issue\|show\|remove/);
 });

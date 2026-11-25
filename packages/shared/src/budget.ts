@@ -40,6 +40,7 @@
  * and `npm run test:unit` can pin the rule with no host to boot.
  */
 import type { UsageInfo } from "./index.js";
+import { fmtUsd } from "./pricing.js";
 import { cleanPeriods, periodBounds, ROLLING_30D_ID, SESSION_PERIOD_ID, WEEKLY_PERIOD_ID, type BudgetPeriod, type PeriodId, type PeriodUnit } from "./period.js";
 
 /**
@@ -354,7 +355,7 @@ export function periodWord(id: PeriodId | undefined): string {
   return id === ROLLING_30D_ID ? "rolling 30 days" : id === WEEKLY_PERIOD_ID ? "weekly window" : !id || id === SESSION_PERIOD_ID ? "session window" : id;
 }
 
-const usd = (n: number | undefined): string => (n == null ? "?" : `$${n >= 100 ? Math.round(n) : n.toFixed(2).replace(/\.00$/, "")}`);
+const usd = (n: number | undefined): string => (n == null ? "?" : fmtUsd(n));
 
 export function budgetReasonText(v: BudgetVerdict): string {
   if (v.unit === "usd") {

@@ -131,7 +131,8 @@ export function remarksToChat(repoId: string, text: string): boolean {
   const c = core();
   const repo = c.world.repos.find((r) => r.id === repoId);
   if (!repo) { c.say.toast("unknown repo — the remarks are kept on the file"); return false; }
-  browseRepoId.set(null); browseAim.set(null);
+  // The gallery the tree may have been opened from is left too, so its context goes with it.
+  browseRepoId.set(null); browseAim.set(null); galleryCtx.set(null);
   goTo(null);
   void copyText(text);
   const here = [c.world.active, ...c.world.sessions].find((s) => s && s.cwd === repo.worktreePath && s.running);
@@ -176,6 +177,16 @@ export function afterSweep(): void {
 export function openBrowseFor(repoId: string, back: Overlay = null): void {
   browseRepoId.set(repoId); if (back) browseAim.set({ file: "", back });
   core().nav.open("browse");
+}
+/** The gallery's door to its repo's tree. The gallery remounts on Back, so the tab and cut on
+ *  screen are put into its context first, or Back would land on a different list. */
+export function browseFromGallery(at: { scope: NonNullable<GalleryCtx["scope"]>; since: number | undefined; onNewCut: boolean }): void {
+  const ctx = galleryCtx.get();
+  const id = ctx?.repoId ?? core().world.activeRepo?.id;
+  if (!id) return;
+  core().say.track("action:gallery.browse");
+  galleryCtx.set({ ...ctx, repoId: id, scope: at.scope, allTime: at.since === undefined, since: at.since, newCut: at.onNewCut ? ctx?.newCut : undefined, openFile: undefined });
+  openBrowseFor(id, "gallery");
 }
 /** The file tree, straight on one file; closing returns to `back`. */
 export function openBrowseAt(repoId: string, relPath: string, back: Overlay): void {

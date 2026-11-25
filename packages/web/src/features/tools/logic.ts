@@ -28,7 +28,7 @@ export const ACTION_IDS = [
   // `session.read` is the launcher's own way in: straight to the reader with the
   // outline up, tracked apart from `session.attach` because "opened to LOOK" and
   // "opened to WORK" are different uses of the same list.
-  "session.attach", "session.read", "session.new", "session.resume", "session.close", "session.close.all", "session.close.stale", "session.close.custom", "session.rename", "session.name", "session.star", "session.followup", "session.followup.closed", "session.pin", "session.reorder", "session.order.reset", "session.filter.wait", "session.filter.blocked", "session.filter.coding", "session.filter.done", "session.filter.exited", "session.filter.starred", "session.filter.followup",
+  "session.attach", "session.read", "session.new", "session.resume", "session.close", "session.close.all", "session.close.stale", "session.close.custom", "session.rename", "session.name", "session.star", "session.star.closed", "session.followup", "session.followup.closed", "session.pin", "session.reorder", "session.order.reset", "session.filter.wait", "session.filter.blocked", "session.filter.coding", "session.filter.done", "session.filter.exited", "session.filter.starred", "session.filter.followup",
   "repo.build.header", "repo.files.header", "repo.close.all", "repo.close.stale", "repo.close.custom", "repo.collapse", "repo.collapse.all", "repo.expand.all", "repo.new.header", "repo.new.offline", "repo.new.project", "repo.new.bare", "repo.clone", "repo.more", "repo.focus", "repo.setup", "repohealth.refresh", "repohealth.ask", "repohealth.askall", "repohealth.scope", "repohealth.help", "repo.branch", "repo.build", "repo.hide", "repo.inbox", "repo.git",
   // A box answered by tapping, from the READER's card (`PromptAnswer.tsx`).
   // The approve bar's size counters (`prompt.mini`/`expand`/`hide`/`show`,
@@ -90,7 +90,7 @@ export const ACTION_IDS = [
   // exists to surface, and one missing from it can never report zero.
   "schedule.new", "schedule.save", "schedule.edit", "schedule.runnow", "schedule.toggle", "schedule.remove",
   "schedule.skipnext", "schedule.session", "schedule.reposession", "schedule.spent",
-  "pull.auto", "pull.enable", "pull.supersede", "pull.retry", "pull.pause", "pull.resumeall", "pull.save", "pull.clearall", "pull.strip.remove", "gallery.pullsave",
+  "pull.auto", "pull.enable", "pull.supersede", "pull.retry", "pull.pause", "pull.resumeall", "pull.save", "pull.deleteall", "pull.strip.remove", "gallery.pullsave",
   "search.recent", "search.history", "read.toggle", "read.find", "read.outline", "read.fileref", "outline.find", "outline.jump", "scrollback.find", "scrollback.reachback",
   // `setup.fix` patches; `setup.remedy` opens a prompt. Counted apart because a
   // checklist whose findings are mostly remedies is one whose checks have

@@ -110,3 +110,28 @@ test("a spend mark is announced once per step up: orange once, red once, never b
   assert.equal(red.notice, true);
   assert.equal(shouldNoticeSpend("s1", "warn", red.next).notice, false, "never downward");
 });
+
+// Session 77221553 of 68: its own record was evicted by the write that made it, so the
+// toast was back on the next frame and could not be dismissed.
+test("an all-digit session id is told once even when the record is full", () => {
+  const full = Object.fromEntries(Array.from({ length: 60 }, (_, i) => [`ab${i}`, "high"]));
+  const id = "77221553";
+  for (const ask of [
+    (seen) => shouldNotice(id, "steep", seen),
+    (seen) => shouldNoticeAgent(id, "agent-1", seen),
+    (seen) => shouldNoticeSpend(id, "high", seen),
+  ]) {
+    const first = ask(full);
+    assert.equal(first.notice, true);
+    assert.equal(Object.keys(first.next).length, 60);
+    assert.equal("ab0" in first.next, false, "the oldest goes, not the one just told");
+    assert.equal(ask(first.next).notice, false, "the next frame is silent");
+  }
+  // Two such sessions do not evict each other either.
+  let seen = shouldNoticeSpend(id, "high", full).next;
+  seen = shouldNoticeSpend("67856048", "high", seen).next;
+  assert.equal(shouldNoticeSpend(id, "high", seen).notice, false);
+  // Dropping back under still clears the entry, so the next agent is told.
+  const told = shouldNoticeAgent(id, "agent-1", full).next;
+  assert.equal(shouldNoticeAgent(id, "agent-2", shouldNoticeAgent(id, null, told).next).notice, true);
+});

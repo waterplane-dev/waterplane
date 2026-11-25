@@ -6,8 +6,9 @@ import { claimDictation, dictationState, heldDictationIds, holdDictation, subscr
 import { linkSnapshot, subscribeLink } from "./link";
 import { showToast } from "./toast";
 import { mergeSpeechResults } from "./speechMerge";
-import { askOnLinkBack, dictateFallbackWhy } from "./dictateFallback";
+import { askOnLinkBack, dictateFallbackWhy, MIC_REFUSED_BY_FRAME, frameAllowsMic } from "./dictateFallback";
 import { CAP_WARN_SECONDS, captureStall, clock, stallToast } from "./dictateWatch";
+import { appendedSince } from "./dictateHold";
 
 /**
  * Push-to-talk dictation, with two engines and one button.
@@ -481,6 +482,9 @@ export function useVoice(box: VoiceBox): Voice {
     // host engine checks its key twice; this one stops at the first mismatch.
     const keyAtStart = boxRef.current.key?.();
     let moved = false;
+    /** Its own last writes, and what was put after them since (`appendedSince`). */
+    let writes = [boxRef.current.read()];
+    let tail = "";
     rec.onresult = (e: any) => {
       if (boxRef.current.key?.() !== keyAtStart) {
         if (!moved) {
@@ -493,7 +497,10 @@ export function useVoice(box: VoiceBox): Voice {
       }
       const parts: string[] = [];
       for (let i = 0; i < e.results.length; i++) parts.push(e.results[i][0].transcript);
-      boxRef.current.write(baseRef.current + applyDictateTerms(mergeSpeechResults(parts), terms));
+      tail += appendedSince(boxRef.current.read(), writes);
+      const next = baseRef.current + applyDictateTerms(mergeSpeechResults(parts), terms) + tail;
+      writes = [...writes.slice(-7), next];
+      boxRef.current.write(next);
     };
     // The browser engine has no audio to hold — the words are recognised in
     // Google's cloud as they are said and there is no recording on this device
@@ -550,6 +557,7 @@ export function useVoice(box: VoiceBox): Voice {
       else { meantStopRef.current = true; recRef.current?.stop(); }
       return;
     }
+    if (!frameAllowsMic(typeof document === "undefined" ? undefined : document)) { showToast(MIC_REFUSED_BY_FRAME); return; }
     // Recording is never blocked by work already waiting: a link that is down
     // is exactly when somebody goes on talking, and the hold is what that is
     // for. The queue refuses in words at its own cap (`holdRefusal`).

@@ -28,6 +28,7 @@ import { makeConnection } from "./ws";
 import { startLanRoute } from "./lanLink";
 import { installShellNet } from "./shellNet";
 import { installShellShare } from "./shellShare";
+import { installVscodeLinks } from "./vscodeShell";
 import { BootGuard, armBootTrap } from "./BootGuard";
 import { HostSetup } from "./HostSetup";
 import { hostConfigured, installHostRouting, isNativeShell, seedRouteNet } from "./hostUrl";
@@ -143,6 +144,8 @@ installShellNet();
 // `window.shellShare` — another app's share sheet (`shellShare.ts`). Same
 // reason again: a cold start from a share asks before React has mounted.
 installShellShare();
+// Links that are not `openExternal` calls (`<a target="_blank">`) in an editor frame.
+installVscodeLinks();
 
 // Ask to be exempt from automatic storage eviction, before anything writes.
 // The queued-upload bytes, the partial downloads and the reconstructed
@@ -306,6 +309,8 @@ function Root() {
     return (
       <>
       <ToastLayer />
+      {/* The pair form asks before an unprotected code leaves; with nowhere to draw the question, pairing hung on it. */}
+      <ConfirmHost />
       {/* A re-pair is no way past the lock; the very first pairing has nothing to lock. */}
       {hostConfigured() && <AppLockGate />}
       <HostSetup

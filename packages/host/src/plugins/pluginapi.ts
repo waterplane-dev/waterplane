@@ -28,6 +28,7 @@ import { contained, containedReal, inRoot } from "../paths.js";
 import { targetId } from "../repos.js";
 import { stripAnsi } from "../prompt.js";
 import { registerThermalReader } from "../sysstat.js";
+import { registerScreenCapture } from "../host.js";
 import type { PluginEntry, PluginRegistry } from "./pluginregistry.js";
 import { hostStateDir } from "../branddirs.js";
 import { makePluginRoute, pluginRouteProblem } from "./pluginroutes.js";
@@ -469,12 +470,18 @@ export function makeApi(reg: PluginRegistry, e: PluginEntry, gen: number): HostP
       e.setupFindings.add(fn);
       return () => { e.setupFindings.delete(fn); };
     },
-    setupFix: (fixId, fn) => {
+    setupFix: (fixId, fn, opts) => {
       if (!live() || typeof fn !== "function") return () => {};
       const taken = typeof fixId === "string" && fixId ? reg.fixTaken(e, fixId) : "a fix needs an id";
       if (taken) throw new Error(taken);
       e.setupFixes.set(fixId, fn);
-      return () => { if (e.setupFixes.get(fixId) === fn) e.setupFixes.delete(fixId); };
+      if (typeof opts?.newProject === "function") e.newProject.set(fixId, opts.newProject);
+      return () => { if (e.setupFixes.get(fixId) === fn) { e.setupFixes.delete(fixId); e.newProject.delete(fixId); } };
+    },
+    optIn: (optId, fn) => {
+      if (!live() || typeof fn !== "function" || typeof optId !== "string" || !optId) return () => {};
+      e.optIns.set(optId, fn);
+      return () => { if (e.optIns.get(optId) === fn) e.optIns.delete(optId); };
     },
     handle: (method, fn) => {
       if (!live() || typeof fn !== "function" || typeof method !== "string" || !method) return () => {};
@@ -558,6 +565,13 @@ export function makeApi(reg: PluginRegistry, e: PluginEntry, gen: number): HostP
     thermalReader: (name, reader) => {
       if (!live()) throw new Error(`${e.manifest.name} is not running`);
       const off = registerThermalReader(name, reader);
+      e.readers.add(off);
+      return () => { if (e.readers.delete(off)) off(); };
+    },
+    // The screenshot when core's own tool is refused (`host.ts`'s `captureDesktop`).
+    screenCapture: (name, capture) => {
+      if (!live()) throw new Error(`${e.manifest.name} is not running`);
+      const off = registerScreenCapture(name, capture);
       e.readers.add(off);
       return () => { if (e.readers.delete(off)) off(); };
     },

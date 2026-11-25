@@ -223,8 +223,8 @@ someone ported it — the owner noticed the two screens no longer matched. Now t
   `esbuild.mjs`'s `phone-reads` plugin (`useRemoteResource`'s `./api` and `./link`, `webapiStats`'
   `./webapiFetch`). So each read the panel makes is the phone's request, spelled once.
 - **The desktop is read by the extension host, over loopback, off by default** (`src/hostlink.ts`,
-  setting `waterplane.desktopUrl`): a webview cannot open that socket, and the extension's listing
-  promises no network call but Copilot's. Only a loopback origin is accepted and only the
+  setting `waterplane.desktopUrl`): a webview cannot open that socket, and the extension's README
+  promises no network call but those its Privacy section names. Only a loopback origin is accepted and only the
   token-screen routes are forwarded (`forwardable`). The account facts the phone gets over its
   socket (`usage.status`, `billing.status`, `budget.state`, `backends`) are one HTTP read for a
   client with no socket: `GET /api/usagenow` (`UsageNowDoc`), copied from the same getters, deriving

@@ -15,6 +15,8 @@ export type {
   ToolbarItemDef, UploadApi, UploadBuf, UploadProgress,
 } from "./types.ts";
 export { core } from "../core/api.ts";
+/** The one way to write the clipboard (`local/one-copy-path`): true when it landed; scrubs read tickets. Never for a secret. */
+export { copyText } from "../webapi/webapiClipboard.ts";
 export { createStore, keepStores, useStore, type Store } from "./store.ts";
 export { mapWith, mapWithout, useCore, useLatest, useQueueEntries } from "./hooks.ts";
 export { armStep, useBackStep } from "../backStep.ts";
@@ -36,11 +38,13 @@ export { featureManifests } from "./extensions.ts";
 export { EXT_CACHE_PREFIX, extAssetCacheName, extAssetUrl, isExtensionEnabled, useExtensionEnabled, watchExtensionEnabled } from "./extensions.ts";
 /** How core opens the screen an extension owns for this phone's own apps (`FeatureManifest.appsDoor`) without importing it:
  *  `useAppsDoor()` answers null while no such extension is on — the caller's off state. */
-export { useAppsDoor, type OpenAppsDoor } from "./extensions.ts";
+export { useAppsDoor, useOptInDoor, type OpenAppsDoor } from "./extensions.ts";
 export type { AppsDoor, AppsDoorCut } from "./appsDoor.ts";
 /** The Android shell's installer (`shellInstall`, `useInstallCaps`, `useInstallSources`, the allow-list). */
 export { setInstallAllow, shellInstall, useInstallAllow, useInstallCaps, useInstallSources, type InstallCaps, type InstallSources } from "./install.ts";
 /** This phone's download records (read-only) and the per-repo auto-download rules. */
+/** What became of an op queued with `track` (`core/queue/fireFate.ts`), outside React. */
+export { fireFateNow, watchFires } from "./fires.ts";
 export { enableBuilds, pullRules, usePullRecords, watchPullRecords, type PullRecord } from "./downloads.ts";
 /** This phone's stable id (the one the desktop's install log and link log name it by). */
 export { deviceId } from "../link/linkLog.ts";
@@ -60,8 +64,8 @@ export { secretFillers } from "./secretFillers.ts";
 export { openExternal } from "../openExternal.ts";
 // Under an ask-the-agent button: the session that button started last time (a seed's `askKey`, `lastAsk.ts`).
 export { LastAskLink } from "../LastAskLink.tsx";
-/** A full-resolution screenshot of the desktop into a repo's `.claude/outbox/` — the one capture route. */
-export { desktopScreenshot } from "../desktopShot.ts";
+/** A full-resolution screenshot of the desktop, into a repo's `.claude/outbox/` or the desktop's own clipboard. */
+export { desktopScreenshot, desktopScreenshotToClipboard } from "../desktopShot.ts";
 /** Hide (or bring back) the Android shell's system bars; false where the shell cannot. */
 export { shellImmersive } from "../immersive.ts";
 export {

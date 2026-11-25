@@ -347,6 +347,7 @@ Each secret in the vault's list shows its migration step and its last use, and t
 ### R-vault-066 · requested
 Vault approval can use Windows Hello, Touch ID, Face ID, WebAuthn security keys or a native Mac app as approvers, beside the Android Keystore, never syncing keys between devices, working over localhost and plain LAN without Tailscale, and for any user's setup.
 - asked: 2026-10-17, 2026-10-24, 2026-10-24
+- note: the laptop-browser half over plain LAN is R-security-033 (a certificate of its own, steps in docs/install.md). The browser's WebAuthn approver is R-vault-183 to 186 (built, not committed, no real Windows browser tried); the native Mac approver is not built.
 
 ### R-vault-067 · shipped
 The vault can hold an old developer key protected by an additional password, usable to publish and release artifacts.
@@ -495,10 +496,10 @@ Each vault's key on a phone is its own: one phone can hold the keys of several d
 - shipped: d974977a
 
 ### R-vault-095 · shipped
-A vault approval does not need Tailscale: it works on the desktop itself (localhost) and from a phone on the same Wi-Fi. On the Wi-Fi the app allows the fingerprint only over a route that proves it reaches the paired desktop (the pinned encrypted link, R-connection-032); over plain Wi-Fi it refuses in words (R-security-021). The optional browser route (the desktop's own certificate from a local CA) is still a separate, unfinished step.
+A vault approval does not need Tailscale: it works on the desktop itself (localhost) and from a phone on the same Wi-Fi. On the Wi-Fi the app allows the fingerprint only over a route that proves it reaches the paired desktop (the pinned encrypted link, R-connection-032); over plain Wi-Fi it refuses in words (R-security-021). The optional browser route (the desktop's own certificate for one name, `waterplane lan-cert`) is R-security-033.
 - asked: 2026-10-24 (owner: the vault must work without Tailscale, on localhost and LAN)
 - shipped: ce1e392c, 1da2c03a, db775c2b
-- note: MULTI-DEVICE-PLAN.md WP4 says what is done and what stays optional. Not tried on a phone.
+- note: MULTI-DEVICE-PLAN.md WP4 says what is done and what stays optional. Not tried on a phone; the browser certificate is not tried in a real Windows browser.
 
 ### R-vault-096 · shipped
 `wp-secret ls`, the one door an agent on the desktop can ask without a tap, answers ids and kinds only: no label, note, repo path, purpose, lease policy, assigns, original or reach. The phone's list is unchanged and still has all of them. A command that needs one more fact asks for it by name: `account ls` the logins by id and kind (the columns are `account ls --full`, R-vault-098), `readers`, `advise`, `rm` and `purge-original` the kept original of the one id named, and `use-undo ASSIGN_ID` lets the desktop find the secret. R-vault-036 follows: `account ls` is narrow too (owner decision 2026-11-05 (a)). `repo show` is narrow too: a repo's logins by id and the `exec --as` line, no catalog column (service, role, username, email, owner, state, tags are `repo show --full --why TEXT`, R-vault-098).
@@ -799,7 +800,7 @@ The vault's documents are written for a first-time reader: they say what is true
 - shipped: d950da54
 
 ### R-vault-144 · requested
-Vault screens and the vault README use one word per concept: **secret** (a stored value), **login** (username + password; CLI `account`), **ask** (a program waiting for a secret; "N waiting"), **Release** / **Deny**, **allowed for 5 min** (ends by itself) and **allowed until you end it** (CLI `grant --standing`), **End** / **End all** (CLI `revoke`), **Lock list** as the only "lock", **move in** (CLI `migrate`), **original** (the leftover plain file; put back / delete original), **History** / **Users** / **Reach** for the three use views, **reach** for leak size (this app / the whole account / everything / not set), **repo** (never project, except a cloud provider's project id), **says … not verified** for a program's own claim, **Backup & recovery** for keys & backup. Words with no screen meaning (pid, pane, worktree, broker, proxied, sealed, treatment, consumer, rewire, …) are not shown. A command is always shown verbatim in a mono block; the README gives each screen-word ↔ CLI-verb pair once. Full list and banned words: `.claude/outbox/journey-vault/glossary-proposal.md` until it moves into the vault docs.
+Vault screens and the vault README use one word per concept: **secret** (a stored value), **login** (username + password; CLI `account`), **ask** (a program waiting for a secret; "N waiting"), **Release** / **Deny**, **allowed for 5 min** (ends by itself) and **allowed until you end it** (CLI `grant --standing`), **End** / **End all** (CLI `revoke`), **Lock list** as the only "lock", **move in** (CLI `migrate`), **original** (the leftover plain file; put back / delete original), **History** / **Users** / **Reach** for the three use views, **reach** for leak size (this app / the whole account / everything / not set), **repo** (never project, except a cloud provider's project id), **says** for a program's own claim (R-vault-202), **Backup & recovery** for keys & backup. Words with no screen meaning (pid, pane, worktree, broker, proxied, sealed, treatment, consumer, rewire, …) are not shown. A command is always shown verbatim in a mono block; the README gives each screen-word ↔ CLI-verb pair once. Full list and banned words: `.claude/outbox/journey-vault/glossary-proposal.md` until it moves into the vault docs.
 - asked: 2026-11-08 (owner picked login, ask, allowed until you end it, reach; journey review `.claude/outbox/journey-vault/decide.md`)
 
 ### R-vault-149 · shipped
@@ -928,3 +929,176 @@ The vault lock actions read 'open the vault' and 'close the vault'.
 ### R-vault-174 · requested
 The home banner that tells the person to tap "the code is updated" opens the secret with the "who reads it" group at the top of its card and the handed row's mark choices already open, so the button the banner names is on screen where the link lands.
 - asked: 2026-11-22 (owner: the banner names a button that is not visible where it sends you)
+
+### R-vault-175 · shipped
+Anything an ask's notification says is on its card with every fold closed. A release card always shows the purpose the program gave, quoted as what the program says (how it is marked: R-vault-202), or says that none was given, for a session, a registered and an unregistered asker, fetch and exec; a waiting row quotes it too. A fetch's title names the program its notification named, and a new-device card shows the code to compare.
+- asked: 2026-11-23 (owner: the notification said a GEMINI_API_KEY ask was for sentiment analysis, the card did not; replaces the open lines decided 2026-11-02, lost in 2ed30f258)
+- shipped: a97a86d55
+
+### R-vault-176 · shipped
+A card that was approved or denied can be opened again the way it was, to check it later. The receipt an answer leaves has "Show the card": the same card in place, read-only, and the receipt stays while it is open. The desktop keeps the card on its History row (the newest 60 rows), and the row has the same button, behind the open vault. It is kept only while that file is sealed, and a reset takes the cards out. What is kept can be read, never approved: no wrap, tag or key, and the requester's raw reason and the person's prompts are scrubbed first. A row the desktop has no card for has no button.
+- asked: 2026-11-23 (owner: "add an button that open the card again the same way it was when I had to approve or deny Soni can later check it again")
+- shipped: cd14b6420
+
+### R-vault-177 · shipped
+A release ask that differs from its secret's earlier approvals says so on its card, above the buttons, with how many approvals it was compared with and since when. Two differences count: another command or project when every approval so far had the same one (its first three words count when they never varied), and a time of day well outside the ten-minute slot every approval of this command here was asked in. Three different days are enough; three asks on one day are not. It never refuses, delays or hides a button, never says a request is usual, safe or wrong, and says nothing when there is too little to compare. History has a "new this week" filter: the last 7 days' release asks that differed, approved or not, including a new command or project for a secret that had two or three before (those have no line on the card).
+- asked: 2026-11-23 (owner: "usually requests for secret x always look like y ... if it's asked three times and it's three times exactly the same and the fourth has been different ... this is already enough"; "build it with the new this week filter")
+- shipped: 400fc51f1
+
+### R-vault-178 · shipped
+While a session is on screen, the Vault key beside its bell counts every waiting ask, the same number Home shows, and its tap opens exactly those with this session's own ask as the open card. The phone re-reads what waits on every reconnect whatever screen is up, so an ask pushed while the app was in the background comes up inside a session too. The lock on a session's tab still marks only the asks that session made.
+- asked: 2026-11-24 (owner: "the vault approval requests do not appear anymore within sessions ... I now miss them often"; the tab strip that carried the lock is off by default on a phone since 6fc6270f4)
+- shipped: 47a77bfb8
+
+### R-vault-179 · shipped
+A vault with several devices asks each of them its own copy of an ask. Each phone shows exactly one card for it, the one sealed to its own key, and approves it with its own fingerprint; a copy meant for another device is never shown, counted or tried. A close names the device it is for, so one device's close never ends another's card or raises a tampering warning there. A phone that cannot yet tell which device it is shows the first copy and, when that copy does not open, says so and offers the next one; it never denies because of a copy that was not its own. A vault with one device asks, lists and closes as before.
+- asked: 2026-11-24 (owner: several phones on one vault, WP2 of the multi-device plan)
+- shipped: a65d092d2
+- note: plan in docs/analysis/vault/MULTI-DEVICE-PLAN.md ("WP2 result"). Not tried on a second real phone.
+
+### R-vault-180 · shipped
+A phone removes another device from the vault's devices on Backup & recovery. The row's button asks first, in words: the device can no longer approve or open the vault, its waiting cards close, and the vault key does not change, so a copy of the vault file from before still opens on it. One fingerprint on the removing phone then proves exactly this removal. A phone cannot remove itself, or the last device, and says why, and the desktop's `wp-secret devices rm` stays the way out when the only other device is the one to remove. A removal also closes every open list.
+- asked: 2026-11-24 (owner: several phones on one vault, WP2 of the multi-device plan)
+- shipped: a65d092d2
+- note: Not tried on a second real phone.
+
+### R-vault-181 · shipped
+The phone's Backup & recovery screen lists the vault's devices when there are two or more: one line each in the desktop's order, this phone marked, with the kind in words and the day it was added; what is not known is left out. With one device it draws no rows, only the line and the desktop command that add another. When this phone cannot tell which row is its own, or holds no key of the vault, the block says why no device can be removed from it instead of offering a button that fails.
+- asked: 2026-11-24 (owner: several phones on one vault, WP2 of the multi-device plan)
+- shipped: a65d092d2
+- note: Not tried on a second real phone.
+
+### R-vault-182 · shipped
+A second device is added from the new phone's Connect screen without a recovery key. The screen shows the desktop command that starts it (`wp-secret devices add --name <name>`, copyable), then the 6-digit code to compare with the desktop, then waits for a device that is already in the vault to approve it, then one fingerprint stores the key. It has no recovery-key step and no cut-off step. A phone that already is one of the vault's devices says so and makes no second key; a key left by an add that stopped can be made again after the same confirm. Starting the add stays on the desktop.
+- asked: 2026-11-24 (owner: several phones on one vault, WP2 of the multi-device plan)
+- shipped: a65d092d2
+- note: R-vault-066 stays requested: the WebAuthn and Mac approvers are not built. Not tried on a second real phone.
+
+### R-vault-183 · shipped
+A browser on Windows can be added to a vault as a device, from the desktop's `wp-secret devices add --name <name>` and the browser's own Connect screen, and then approves the vault's cards with Windows Hello or a security key. The add takes three taps in the browser, one passkey prompt each: make the passkey, lock the vault key with it, check it; a device that is already in the vault approves the add between the first two. A passkey that can sync to other devices (Chrome's Google Password Manager, iCloud Keychain) is refused in words that name the way out, and a vault never starts on or moves to a browser. A browser that is not one of the vault's devices says how to become one and can still show and deny cards. An answer carries the answering device's own proof (its tag), so a browser cannot answer a phone's copy of a card; an answer without the tag is taken only from an app from before the tag, and only while every device of the vault is, and always was, an Android phone (a browser whose add failed after it was sent the vault key counts as one that was).
+- asked: 2026-11-24 (owner: a browser passkey as a vault device, WP3 of the multi-device plan)
+- shipped: d629dbf55
+- note: plan in docs/analysis/vault/MULTI-DEVICE-PLAN.md; trial steps in docs/analysis/vault/WP3-TRIAL.md. Not tried on a real Windows machine. R-vault-066 stays requested: the Mac native approver is not built.
+
+### R-vault-184 · shipped
+A browser's passkey works only at the address it was added on: the same host at another port, another site on that host, or a page whose browser storage was cleared opens nothing. The screens say so before the first tap and when it happens: what address the passkey belongs to, that clearing the browser's site data ends the device (remove it and add the browser again), that a renamed desktop needs its own, and that removing the device does not delete the passkey from Windows.
+- asked: 2026-11-24 (owner: a browser passkey as a vault device, WP3 of the multi-device plan)
+- shipped: d629dbf55
+- note: Not tried on a real Windows machine.
+
+### R-vault-185 · shipped
+A browser never shows secret values or the recovery key, keeps no offline copy, and a vault is not started or recovered on it: a card that would bring a value to its screen is refused in words before any prompt, and the desktop does not send it one. The add card says so before the first tap.
+- asked: 2026-11-24 (owner: a browser passkey as a vault device, WP3 of the multi-device plan)
+- shipped: d629dbf55
+- note: Not tried on a real Windows machine.
+
+### R-vault-186 · shipped
+Windows' passkey prompt names only the site, so the approve button names the means (Windows Hello, or the browser's passkey) and the line under it says that the window names only the site and that the approval is the card above. The add card says the same before the first tap, with how many prompts to expect. A prompt that is closed or times out leaves the card open, says so in words and sends nothing. A secret marked fingerprint-only is never asked in a browser, and the add card says that a Windows PIN alone can approve what is not marked.
+- asked: 2026-11-24 (owner: a browser passkey as a vault device, WP3 of the multi-device plan)
+- shipped: d629dbf55
+- note: Not tried on a real Windows machine.
+
+### R-vault-187 · shipped
+A save of the vault writes all of its bytes or is refused, and the old file stays whole: a full disk, an error or a kill at any step loses no stored secret. The new file and a new catalog key are read back before they count. Temp files a killed write left are removed at the next start, but a whole vault file that differs from the live one is kept and named in the host log. When the disk could not confirm a recover's last step, the phone keeps its old key and is told to keep the old recovery key too.
+- asked: 2026-11-25 (owner: build the remaining vault parts in quality; found by the crash harness of the vault key change)
+- shipped: edc6f4847
+- note: two processes writing at once, damaged sectors and DPAPI are not modelled by the harness. After a recover the desktop still prints that the old recovery key no longer works, even when the disk could not confirm it.
+
+### R-vault-188 · shipped
+The vault key can be changed from the desktop: `wp-secret change-key [--why TEXT]` gives the vault a new key and a new recovery key, and `wp-secret recover --change-key` does the same with the typed recovery key as the approval, for when every phone is gone. The command first says in words what it does and does not protect, how many devices will have to be added back, and which older copies of the vault file sit beside it, then asks y. It is refused in words while an init, recover, add or other key change is open, while a card is waiting (not for `recover --change-key`), while an approval is being carried out, or while any record or kept hold copy does not open: that is named by id, and nothing is written. One Android phone pairs (its code is compared on the desktop), one card naming that code asks an enrolled phone that may approve a vault-wide ask (or the typed recovery key stands in), the new recovery key is shown on the paired phone only, and only after one group of it is typed back is anything written. A denial, a lapse, a closed command or a restart before that leaves `vault.json` byte for byte as it was. The CLI never prints the new recovery key.
+- asked: 2026-11-25 (owner: change the vault key, VMK-CHANGE plan)
+- shipped: 80975ef5f
+- note: plan in docs/analysis/vault/KEY-CHANGE-TRIAL.md (owner trial). Not tried with a real phone and the real vault.
+
+### R-vault-189 · shipped
+A power loss or a kill at any step of a key change loses no secret and leaves one recovery key that works. The new file is made and checked from its own text (every record and hold copy opens under the new key and equals what the old key gave) before it replaces `vault.json`; that rename is the one commit point. Before it the old devices and the old recovery key open everything; after it the new ones do. At the next start the vault decides which world is live by trying to open `vault.json` with the key it has, finishes or takes back what a cut left (side files, the staged catalog key, the marker), and writes one line to the host log saying whether the key change was finished (the new recovery key is the valid one) or was not done (the recovery key is unchanged). While it cannot tell, both keys are kept and the vault retries at the next start. When the disk cannot confirm the write, the desktop says so and the phone keeps its old key: keep both recovery keys until the desktop has been shut down cleanly once.
+- asked: 2026-11-25 (owner: change the vault key, VMK-CHANGE plan)
+- shipped: 80975ef5f
+- note: Not tried on a power-loss machine; the crash harness kills the process at each write.
+
+### R-vault-190 · shipped
+An approval given before a key change never writes or opens anything under the dead key. Each approved vault key is tied to the vault key it was approved for; every seal and open that uses it first checks that the vault still has that key, and refuses in words ("the vault's key was changed after this was approved ... ask again") with nothing released or written. Cards that are open at the commit end as failed; leases, grants, standing grants, boot unlock, broker sessions and pinned runs go on, because they hold values or ids and not the vault key.
+- asked: 2026-11-25 (owner: change the vault key, VMK-CHANGE plan)
+- shipped: 80975ef5f
+
+### R-vault-191 · shipped
+On a phone a key change shows as a card with the pairing code of the phone that gets the new key large on a line of its own, saying which phone shows it, then which other devices stop approving, and behind one tap the recovery key that follows and what the change does not protect; then the new recovery key once, with the old one to be kept. The old phone key is deleted only by a closing message whose tag checks, and not while the desktop's disk has not confirmed the change; the phone's offline copy of the vault is removed once (it was locked with the old key) and pulled again at the next open. Backup & recovery says, before the line about the recovery key, that the vault has a new key since a day, that the vault file from before is kept on the desktop, which recovery key to keep and the command that deletes the copy. Devices names the day once and lists each device that was not added back as a row with its own `wp-secret devices add --name <name>` command; `wp-secret devices` and `status` print the same, and `vault key changed <when>` also after the copy is deleted. A browser whose passkey was dropped says to add it again.
+- asked: 2026-11-25 (owner: change the vault key, VMK-CHANGE plan)
+- shipped: 80975ef5f
+- note: Not looked at on a real phone.
+
+### R-vault-192 · shipped
+A key change keeps the vault file from before it beside the new one, as `vault.json.before-key-change-<time>.bak`, until the person deletes it with `wp-secret change-key --forget-old` (one y). Only a file with that name is ever deleted, and nothing in the host rewrites or seals it. It opens with the OLD recovery key and with the old key of a device not yet added back, never with the new ones. The end words say to keep the old recovery key until the vault has been tried, then delete the copy and destroy the old recovery key. Copies outside the folder (backups, exports) are named, never touched.
+- asked: 2026-11-25 (owner: change the vault key, VMK-CHANGE plan)
+- shipped: 80975ef5f
+
+### R-vault-193 · shipped
+The words of a key change say what it does not protect, on the CLI and on the phone: old copies of the vault file (the kept one, backups, Time Machine) still open with the old key, and every secret value that existed before the change is in them, so the secrets themselves must be replaced at their providers, widest reach first; values already given to a program or shown on a phone stay known; a lost phone's offline copy stays readable on that phone; an export keeps its own password; and a process running as the owner on the live desktop reads everything before and after. What the change does protect: a removed, lost or recovered-away device opens nothing in the new file, and the old recovery key opens nothing new.
+- asked: 2026-11-25 (owner: change the vault key, VMK-CHANGE plan)
+- shipped: 80975ef5f
+
+### R-vault-194 · shipped
+A card that exports or backs up the whole vault fits a phone: its title says ALL and how many, what the fingerprint allows is short labelled rows (file, how long it stays, password, what the vault keeps), amber only where the copy leaves in clear or a held place is missing from it, and the secrets are one row each behind one tap, with the path or the id under a name. No line of a vault card is larger than its title.
+- asked: 2026-11-25 (owner, screenshot of the backup card: "the screen looks horrible")
+- shipped: 898a62d7c
+
+### R-vault-195 · shipped
+A browser that is not one of the vault's devices shows the add command whole: a name field is filled in with what the browser is ("Edge on Windows") and can be changed, and the command to copy carries it as one shell word. No screen there asks the person to replace a placeholder.
+- asked: 2026-11-25 (owner, screenshot: "what name do i have to put? why not have a button for the user to press?")
+- shipped: (this commit)
+- note: the add still starts on the desktop and its code is still confirmed there (R-vault-183); a button that starts it waits for the owner.
+
+### R-vault-196 · shipped
+Two daemons on one data folder never lose each other's save of the vault: a save made from a read that another program has replaced since is refused in words with nothing written, and the last look and the replacement happen while no other daemon saves. A crash or a kill leaves no lock behind, and where the lock cannot be had (an older Node, an odd file system, a program that keeps it) the save goes on as without it and the host log says so once. A reset or start over never throws away another daemon's save.
+- asked: 2026-11-25 (owner: fix all the things found along the way)
+- shipped: 176779c10
+- note: not run on Linux or WSL. A save of what was read before vault.json was deleted no longer writes it again.
+
+### R-vault-197 · shipped
+A change to the vault file's kept copies of its keys (the one the recovery key opens, the one the list's key is in) that no recover or key change made is said plainly, in Backup & recovery, the plugin's row, `wp-secret status`, the host log and one history row, with what to do. Nothing is refused for it.
+- asked: 2026-11-25 (owner: fix all the things found along the way)
+- shipped: 176779c10
+- note: damage from before the first save by this build cannot be seen in the copy the recovery key opens. Not looked at on a real phone.
+
+### R-vault-198 · shipped
+A damaged kept copy can be repaired: the list's key copy is made again by the next approval that holds the vault key (a release does), and the copy the recovery key opens by `wp-secret change-key`, which gives a new recovery key, shown once on the paired phone and confirmed there before anything is written. The words after it say that the old recovery key may not open the kept copy and still say to keep it until the vault was tried. No program or agent gets a recovery key.
+- asked: 2026-11-25 (owner: fix all the things found along the way)
+- shipped: 176779c10
+
+### R-vault-199 · shipped
+After a key change, a phone without a sign-in that may be the very phone that was paired again is listed as not added back with the words that this is not known, on the desktop, in Backup & recovery, in the history and in the notification, with both ways out: the command that adds it and the command that takes its name off the list. Of every device not added back only its old key is said to open the vault no more, never that the device holds no key: it may have been paired again under another name.
+- asked: 2026-11-25 (owner: fix all the things found along the way)
+- shipped: d07731535
+- note: a vault's one phone without a sign-in, paired again by a phone of no listed sign-in, is taken to be that phone. Not looked at on a real phone.
+
+### R-vault-200 · shipped
+A phone or browser whose storage takes no write when its key was proven reads that key as not known after a reload, never as unused.
+- asked: 2026-11-25 (owner: fix all the things found along the way)
+- shipped: d07731535
+
+### R-vault-201 · shipped
+The vault's screens start on the app's page margin. The field that confirms a recovery key was saved is as wide as its card, and the whole of what to type is readable at 360 px. The phone names the kept vault file by what it is ("the vault file from before the change, kept on the desktop"); the command prints its file name.
+- asked: 2026-11-25 (owner: fix all the things found along the way)
+- shipped: d07731535
+- note: not looked at on a real phone.
+
+### R-vault-202 · shipped
+On an ask card, orange marks only a line that would be missing on an ordinary ask of that secret. A program's own claim is told by *Says* and quotes, and in Details by its group: what the desktop knows and what the program says, with one sentence on what a claim is worth. The reach of the secret and that a secret is printed are plain text. The words "not verified" are in How to read an ask, not on each card. No card repeats what Deny and Not now do.
+- asked: 2026-11-25 (owner: "not verified" in orange is always showing; it wears off and makes the person ignore all orange warnings)
+- shipped: ddeb97287
+
+### R-vault-203 · shipped
+A waiting release whose program has stopped waiting and whose next run an approval since already serves (same program name, session or folder, and secrets) is listed at the foot as covered, with the time of that approval, and closes with the outlived ones in one confirmed tap. Dismissing ends no approval. A card that differs from earlier approvals, a secret that is never kept, or an approval that was ended is never covered.
+- asked: 2026-11-25 (owner: "Ok do these")
+- shipped: ddeb97287
+
+### R-vault-204 · shipped
+A release card from a matched session shows the person's own prompt there, with how long before the ask it was sent. The first ask of a secret with a command is said on the open card once the history is at least a week long. Both are plain text.
+- asked: 2026-11-25 (owner: "Ok do these")
+- shipped: ddeb97287
+- note: a match by folder only does not quote a prompt on the open card.
+
+### R-vault-205 · shipped
+A release card says that the program names itself, says that the session was found from the process number the program gave, and says the program has stopped waiting only once it has.
+- asked: 2026-11-25 (owner: "Ok do these")
+- shipped: ddeb97287

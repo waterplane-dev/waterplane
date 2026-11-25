@@ -135,6 +135,9 @@ export const SUBMIT_NAV_SETTLE_MS = 160;
 export const MODE_MAX_PRESSES = 6;
 export const MODE_PRESS_WAIT_MS = 1500;
 export const MODE_POLL_MS = 60;
+/** How long, and how often, the CLI's answer to `/fast on|off` is looked for (`watchFast`). */
+export const FAST_ANSWER_WAIT_MS = 6000;
+export const FAST_ANSWER_POLL_MS = 250;
 /**
  * Placing the selection on an UNNUMBERED option (`choosePromptBox`), and the
  * rows an attributed replay reads back for it.

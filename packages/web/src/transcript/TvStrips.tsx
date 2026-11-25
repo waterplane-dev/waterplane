@@ -1,14 +1,16 @@
 import { CloudOff } from "lucide-react";
 import { agoText } from "../useRemoteResource";
 import { clock } from "../transcriptUtil";
-import { TvAgents } from "./TvAgents";
+import { TvTop } from "./TvTop";
 import { since } from "./tvRows";
 import type { TvModel } from "./useTranscriptView";
 
-/** The live strip, one row per running agent, and the cached-copy notice. */
+/** The live strip, the cached-copy notice, then the rows a person may shorten
+ *  (`TvTop.tsx`). The first two are never inside that frame: one can ask for an
+ *  answer and the other is an honesty marker. */
 export function TvStrips({ m }: { m: TvModel }) {
   const {
-    status, live, stale, liveTitle, work, shellFirstWords, now, onOpenShells, asking, onAnswer, agents,
+    status, live, stale, liveTitle, work, shellFirstWords, now, onOpenShells, asking, onAnswer,
     offlineAt, cachedAt,
   } = m;
   return (
@@ -45,16 +47,6 @@ export function TvStrips({ m }: { m: TvModel }) {
         </div>
       )}
 
-      {/* One row per agent, because the COUNT is not the progress: "2 agents
-          running" answers how many and nothing about what, and the whole reason
-          this view exists is that the terminal's own agent panel is two taps
-          and a keystroke away on a phone. Rendered whenever agents are running,
-          including through a busy turn (a foreground Task call is the same
-          fact) — but never as a claim of freshness: with the link down the
-          strip above already says "last known", and these rows are part of that
-          same snapshot. */}
-      {agents.length > 0 && <TvAgents agents={agents} now={now} />}
-
       {/* Sticky, not a one-shot toast — stays up for as long as what's on
           screen is stale, and disappears the moment a fetch actually lands.
           Raised by the cache SEED as well as by a failed fetch: painting a
@@ -73,6 +65,7 @@ export function TvStrips({ m }: { m: TvModel }) {
           </span>
         </div>
       )}
+      <TvTop m={m} />
     </>
   );
 }

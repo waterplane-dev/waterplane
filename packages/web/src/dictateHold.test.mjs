@@ -15,6 +15,7 @@ import {
   HOLD_CAP,
   HOLD_MAX_BYTES,
   afterMiss,
+  appendedSince,
   holdNews,
   holdRefusal,
   holdTitle,
@@ -119,4 +120,16 @@ test("a transcript with no words in it is silence, not a full stop in the box", 
   assert.equal(saidNothing("ok"), false);
   assert.equal(saidNothing("3"), false);
   assert.equal(saidNothing("höchstwahrscheinlich."), false);
+});
+
+test("a picture's path put after the recogniser's words survives its next rewrite", () => {
+  // The path went onto the end of the newest write: kept.
+  assert.equal(appendedSince("fix the .claude/inbox/a.png", ["fix", "fix the"]), " .claude/inbox/a.png");
+  // Nothing new, and a render that still shows an OLDER write: not an edit.
+  assert.equal(appendedSince("fix the", ["fix", "fix the"]), "");
+  assert.equal(appendedSince("fix the", ["fix the", "fix"]), "");
+  // Before the first word, whatever was put after the base.
+  assert.equal(appendedSince("typed pic.png", ["typed"]), " pic.png");
+  // An edit in the middle is not an append.
+  assert.equal(appendedSince("fox the", ["fix the"]), "");
 });

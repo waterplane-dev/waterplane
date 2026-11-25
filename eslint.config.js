@@ -99,6 +99,7 @@ export default tseslint.config(
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "warn",
       "local/no-second-socket": "error",
+      "local/one-copy-path": "error",
       // Decision 6 of the rework: no tap may be silent. The prose version of
       // this rule was already in the codebase — `sendInput`'s own comment
       // explains exactly why a bare send in a handler dies at the next reload —
@@ -248,6 +249,9 @@ export default tseslint.config(
   },
   // ws.ts owns the socket and the health probe behind the watchdog reload.
   { files: ["packages/web/src/ws.ts"], rules: { "local/no-second-socket": "off" } },
+  // The one copy path IS the write; the vault's two files copy SECRETS, where scrubTickets could
+  // alter a password and shownlogin reads the clipboard back and clears it.
+  { files: ["packages/web/src/webapi/webapiClipboard.ts", "packages/extensions/vault/web/Shown.tsx", "packages/extensions/vault/web/shownlogin.ts"], rules: { "local/one-copy-path": "off" } },
   { files: STORAGE_FACADE, rules: { "local/no-raw-storage": "off" } },
   // `backendCaps.ts` IS the resolution — `hasCap`/`capReason` are where absent
   // becomes "inherit what used to imply it". It reads the fields computed

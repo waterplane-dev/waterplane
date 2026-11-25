@@ -37,6 +37,8 @@ interface Doc {
    *  `noteOptInSends`). Remembered because the session that carried them, and
    *  its history, are gone once it closes. */
   optInSent: Record<string, Record<string, number>>;
+  /** When somebody first left this repo's set-up page (`RepoTarget.setupUnseen`). */
+  setupSeen: Record<string, number>;
   /** Machine and account findings a person waived, by finding id (`setupcheck/`). Repo findings keep `ignored` and the accepts file. */
   waived?: Record<string, { reason?: string; at: string }>;
 }
@@ -57,13 +59,16 @@ function key(worktree: string): string {
 
 export class SetupPrefsStore {
   private path: string;
-  private doc: Doc = { ignored: {}, optIns: {}, optInSent: {} };
+  private doc: Doc = { ignored: {}, optIns: {}, optInSent: {}, setupSeen: {} };
+  /** Realpaths of checkouts asked about by `setupUnseen`, which every repo listing does: on WSL's
+   *  9P bridge a `realpathSync` per repo per listing is a blocked loop. */
+  private realOf = new Map<string, string>();
 
   constructor(root: string) {
     this.path = join(hostStateDir(root), "setupprefs.json");
     try {
       if (existsSync(this.path)) {
-        const raw = readJsonGuarded<any>(this.path, null) as { autoCompactDefault?: unknown; ignored?: unknown; optIns?: unknown; optInSent?: unknown; waived?: unknown };
+        const raw = readJsonGuarded<any>(this.path, null) as { autoCompactDefault?: unknown; ignored?: unknown; optIns?: unknown; optInSent?: unknown; setupSeen?: unknown; waived?: unknown };
         // Cleaned on the way IN too: a hand-edit must not put an unreadable
         // window or a non-advisory id where the checklist reads it.
         if (raw?.autoCompactDefault != null) {
@@ -103,6 +108,11 @@ export class SetupPrefsStore {
               if (OPT_INS.some((d) => d.id === id) && typeof at === "number" && Number.isFinite(at) && at > 0) m[id] = at;
             }
             if (Object.keys(m).length) this.doc.optInSent[k] = m;
+          }
+        }
+        if (raw?.setupSeen && typeof raw.setupSeen === "object" && !Array.isArray(raw.setupSeen)) {
+          for (const [k, at] of Object.entries(raw.setupSeen as Record<string, unknown>)) {
+            if (typeof at === "number" && Number.isFinite(at) && at > 0) this.doc.setupSeen[k] = at;
           }
         }
       }
@@ -212,6 +222,21 @@ export class SetupPrefsStore {
     this.save();
   }
 
+  /** Nothing says a person met this repo's set-up page: no seen mark, choice or sent time. */
+  setupUnseen(worktree: string): boolean {
+    let k = this.realOf.get(worktree);
+    if (k === undefined) { k = key(worktree); this.realOf.set(worktree, k); }
+    return !(k in this.doc.setupSeen) && !(k in this.doc.optIns) && !(k in this.doc.optInSent);
+  }
+
+  /** The first mark stands: marking again writes nothing. */
+  markSetupSeen(worktree: string, at: number): void {
+    const k = key(worktree);
+    if (k in this.doc.setupSeen) return;
+    this.doc.setupSeen[k] = at;
+    this.save();
+  }
+
   private save(): void {
     try {
       mkdirSync(join(this.path, ".."), { recursive: true });
@@ -241,6 +266,11 @@ export function setupPrefsStore(): SetupPrefsStore | null {
 /** The window the checklist writes and passes at — the chosen one, else the shipped one. */
 export function autoCompactDefault(): string {
   return current?.autoCompactDefault().value ?? AUTO_COMPACT_SUGGESTED;
+}
+
+/** Did a person choose that window in Settings (as against the suggested value standing in)? */
+export function autoCompactChosen(): boolean {
+  return current?.autoCompactDefault().chosen ?? false;
 }
 
 export function waivedFindings(worktree?: string): Record<string, { reason?: string; at: string }> {
@@ -282,4 +312,21 @@ export function optInSentTimes(worktree: string): Record<string, number> {
 
 export function noteOptInSent(worktree: string, id: string, at: number): void {
   current?.noteOptInSent(worktree, id, at);
+}
+
+/** False without a store: "nobody has seen it" is only said by a host that would remember. */
+export function setupUnseen(worktree: string): boolean {
+  return current?.setupUnseen(worktree) ?? false;
+}
+
+export function markSetupSeen(worktree: string, at = Date.now()): { ok: true } | { ok: false; error: string } {
+  if (!current) return { ok: false, error: "no preference store is installed on this host" };
+  current.markSetupSeen(worktree, at);
+  return { ok: true };
+}
+
+/** The answer to a create or a clone: a repo that was made says this desktop has a set-up page for it,
+ *  so the phone offers it over the first session (`RepoTarget.setupUnseen` is not listed yet by then). */
+export function madeRepoAnswer<R extends object>(r: R): R | (R & { setupPage: true }) {
+  return "error" in r || !current ? r : { ...r, setupPage: true as const };
 }

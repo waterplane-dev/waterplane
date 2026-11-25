@@ -18,13 +18,13 @@ import type { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
-import { normalizeDeviceName, type DeviceTokenResponse, type PassiveAuthFields, type PassiveStateResponse, type PeerKind, logTag, envName, BRAND } from "@waterplane/shared";
+import { normalizeDeviceName, type DeviceTokenResponse, type PassiveAuthFields, type PassiveStateResponse, type PeerKind, logTag, BRAND, INSTALL_ALLOW_KEY, installAllowSetting } from "@waterplane/shared";
 import { SlowJobs } from "../slowjobs.js";
 import { passiveAllows, passiveItems, passiveNeverAllows, queuedApkIn } from "../passive.js";
-import { requestPeerKind, isProxied } from "../net.js";
+import { learnFrontDoors, requestPeerKind, isProxied, localProcessRefusal, tlsServerName, unprovenName, unverifiedNameLine } from "../net.js";
 import { RateLimiter, rateKey } from "../ratelimit.js";
 import { LoginGuard, guarded } from "../loginguard.js";
-import { canonicalRequestPath, checkRequestOrigin, corsHeaders } from "../origin.js";
+import { canonicalRequestPath, checkRequestOrigin, corsHeaders, isBrowserName, originHint } from "../origin.js";
 import { admitReadTicket, cookieToken, tokenFromRequest, authCookie, clearAuthCookie } from "../auth.js";
 import { SELF_SIGNED_NOTICE_HEADERS, SELF_SIGNED_NOTICE_HTML, selfSignedNoticeFor } from "../lantls.js";
 import { READ_TICKET_ROUTE } from "../passive.js";
@@ -42,6 +42,16 @@ import { createRelay } from "./bgrelay.js";
 import { backendInfos } from "../backends/index.js";
 
 // ── HTTP: API router, then static web app ────────────────────────────
+
+/**
+ * Who may show the app's page inside their own (clickjacking): itself, and, for a page asked for on
+ * this machine under a loopback name, VS Code's webviews, whose two schemes no website can have. Those
+ * schemes admit EVERY extension's webview, so no other address of this host offers them. The origin gate cannot see this: a framed page's requests carry
+ * OUR origin, so a page on another site could lay the live app, invisible, under the person's taps.
+ * Not `X-Frame-Options`, which cannot name a scheme.
+ */
+export const SHELL_FRAME_POLICY = "frame-ancestors 'self'";
+export const SHELL_FRAME_POLICY_LOCAL = "frame-ancestors 'self' vscode-webview: vscode-file:";
 
 // `as`, not an annotation: hostshape allows a column-0 `const NAME = ` only.
 const MIME = {
@@ -94,10 +104,13 @@ export function createHttp(ctx: ServerCtx) {
     const url = new URL(req.url ?? "/", "http://localhost");
     const method = req.method ?? "GET";
     const jsonHead = { "content-type": "application/json", ...corsHeaders(req.headers) } as Record<string, string>;
+    // Read now: a connection reset while the body is awaited has no address any more.
+    const under = unprovenName(req.socket.remoteAddress, req.headers) ?? undefined;
+    const named = under !== undefined;
 
     if (url.pathname === "/api/auth/status" && method === "GET") {
       const tok = tokenFromRequest(req.headers);
-      const authed = !ctx.auth.needsToken(kind) || ctx.auth.checkToken(tok, kind);
+      const authed = !ctx.auth.needsToken(kind) || ctx.auth.checkToken(tok, kind, named);
       res.writeHead(200, jsonHead);
       // The guard's counts go to a trusted caller only (never an address).
       res.end(JSON.stringify({ kind, authed, ...ctx.authStateFor(kind), ...passiveFields(tok), ...(ctx.auth.canManage(kind) ? { loginGuard: loginGuard.reading() } : {}) }));
@@ -106,7 +119,7 @@ export function createHttp(ctx: ServerCtx) {
     // Passive devices (`passive.ts`): the unlock is the passive token's own
     // route — the one write it may make — and rate-limited per device there.
     if (url.pathname === "/api/auth/unlock" && method === "POST") {
-      const row = ctx.auth.deviceFor(tokenFromRequest(req.headers), kind);
+      const row = ctx.auth.deviceFor(tokenFromRequest(req.headers), kind, named);
       const body = await readSmallJson(req);
       const r = ctx.auth.passive.unlock(row, body.pin);
       const status = r.ok ? 200 : r.error === "rate-limited" ? 429 : r.error === "bad-request" ? 400 : r.error === "no-pin" ? 409 : 403;
@@ -118,7 +131,7 @@ export function createHttp(ctx: ServerCtx) {
     // A read ticket for the opaque loads (`<img src>`, downloads) of a phone that has no tailnet:
     // minted for the presented device token, 1 h, accepted only as `?wt=` on a TLS socket (`admitReadTicket`).
     if (url.pathname === READ_TICKET_ROUTE && method === "POST") {
-      const row = ctx.auth.deviceFor(tokenFromRequest(req.headers), kind);
+      const row = ctx.auth.deviceFor(tokenFromRequest(req.headers), kind, named);
       if (!row) {
         res.writeHead(401, { ...jsonHead, "cache-control": "no-store" });
         res.end(JSON.stringify({ error: "a device token is needed", authRequired: true }));
@@ -129,7 +142,7 @@ export function createHttp(ctx: ServerCtx) {
       return;
     }
     if (url.pathname === "/api/auth/lock" && method === "POST") {
-      const row = ctx.auth.deviceFor(tokenFromRequest(req.headers), kind);
+      const row = ctx.auth.deviceFor(tokenFromRequest(req.headers), kind, named);
       const locked = row ? ctx.auth.passive.lock(row.id) : false;
       res.writeHead(200, jsonHead);
       res.end(JSON.stringify({ ok: true, locked }));
@@ -140,7 +153,7 @@ export function createHttp(ctx: ServerCtx) {
     // passive token — not even one that is unlocked right now.
     if (url.pathname === "/api/auth/pin" && method === "POST") {
       const tok = tokenFromRequest(req.headers);
-      const row = ctx.auth.deviceFor(tok, kind);
+      const row = ctx.auth.deviceFor(tok, kind, named);
       const trusted = ctx.auth.canManage(kind) && (!ctx.auth.needsToken(kind) || !!row) && row?.scope !== "passive";
       if (!trusted) { res.writeHead(403, jsonHead); res.end(JSON.stringify({ ok: false, error: "The unlock PIN is set from a trusted phone over Tailscale, or on the desktop — never from a passive device or the Wi-Fi route." })); return; }
       const body = await readSmallJson(req);
@@ -186,8 +199,9 @@ export function createHttp(ctx: ServerCtx) {
       }
       // A browser logging in again replaces its own row rather than adding one.
       ctx.auth.revoke(cookieToken(req.headers.cookie));
-      const { token } = ctx.auth.issueToken(normalizeDeviceName(body.deviceName) ?? browserName(req.headers["user-agent"]), kind);
-      res.writeHead(200, { ...jsonHead, "set-cookie": authCookie(token) });
+      // Under a name only the local network vouches for, the sign-in is short and counts there alone.
+      const { token } = ctx.auth.issueToken(normalizeDeviceName(body.deviceName) ?? browserName(req.headers["user-agent"]), kind, undefined, under);
+      res.writeHead(200, { ...jsonHead, "set-cookie": authCookie(token, isBrowserName(tlsServerName(req.socket)), under !== undefined) });
       res.end(JSON.stringify({ ok: true }));
       return;
     }
@@ -200,7 +214,7 @@ export function createHttp(ctx: ServerCtx) {
       // Minting is a desktop / Tailscale act: a token already in hand over the
       // Wi-Fi route (or Funnel) must not breed more of them.
       if (!ctx.auth.canManage(kind)) { res.writeHead(403, jsonHead); res.end(JSON.stringify({ ok: false, error: "a device token is minted on the desktop or over Tailscale, never from the Wi-Fi route" })); return; }
-      const presented = ctx.auth.deviceFor(tokenFromRequest(req.headers), kind);
+      const presented = ctx.auth.deviceFor(tokenFromRequest(req.headers), kind, named);
       // A passive token never mints another — unlocked or not, a full token
       // would outlive the 30 minutes.
       if (presented?.scope === "passive") { res.writeHead(403, jsonHead); res.end(JSON.stringify({ ok: false, error: "passive device", passive: true })); return; }
@@ -286,20 +300,27 @@ export function createHttp(ctx: ServerCtx) {
       // built, validator and all.
       const isManifest = extname(filePath) === ".webmanifest";
       const isIndex = filePath === join(WEB_DIST, "index.html");
+      const type = MIME[extname(filePath)] || "application/octet-stream";
+      // Every page, by what it is served AS: on a case-insensitive disk `/Index.html` is the app too.
+      const frame = !type.startsWith("text/html") ? ""
+        : localProcessRefusal(req.socket.remoteAddress, req.headers) === null ? SHELL_FRAME_POLICY_LOCAL : SHELL_FRAME_POLICY;
       const brandName = isManifest ? themeOverlayState().overlay.displayName : undefined;
       const icons = isManifest || isIndex ? themeIconUrls() : {};
       if (brandName && etag) etag = etag.replace(/"$/, `-${Buffer.from(brandName).toString("hex")}"`);
       const iconTag = iconUrlsTag(icons);
       if (iconTag && etag) etag = etag.replace(/"$/, `-i${iconTag}"`);
+      // A copy cached under another policy must not be revalidated into keeping it.
+      if (frame && etag) etag = etag.replace(/"$/, frame === SHELL_FRAME_POLICY ? '-f2"' : '-f2l"');
       if (etag && notModified(req, res, etag, cc)) return;
       const raw = await readFile(filePath);
       const body = isManifest ? brandManifest(raw, brandName, icons) : isIndex ? brandIndexHtml(raw, icons) : raw;
       // sendBody br/gzip-negotiates: the JS bundle is the biggest single download
       // a cold phone makes, and it compresses ~4x.
       sendBody(req, res, 200, body, {
-        "content-type": MIME[extname(filePath)] || "application/octet-stream",
+        "content-type": type,
         "cache-control": cc,
         ...(etag ? { etag } : {}),
+        ...(frame ? { "content-security-policy": frame } : {}),
       }, etag ? `${filePath}\0${etag}` : undefined);
     } catch {
       res.writeHead(404).end("Not found");
@@ -309,7 +330,15 @@ export function createHttp(ctx: ServerCtx) {
   /** The `createServer` callback, one per bind in `main()` (it keeps no
    *  per-server state, so one function serves every bind). */
   function handler(req: IncomingMessage, res: ServerResponse): void {
+    // A `tailscale serve` port set up since the last reading: read it before judging the name on it.
+    const learning = learnFrontDoors(req.socket.remoteAddress, req.headers, ctx.PORT);
+    if (learning) { void learning.then(() => judge(req, res)); return; }
+    judge(req, res);
+  }
+
+  function judge(req: IncomingMessage, res: ServerResponse): void {
     const kind = requestPeerKind(req.socket.remoteAddress, req.headers);
+    const named = unprovenName(req.socket.remoteAddress, req.headers) !== null;
     const canon = canonicalRequestPath(req.url);
     if (canon === null) {
       res.writeHead(400, { "content-type": "application/json" });
@@ -321,9 +350,9 @@ export function createHttp(ctx: ServerCtx) {
     // including the auth endpoints, so a drive-by page can't brute-force the
     // password either. Static assets stay ungated (the SPA shell is public).
     if (p.startsWith("/api/")) {
-      const originOk = checkRequestOrigin(req.headers, { path: p, method: req.method, proxied: isProxied(req.headers) });
+      const originOk = checkRequestOrigin(req.headers, { path: p, method: req.method, proxied: isProxied(req.headers), tlsName: tlsServerName(req.socket) });
       if (!originOk.ok) {
-        console.warn(`${logTag} refused ${p}: ${originOk.reason}. If this is your own hostname, set ${envName("ALLOWED_HOSTS")}.`);
+        console.warn(`${logTag} refused ${p}: ${originOk.reason}. ${originHint(originOk)}`);
         res.writeHead(403, { "content-type": "application/json" });
         res.end(JSON.stringify({ error: "origin not allowed" }));
         return;
@@ -371,7 +400,9 @@ export function createHttp(ctx: ServerCtx) {
       // other daemon presents a PEER token, which `peers/routes.ts` checks (and refuses a
       // device token, a LAN caller and a missing token there).
       const peerApi = p === "/api/peer" || p.startsWith("/api/peer/");
-      if (p.startsWith("/api/") && !peerApi && !ticketRow && ctx.auth.needsToken(kind) && !ctx.auth.checkToken(tok, kind)) {
+      if (p.startsWith("/api/") && !peerApi && !ticketRow && ctx.auth.needsToken(kind) && !ctx.auth.checkToken(tok, kind, named)) {
+        const said = unverifiedNameLine(req.socket.remoteAddress, req.headers);
+        if (said) console.warn(`${logTag} ${said}`);
         res.writeHead(401, { "content-type": "application/json", ...corsHeaders(req.headers) });
         res.end(JSON.stringify({ error: "auth required", authRequired: true, enabled: ctx.auth.isEnabled() }));
         return;
@@ -421,6 +452,7 @@ export function createHttp(ctx: ServerCtx) {
       // "an upload landed in this worktree, re-ask the gate now".
       const handled = await handleApi(req, res, {
         root: ctx.ROOT, push: ctx.push, sessions: ctx.sessions, uiStats: ctx.uiStats, netstats: ctx.netstats, setup: ctx.setupWatch, health: ctx.healthWatch, attention: ctx.attention, resolveAttention: ctx.resolveAttention, handleNotification: (id) => ctx.handleNotification(id), notify: (k, p) => ctx.notify(k, p), builds: ctx.builds, launches: ctx.intents,
+        pullRule: (d) => ctx.autopull.config(d), installAllow: () => installAllowSetting(ctx.settings.get(INSTALL_ALLOW_KEY)?.value),
         periods: () => ctx.budget.get().periods ?? [], tokenStats: ctx.tokenStats, usageLog: ctx.usageLog, usageSources: ctx.usageSources, usageReadings: () => ctx.usageSources.readings(), budgetStanding: (now) => ({ states: ctx.budget.periods(now), ceilings: ctx.budget.get().ceilings }), usagePollMs: USAGE_POLL_MS, bootId: ctx.BOOT_ID, weekBurn: ctx.weekBurn,
         usageNow: () => ({
           usage: ctx.usage.get(), readings: ctx.usageSources.readings(), billing: ctx.billing.status(),
@@ -434,7 +466,7 @@ export function createHttp(ctx: ServerCtx) {
         pluginFile: (id, token) => ctx.plugins.offeredFile(id, token),
         peers: ctx.peers, canManage: (k) => ctx.auth.canManage(k),
         // Bound to THIS request's identity — what the token gate above admitted.
-        relay: (body) => bgRelay.relay(body, { kind, tok, deviceId: ctx.auth.deviceFor(tok, kind)?.id }),
+        relay: (body) => bgRelay.relay(body, { kind, tok, deviceId: ctx.auth.deviceFor(tok, kind, named)?.id }),
       });
       if (handled) return;
       // A self-signed TLS port answers a plain page in place of the app (`lantls.ts`).

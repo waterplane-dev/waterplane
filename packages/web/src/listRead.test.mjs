@@ -21,7 +21,7 @@ test("both readers: unread/empty waits, read/empty says none", () => {
   const unread = listRead({ rows: [], readAt: 0 });
   const none = listRead({ rows: [], readAt: 5 });
   assert.equal(noReposWords(unread), "Waiting for the desktop's repo list.");
-  assert.equal(noReposWords(none), "No repos under host root.");
+  assert.equal(noReposWords(none), "No repos in the code folder yet.");
   assert.equal(noReposWords(listRead({ rows: [{ id: "a" }], readAt: 5 })), null, "a list with rows draws them, no sentence");
   assert.equal(gitNoRepoWords(null, unread, true), "Waiting for the desktop's repo list to find this session's repo. Go back, then open a session or a repo's git view from the launcher.");
   assert.equal(gitNoRepoWords(null, none, true), "The open session's folder is not one of this desktop's repos, so there is nothing to review. Go back, then open a session or a repo's git view from the launcher.", "a host with no repos never waits for ever");
@@ -33,7 +33,7 @@ test("wiring: both readers pass the repo list's read time, never its length alon
   assert.match(ov, /<GitNoRepo focus=\{focus\} list=\{listRead\(\{ rows: repos, readAt: reposAt \}\)\}/);
   const launcher = readFileSync(new URL("./core/launcher/LauncherScreen.tsx", import.meta.url), "utf8");
   assert.match(launcher, /noReposWords\(listRead\(\{ rows: repos, readAt: reposAt \}\)\)/);
-  assert.doesNotMatch(launcher, /repos\.length === 0 && <Empty>No repos under host root\./);
+  assert.doesNotMatch(launcher, /repos\.length === 0 && <Empty>No repos in the code folder yet\./);
 });
 
 test("sdk: a feature reads the repo list WITH its read time, and the same listRead", () => {

@@ -17,6 +17,7 @@ const repo = fileURLToPath(new URL("../../..", import.meta.url));
 
 /** path (from the repo root) → why a hand-rolled write is right there. */
 const ALLOW = {
+  "packages/host/src/cli/lancert.ts": "the certificate's DER bytes, not JSON, into a folder the person named; an fsync error is fatal there",
   "packages/host/src/intents/disk.ts": "the intent store is a leaf under `intents/`: it may import only `intents/contract`, so jsonstore is INJECTED (`IntentDeps.files`); the hand-rolled tmp+rename is the fallback a unit fake without it gets",
   "packages/host/src/localusage.ts": "async tmp+rename so a large ledger never blocks the event loop; jsonstore is sync-only",
   "packages/host/src/convfork.ts": "writes a forked conversation .jsonl (the CLI's own transcript), not a state file",

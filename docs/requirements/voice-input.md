@@ -33,9 +33,9 @@ The desktop sets up local dictation on a person's tap: whisper.cpp through brew 
 - note: Host half (`dictatesetup.ts`, `shared/dictatemodels.ts`); refuses below model size + 2 GB free; nothing starts without the tap and a failure is never retried.
 
 ### R-voice-input-007 · shipped
-Send tapped while a dictation is not back yet (microphone open, or a recording waiting to be read) asks whether to send the transcript unread the moment it returns or to read it first; when the words come from the phone's own recogniser the ask also warns that its transcription is far less accurate.
-- asked: 2026-11-14 (owner)
-- note: `dictationSendAsk` (`composeSend.ts`); `useVoice`'s `pending`/`finish()`; the armed send is phone-held and in memory only, called off by tapping Send again.
+Send tapped while a dictation is not back yet (microphone open, or a recording waiting to be read) asks whether to send the transcript unread the moment it returns or to read it first; when the words come from the phone's own recogniser the ask also warns that its transcription is far less accurate. A picture's own Send (the annotator's Send & run, Send all + submit and their when-it's-free twins) asks the same and holds the picture in the box with the words, rather than running without them.
+- asked: 2026-11-14 (owner); the picture's Send 2026-11-23 (owner)
+- note: `dictationSendAsk` (`composeSend.ts`); `useVoice`'s `pending`/`finish()`; the armed send is phone-held and in memory only, called off by tapping Send again. The picture's Send asks through `dictationGate` (`core/queue/uploads.ts`, `pictureGate.test.mjs`).
 ### R-voice-input-008 · shipped
 When voice input falls back to the phone's recogniser, a pill says it is weaker and opens the local dictation setup row.
 - asked: 2026-11-12

@@ -13,6 +13,7 @@ import { AtSign, Copy, ListChecks, MessageSquareReply, Quote, TextSelect, X } fr
 import { useBackStep } from "../../backStep";
 import { copySessionRef, openDecisions, quoteIntoCompose } from "../../features/clipboard";
 import { showToast } from "../../toast";
+import { copyText } from "../../api";
 import { Button } from "../../kit/Button";
 
 const ICON = 16;
@@ -31,8 +32,8 @@ export function quotePicked(lines: readonly string[]): boolean {
   return true;
 }
 export async function copyPicked(lines: readonly string[]): Promise<void> {
-  try { await navigator.clipboard.writeText(lines.join("\n")); showToast(`copied ${plural(lines.length)}`); }
-  catch { showToast("clipboard unavailable (needs https) — quote puts the lines in compose instead"); }
+  if (await copyText(lines.join("\n"))) showToast(`copied ${plural(lines.length)}`);
+  else showToast("the clipboard refused it here — quote puts the lines in compose instead");
 }
 
 export function PickMenu({ at, onPick, onCancel }: { at: MenuAt; onPick: () => void; onCancel: () => void }) {

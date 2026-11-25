@@ -24,8 +24,12 @@ connection with `authRequired` and closes it; this feature is the full-screen
   offer *pair with code*: this card covers Settings. A browser keeps the form. `logic.ts` is the
   choice and the words.
 
+  Kind `unknown` at a NAME is the host saying the local network can answer for it (its own `.local`, an
+  `ALLOWED_HOSTS` alias; `host/origin.ts` `unverifiedName`): `askedName` finds it, and the card says so in place of "the local
+  network", names the addresses that need no sign-in, and says when a sign-in there ends (`NAME_SIGNIN_HOURS`).
+
 **Wire frames**: `authRequired` (sets), `welcome` (clears). `auth.state` and
-`welcome.auth` — the Settings → LAN access section's `authState` — stay in App,
+`welcome.auth` — the Settings › Connection › LAN password section's `authState` — stay in App,
 as does the new-password field (`lanPw`): that is settings, not the gate.
 
 **Overlay ids**: none. The gate is not a sheet — App returns it early, before

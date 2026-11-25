@@ -11,6 +11,7 @@
  * core's `sendInput` — no new send path.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   AlertTriangle, BookOpen, CloudOff, GripVertical, Hourglass, Loader2,
   List, Maximize2, Minimize2, Play, Rabbit, Radar, RotateCw, ScrollText, Sparkles, Terminal as TerminalIcon, X,
@@ -55,7 +56,9 @@ import { pendingCardHintParts, pendingCardLine, pendingLead, pendingOpenState, p
 import type { ComposeApi } from "../compose/useCompose";
 import type { Launch } from "../launch/useLaunch";
 import { keepFocus } from "../compose/ComposeBar";
-import { fullScreenTap } from "../../chromeMode";
+import { useHasKeyboard } from "../../ShortcutCard";
+import { detectMac } from "../../shortcuts";
+import { fullScreenKeyLabel } from "./fullScreenKey";
 import { applyReaderZoom, applyTermZoom, usePref } from "../prefs";
 import { NewImagesStrip, openFileRef } from "../../features/images";
 import { copyCode, copyLink, openLink } from "../../features/clipboard";
@@ -140,8 +143,10 @@ export interface TermAreaProps {
  * button itself is gone (`Unavailable.tsx`: never a dimmed one) and a control
  * that disappears without saying so is the thing that rule exists to stop.
  */
-function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, setView, sessionCan, chrome, wheel, openOutline }: {
+function ScreenCorner({ zoom: zoomOn, covered, active, pending, readerShown, readMode, setView, sessionCan, chrome, wheel, openOutline }: {
   zoom?: boolean;
+  /** The storm is over the whole terminal box: a group that lives in it is not drawn. */
+  covered: boolean;
   openOutline?: () => void;
   active: SessionInfo;
   pending: boolean;
@@ -155,11 +160,12 @@ function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, se
     & { backends: BackendInfo[] | null };
 }): ReactNode {
   const [wheelOpen, setWheelOpen] = useState(false);
-  const corner = useCornerDrag((wasReset) => showToast(wasReset
+  const corner = useCornerDrag(covered, (wasReset) => showToast(wasReset
     ? "buttons back in the corner"
     : "drag the grip to move these buttons; double-tap it to put them back"));
   const wheelBtn = useRef<HTMLButtonElement>(null);
-  const { chromeHidden: shut, setFullScreen, setTypingPeek, chromeIn } = chrome;
+  const { chromeHidden: shut, toggleFullScreen } = chrome;
+  const keyHint = useHasKeyboard() ? ` (${fullScreenKeyLabel(detectMac(navigator as never))})` : "";
   const txtScale = usePref("txtScale");
   const tZoom = usePref("tZoom");
   const rZoom = usePref("rZoom");
@@ -183,8 +189,11 @@ function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, se
   const bigger = nextZoom(zoom, 1, txtScale);
   const wider = readerShown ? "" : ", i.e. more columns and rows for the CLI to draw in";
   const narrower = readerShown ? "" : ", i.e. fewer columns and rows";
+  // Drawn on `.screen`, so it can be dragged off the terminal (`useCornerDrag.ts`);
+  // the anchor left here is where it lives until it is.
   return (<>
-    <div ref={corner.ref} className="term-zoom" data-hint="term.zoom" style={corner.style}>
+    <i ref={corner.anchor} className="term-zoom-anchor" aria-hidden />
+    {corner.host && createPortal(<div ref={corner.ref} className="term-zoom" data-hint="term.zoom" style={corner.style}>
       {/* The grip, FIRST so it sits at the far end from the fixed full-screen
           button: drag it to move the whole group off a line it is hiding,
           double-tap to put it back (`useCornerDrag`). No `active` highlight
@@ -300,15 +309,10 @@ function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, se
         onPointerDown={keepFocus}
         aria-label={shut ? "leave full screen" : "full screen"} aria-pressed={shut}
         title={shut
-          ? "leave full screen — the header, status and toolbar come back"
-          : `full screen — hide the header, status and toolbar and give the rows to the ${readerShown ? "conversation" : "output"}. No keyboard${readerShown ? "" : ": the Esc/arrow row stays"}.`}
-        onClick={() => {
-          const next = fullScreenTap(chromeIn);
-          track(next.fullScreen ? "action:fullscreen.on" : "action:fullscreen.off");
-          setFullScreen(next.fullScreen);
-          setTypingPeek(next.typingPeek);
-        }}>{shut ? <Minimize2 size={ICON} /> : <Maximize2 size={ICON} />}</Button>
-    </div>
+          ? `leave full screen${keyHint} — the header, status and toolbar come back`
+          : `full screen${keyHint} — hide the header, status and toolbar and give the rows to the ${readerShown ? "conversation" : "output"}. No keyboard${readerShown ? "" : ": the Esc/arrow row stays"}.`}
+        onClick={toggleFullScreen}>{shut ? <Minimize2 size={ICON} /> : <Maximize2 size={ICON} />}</Button>
+    </div>, corner.host)}
     {wheelOpen && !pending && !isShellBackend(wheel.backends, active.backend) && (
       <ModelWheel cur={active} backends={wheel.backends} canSlash={sessionCan(active, "slash")}
         submitInput={wheel.submitInput} relaunch={wheel.relaunch} liveAsk={wheel.liveAsk}
@@ -388,7 +392,7 @@ export function TermArea(p: TermAreaProps): ReactNode {
   const txtScale = usePref("txtScale");
   const rZoom = usePref("rZoom");
   const corner = (zoom?: boolean) => (
-    <ScreenCorner zoom={zoom} active={active} pending={pending} readerShown={readerShown} readMode={readMode}
+    <ScreenCorner zoom={zoom} covered={stormUp} active={active} pending={pending} readerShown={readerShown} readMode={readMode}
       setView={setView} sessionCan={sessionCan} chrome={chrome} openOutline={openOutline}
       wheel={{ backends, submitInput, relaunch: launch.relaunch, liveAsk: conn.liveAsk }} />
   );

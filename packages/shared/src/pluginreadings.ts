@@ -25,6 +25,18 @@ export interface PluginThermalReader {
   read(): Promise<PluginThermalReading>;
 }
 
+/** How long the core waits for a contributed screen capture before it counts as none. */
+export const PLUGIN_SCREEN_CAPTURE_TIMEOUT_MS = 12_000;
+
+/** What a contributed screen capture answers (since 2.12): the whole main display as one JPEG at
+ *  its real pixel size, or the sentence saying why there is none. */
+export type PluginScreenStill = { jpeg: Uint8Array } | { note: string };
+
+/** A screen capture (`api.screenCapture`, since 2.12). */
+export interface PluginScreenCapture {
+  still(): Promise<PluginScreenStill>;
+}
+
 /** A usage probe (`api.usageProbe`, since 1.7): one account's quota as a `UsageReading`. */
 export interface PluginUsageProbe {
   /** The reading's id: short, lowercase, `[a-z0-9:_-]` (`USAGE_SOURCE_RE`). Never `claude`. */

@@ -168,7 +168,7 @@ Each has caused a real failure here and is invisible in review unless you know i
   policy. Every `/api/*` request and WS upgrade is checked on `Origin` *and* `Host` (DNS rebinding),
   with `Sec-Fetch-Site` as the backstop for `Origin`-less cross-origin GETs. Missing `Origin` is
   allowed (curl, e2e, hook sink). Never widen
-  `*.ts.net` past the MagicDNS fallback, never trust `*.local` as a wildcard (own mDNS name only). Side-effecting endpoints must not be
+  `*.ts.net` past the MagicDNS fallback, never trust `*.local` (own mDNS name let in, untrusted). Side-effecting endpoints must not be
   GET (`/api/host/screenshot` is POST for this). Exactly two read-only routes are exempt
   (`OPAQUE_READ_ROUTES`: artifact + inbox file, GET/HEAD only) because the APK loads them as `<img src>`/`<a download>`;
   widen only for a route `api.ts` builds with `abs()`.
@@ -185,5 +185,5 @@ Each has caused a real failure here and is invisible in review unless you know i
 
 Plain `http://100.x` is not a secure context (no service worker, push, install, clipboard; a navigation
 while the tunnel is down loses the app). Fix: `tailscale serve --bg --https=443 http://127.0.0.1:8770`.
-The serve port is DISCOVERED (`serveHttpsUrl`); a front door on another port needs
-`WATERPLANE_ALLOWED_HOSTS`/`_ORIGINS` *with* the port.
+The serve port is DISCOVERED (`serveHttpsUrl`); another needs its bare name in
+`WATERPLANE_ALLOWED_HOSTS`, its origin *with* port in `_ORIGINS`.

@@ -225,7 +225,7 @@ export function cacheReading(t: TokenTotals, scope: CacheScope = "corpus"): Cach
       ? `Cache reads are ${Math.round(share)}% of everything sent in, and each token written into the cache was read back ${reuse >= 10 ? Math.round(reuse) : reuse.toFixed(1)}× — well past the ${payback!.toFixed(1)}× that makes a write worth writing. A high share is the cheap shape of this traffic, not a symptom: a cache read bills at a tenth of the input rate, and the only way to lower the share is to re-send the same context at full price.`
       : `Cache reads are ${Math.round(share)}% of everything sent in. A cache read bills at a tenth of the input rate, so a high share is the cheap shape of the same traffic rather than a symptom.`;
 
-  const mark = `the ~${fmtCount(CTX_PER_TURN_HEAVY)} mark where this desktop's own logs found the spend concentrating (the conversations past 200k were 1.4% of them and 76% of every token)`;
+  const mark = `the ~${fmtCount(CTX_PER_TURN_HEAVY)} mark where the logs of the one desktop this was measured on found the spend concentrating (its conversations past 200k were 1.4% of them and 76% of every token)`;
   // A mean is stated as a mean, every time. The distribution it came out of is
   // the most skewed in this repo's measurements, and a reader who takes 190k
   // for "my turns are 190k" has read a ceiling off an average.

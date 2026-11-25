@@ -115,6 +115,7 @@ Beside the Setup check, a repo has an Opt-ins list: the advanced things it can t
 Every opt-in is the person's choice: a tap seeds the Send sheet (or runs the existing no-cost setup fix, or opens the screen that does the job), and nothing is sent or scheduled until the person sends it there. "Not for me" hides an offer in that repo until they offer it again. An offer the desktop cannot check can be marked done by the person and is shown as their word, not as a check that passed. Offers that do not fit the repo sit behind a count.
 - asked: 2026-10-16
 - shipped: 1b62447
+- note: the set-up page (R-onboarding-035) is that person's send too: the owner allowed its Go button, under the list of exactly what it does, on 2026-11-23.
 
 ### R-onboarding-019 · shipped
 A "walk me through these" button seeds one prompt in which an agent interviews the person about the offers still open, then posts each one they pick as its own work item (a schedule for the recurring ones) instead of doing them all in one long session.
@@ -165,3 +166,48 @@ A signed-out session tells a first-time user they can type /login in the text bo
 A fresh install's first screen says what the app is (a remote control for Claude Code on your own computer), that the desktop must be set up first with a link to the guide, and how a QR is scanned: with the phone's camera app, since the app has no scanner. A pairing link skips the welcome.
 - asked: 2026-11-04 (owner, screenshot of the first screen)
 - shipped: `HostSetup.tsx`, `PairForm.tsx`, commit "first screen: say what this is"
+
+### R-onboarding-029 · shipped
+Creating a project from the phone offers a checkbox per thing this desktop can also set up in it (core's, and whatever an extension, private ones included, adds), each with a sentence saying what is written. The phone remembers what the person changed, and what a box writes is in the project's first commit.
+- asked: 2026-11-23 (owner, screenshot of wadrobe-aid)
+- shipped: `newproject.ts`, `routes/apinewproject.ts`, `NewMenu.tsx`
+
+### R-onboarding-030 · shipped
+A session the desktop starts finds the person's own commands in `~/.local/bin` (such as `wp-secret`), in a new project as in any other, and so do build buttons.
+- asked: 2026-11-23 (owner: a new project "doesn't know about the Vault")
+- shipped: `ptyenv.ts` (`withUserBin`), `sessions/tmux.ts`, `builds.ts`
+
+### R-onboarding-031 · shipped
+A repo that holds an Android app has two more opt-ins: its new builds download to the phone by themselves, and they install by themselves. Each says whether it is on. The first is turned on with a tap on its card and keeps the rest of the repo's download rule; the second opens the Apps screen on that repo's app.
+- asked: 2026-11-23 (owner, screenshot of wadrobe-aid's opt-ins)
+- shipped: `optins.ts` (host and shared), `OptInRegion.tsx`
+
+### R-onboarding-032 · shipped
+The Opt-ins list offers Links: it says whether the repo has a pinned link and opens the Links screen on that repo, or says where the extension is switched on. A server an agent runs from its session's scratch folder, reachable through a front door, is found as that repo's link.
+- asked: 2026-11-23 (owner, screenshot of wadrobe-aid)
+- shipped: `optins.ts` (host and shared), `OptInRegion.tsx`, `extensions/links`
+
+### R-onboarding-033 · shipped
+Each repo has one set-up page listing everything that can be turned on in it. It is offered by itself once per repo: leaving it (Back, skip or done) ends the offer on every phone, and it stays in the repo's ⋯ menu › set up this repo.
+- asked: 2026-11-23 (owner, this session)
+- shipped: a440679a4 (page), `core/launch/afterStart.ts`, `RepoGroup.tsx` (entry points)
+
+### R-onboarding-034 · shipped
+The page opens over the session that just started after a project is created or cloned, and after New session in a repo nobody has seen it for. The session starts exactly as it would without it. Never by itself in the demo, on a child's device, for a linked worktree, offline, on an older desktop, over the launch question, or after a cancelled or refused start.
+- asked: 2026-11-23 (owner, this session)
+- shipped: `core/launch/afterStart.ts`, `useLaunch.ts`, `setupprefs.ts` (`madeRepoAnswer`)
+
+### R-onboarding-035 · shipped
+On the set-up page the free things are ticked in advance, what costs an agent session never is. The button names how many are ticked and runs exactly those: free ones right away, each paid one as its own backlog item or schedule. Every row then says what happened, and nothing is run or posted twice.
+- asked: 2026-11-23 (owner, this session)
+- shipped: a440679a4, 38f385623
+
+### R-onboarding-036 · shipped
+An agent asked to look at the repo first only suggests ticks, each with its reason on the row. It sets nothing up, and its suggestions tick nothing until the person takes them.
+- asked: 2026-11-23 (owner, this session)
+- shipped: a440679a4, 38f385623
+
+### R-onboarding-037 · shipped
+With no repos on the desktop the first-run card offers the ways to get one: build your first app, new project, clone a repo, choose another folder, or try the demo.
+- asked: 2026-11-23 (owner, this session)
+- shipped: aa6c4db11

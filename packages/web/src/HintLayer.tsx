@@ -4,6 +4,7 @@ import {
   closeHint, explainMode, onExplainChange, onHintCard, proceedHint, setExplainMode,
   type ActiveHint,
 } from "./hints";
+import { useDialogStep } from "./backStep";
 import { track } from "./usage";
 import { prefs, setPref, usePref } from "./core/prefs";
 import { showToast } from "./toast";
@@ -40,6 +41,16 @@ export function HintLayer() {
     window.addEventListener("keydown", esc);
     return () => window.removeEventListener("keydown", esc);
   }, [explain]);
+
+  // Back leaves explain mode (as Esc does), and closes a card without counting it as read. In this
+  // order: a card is over the mode it was opened in.
+  useDialogStep(explain, () => setExplainMode(false));
+  useDialogStep(askChip && !hint, () => setAskChip(false));
+  useDialogStep(hint !== null, () => closeHint(false));
+
+  // A dismissal is written by `hints.ts`, beside the store: re-read it, or Settings' "explain them
+  // again" still says nothing was dismissed.
+  const proceed = (again = false) => { track("action:hint.proceed"); proceedHint(again); prefs.reload("hints"); };
 
   return (
     <>
@@ -83,23 +94,32 @@ export function HintLayer() {
             </div>
             <p className="hint-card-what">{hint.def.what}</p>
             {hint.def.when && <p className="hint-card-when">{hint.def.when}</p>}
+            {hint.id === "tabs.logo" && <LogoCountAsk />}
             <div className="hint-card-acts">
-              {hint.intercepted ? (
+              {hint.intercepted && hint.def.askAgain ? (
+                <>
+                  <Button data-nohint onClick={() => proceed(true)}>show it again</Button>
+                  <span className="spacer" />
+                  <button className="send" data-nohint onClick={() => proceed()}><Check size={14} /> don't show again</button>
+                </>
+              ) : hint.intercepted ? (
                 <>
                   <Button data-nohint onClick={() => closeHint(false)}><X size={14} /> not now</Button>
                   <span className="spacer" />
                   <button className={`send${hint.def.danger ? " danger" : ""}`} data-nohint
-                    onClick={() => { track("action:hint.proceed"); proceedHint(); }}>do it</button>
+                    onClick={() => proceed()}>do it</button>
                 </>
               ) : (
                 <>
                   <span className="spacer" />
-                  <button className="send" data-nohint onClick={() => closeHint(true)}><Check size={14} /> got it</button>
+                  <button className="send" data-nohint onClick={() => { closeHint(true); prefs.reload("hints"); }}><Check size={14} /> got it</button>
                 </>
               )}
             </div>
             <div className="hint-card-foot">
-              {hint.intercepted
+              {hint.intercepted && hint.def.askAgain
+                ? "“show it again” and “don't show again” both open your tabs. Long-press the logo for this card; Settings › Writing & reading › explain them again brings it back."
+                : hint.intercepted
                 ? "Explained once. The next tap on this button just does it."
                 : "Long-press any button for this. “Got it” stops it being explained again."}
             </div>
@@ -107,6 +127,23 @@ export function HintLayer() {
         </div>
       )}
     </>
+  );
+}
+
+/** The logo's card offers to take its number off: the same one is in the lines at the top. */
+function LogoCountAsk() {
+  const on = usePref("logoCount");
+  return on ? (
+    <div className="hint-card-opt">
+      <Button data-nohint onClick={() => { track("action:hints.logoCountHidden"); setPref("logoCount", false); }}>
+        OK, hide the number here — it's at the top too
+      </Button>
+    </div>
+  ) : (
+    <div className="hint-card-opt" role="status">
+      <span>Number hidden. Settings › Appearance › number on the logo brings it back.</span>
+      <Button data-nohint onClick={() => setPref("logoCount", true)}>undo</Button>
+    </div>
   );
 }
 

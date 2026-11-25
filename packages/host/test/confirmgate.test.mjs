@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-const { createConfirmGate, gateRefusal, fixGateRefusal, withFixConfirms, fixBind, FIX_SCOPE, CONFIRM_TTL_MS } = await import("../dist/confirmgate.js");
+const { createConfirmGate, gateRefusal, fixGateRefusal, withFixConfirms, withOptInConfirms, fixBind, FIX_SCOPE, CONFIRM_TTL_MS } = await import("../dist/confirmgate.js");
 const { configureOrigins } = await import("../dist/origin.js");
 
 configureOrigins({ port: 8771 });
@@ -68,4 +68,16 @@ test("compliance fixes: ungated lists pass, a gated id runs alone with its own t
   assert.equal(fixGateRefusal(browser, "/wt", ["signing-key"], t, g).status, 403);
   assert.equal(fixGateRefusal(browser, "/wt", ["android-toolchain"], t, g), null);
   assert.equal(g.check(t, FIX_SCOPE, fixBind("/wt", "android-toolchain")), null);
+});
+
+test("opt-ins: a gated offer that is off carries the token its confirm sends; nothing else mints one", () => {
+  const g = createConfirmGate();
+  const rep = (rows) => withOptInConfirms("/wt", { repoId: "r", repoName: "r", rows, checkedAt: 1 }, g);
+  const off = { relevant: true, state: "off", detail: "" };
+  const r = rep([{ id: "local-ci-status", ...off }, { id: "requirements", ...off }]);
+  assert.deepEqual(Object.keys(r.confirm), ["local-ci-status"], "an ungated fix needs none");
+  assert.equal(fixGateRefusal(browser, "/wt", ["local-ci-status"], undefined, g).status, 403, "no token: what the phone's card got");
+  assert.equal(fixGateRefusal(browser, "/wt", ["local-ci-status"], r.confirm["local-ci-status"], g), null);
+  assert.equal(rep([{ id: "local-ci-status", ...off, state: "on" }]).confirm, undefined);
+  assert.equal(rep([{ id: "local-ci-status", ...off, relevant: false }]).confirm, undefined);
 });

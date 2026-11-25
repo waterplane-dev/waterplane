@@ -48,6 +48,8 @@ import { prefRef } from "../prefs.ts";
 import { baseName } from "../../format.ts";
 import { pickShell, type ReturnTo } from "./shellTab.ts";
 import { rememberShell, shellTabs } from "./shellReturn.ts";
+import { useAfterStart } from "./afterStart.ts";
+import { offerRepoSetup } from "../../features/repoSetup";
 
 /** What a shell tap says on a desktop whose host lists no shell backend. */
 const SHELL_CANT = "This desktop can’t open a shell — it needs an update.";
@@ -74,6 +76,9 @@ export interface LaunchDeps {
   repos: RepoTarget[];
   /** The session on screen (a pending one included) — the model sheet's subject. */
   active: SessionInfo | null | undefined;
+  /** The screen on top, for what opens over a start (`afterStart.ts`). */
+  activeId: string | null;
+  overlay: Overlay;
   /** Getters, because App derives both after this hook runs: the opens already
    *  in flight per repo (`openRepo`'s toast) and a cwd's repo (`resetFileDrift`). */
   openingCwds(): ReadonlyMap<string, { status: string; n: number }>;
@@ -87,6 +92,10 @@ export function useLaunch(deps: LaunchDeps) {
   const launchAskRef = prefRef("launchAsk");
   const { queueOp, enterPending, enterOldestPending, queueSessionPrompt } = deps.queue;
   const repoForCwd = deps.repoForCwd;
+  const afterStart = useAfterStart(deps.activeId, deps.overlay);
+  /** A repo's set-up page over the session `createAck` starts there; the feature says whether it may (`offerRepoSetup`). */
+  const setupOver = (createAck: string, worktreePath: string) =>
+    afterStart({ screen: pendingLaneId(createAck), at: Date.now(), open: () => offerRepoSetup(worktreePath) });
   /**
    * The open that is WAITING on that question: what the sheet says it is about,
    * and the RESUMPTION — the rest of the tap, as a thunk taking the answer.
@@ -364,7 +373,8 @@ export function useLaunch(deps: LaunchDeps) {
    *  it, which belonged to the catalogue being left behind. */
   const pickBackend = (id: string | undefined) => setLaunchOpt({ backend: id, model: undefined, effort: undefined });
 
-  function openRepo(t: RepoTarget) {
+  /** `offerSetup`: the launcher's own New session. A door that starts one for its own reason says false. */
+  function openRepo(t: RepoTarget, offerSetup = true) {
     // A create already in flight for this repo: the second tap SHOWS it, it does
     // not start another. The double-tap that opened two sessions was exactly
     // this. A second session in the same repo is still one tap away from the
@@ -398,12 +408,12 @@ export function useLaunch(deps: LaunchDeps) {
     // one that appears while the question is still up is a session already
     // started under the defaults the question exists to override.
     // The sheet SAYS the repo as it is shown ("Start waterplane"): `askLaunchFirst` does that rewording, once, from the folder-named title.
-    if (askLaunchFirst(repoStartTitle(t), { launch }, (l, b) => openRepoWith(t, l, b ?? undefined))) return;
-    openRepoWith(t, launch);
+    if (askLaunchFirst(repoStartTitle(t), { launch }, (l, b) => openRepoWith(t, l, b ?? undefined, offerSetup))) return;
+    openRepoWith(t, launch, undefined, offerSetup);
   }
   /** The rest of `openRepo`, once the launch is settled — by the defaults, or by
    *  the answer to `askLaunchFirst`. */
-  function openRepoWith(t: RepoTarget, launch: LaunchOpts, budget?: SessionBudget) {
+  function openRepoWith(t: RepoTarget, launch: LaunchOpts, budget?: SessionBudget, offerSetup = false) {
     const createAck = newAckId();
     const offline = queueOp(
       createOp({ cwd: t.worktreePath, title: repoBranchLabel(t), launch, ...(budget ? { budget } : {}) }),
@@ -411,6 +421,11 @@ export function useLaunch(deps: LaunchDeps) {
     );
     if (offline) track("action:repo.new.offline");
     enterPending(createAck);
+    if (offerSetup && t.isPrimary && t.setupUnseen) setupOver(createAck, t.worktreePath);
+  }
+  /** The first session of a repo the new-project sheet just made or cloned. */
+  function openMade(cwd: string, title: string, offerSetup?: boolean) {
+    openCwd(cwd, title, false, undefined, undefined, undefined, undefined, undefined, offerSetup ? (ack) => setupOver(ack, cwd) : undefined);
   }
   /**
    * "Open a shell here" — a plain login shell in the repo's worktree, through
@@ -486,7 +501,7 @@ export function useLaunch(deps: LaunchDeps) {
    *  on screen (`pending:<createAck>`), or null when the tap was deferred to a
    *  launch question — so a caller that owes that screen words can seed its
    *  draft (`compose.seedDraft`) rather than typing into the box it is leaving. */
-  function openCwd(cwd: string, title: string, resume = false, resumeMode?: "continue" | "pick" | "fork", launchOverride?: LaunchOpts, resumeSessionId?: string, budget?: SessionBudget, companionOf?: string): string | null {
+  function openCwd(cwd: string, title: string, resume = false, resumeMode?: "continue" | "pick" | "fork", launchOverride?: LaunchOpts, resumeSessionId?: string, budget?: SessionBudget, companionOf?: string, onCreated?: (createAck: string) => void): string | null {
     // Not a RESUME (a resumed conversation carries the launch it was recorded
     // with; asking offers to continue it under a different binary) and not over
     // an OVERRIDE (the archive's explicit claude, a relaunch, a worktree row
@@ -500,7 +515,7 @@ export function useLaunch(deps: LaunchDeps) {
       resume = false; resumeMode = undefined; resumeSessionId = undefined;
     }
     if (askLaunchFirst(title, { resume, override: !!launchOverride, launch: launchOverride ?? launch },
-      (l, b) => { openCwd(cwd, title, resume, resumeMode, l, resumeSessionId, b === undefined ? budget : b ?? undefined, companionOf); })) return null;
+      (l, b) => { openCwd(cwd, title, resume, resumeMode, l, resumeSessionId, b === undefined ? budget : b ?? undefined, companionOf, onCreated); })) return null;
     track(resume ? "action:session.resume" : "action:session.new");
     const createAck = newAckId();
     queueOp(
@@ -510,6 +525,7 @@ export function useLaunch(deps: LaunchDeps) {
     // Same screen for a resume as for a fresh open: what is being waited for is
     // a PTY either way, and the wait is the thing that had no home.
     enterPending(createAck);
+    onCreated?.(createAck);
     return pendingLaneId(createAck);
   }
   /**
@@ -755,7 +771,7 @@ export function useLaunch(deps: LaunchDeps) {
     backends, launch, root: deps.root, repos: deps.repos, active: deps.active,
     launchAskFor, setLaunchAskFor, hostedAskFor, setHostedAskFor, branchPick, setBranchPick,
     modelInput, setModelInput, setOverlay, submitInput: deps.queue.submitInput,
-    refreshRepos, openCwd, pickBackend, relaunch, sessionCan, sessionCant,
+    refreshRepos, openCwd, openMade, pickBackend, relaunch, sessionCan, sessionCant,
     recheckBackends: () => { core().conn.send({ t: "backends.recheck" }); },
   });
 

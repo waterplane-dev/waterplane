@@ -48,6 +48,16 @@ check(decideHint({ mode: "first", explain: true, def: hold, seen: false }) === "
 check(decideHint({ mode: "first", explain: true, def: undefined, seen: false }) === "act",
   "…but it cannot explain a button that has nothing to say, so that tap still acts");
 
+// An `askAgain` entry (the logo) interrupts in the default mode too, until told not to.
+const ask = HINTS["tabs.logo"];
+check(decideHint({ mode: "press", explain: false, def: ask, seen: false }) === "explainThenAct"
+  && decideHint({ mode: "first", explain: false, def: ask, seen: false }) === "explainThenAct",
+  "R-tabs-020: the logo explains itself on a tap, long-press mode included");
+check(decideHint({ mode: "press", explain: false, def: ask, seen: true }) === "act",
+  "…and never again once the person said so");
+check(decideHint({ mode: "off", explain: false, def: ask, seen: false }) === "act", "…and not with hints off");
+check(Object.keys(HINTS).filter((k) => HINTS[k].askAgain).join() === "tabs.logo", "it is the only one");
+
 // ── The catalog itself ──────────────────────────────────────────────
 const ids = Object.keys(HINTS);
 const confirming = ids.filter((k) => HINTS[k].confirm);

@@ -186,6 +186,7 @@ const CONFIRM_FIXES: Record<string, (size: string) => string> = {
   "android-toolchain": () => androidToolchainConsent(null),
   "signing-key": () => SIGNING_KEY_CONSENT,
   "protect-main": () => "set the two standard rulesets on GitHub (block force-push and deletion on main and v* tags)?",
+  "local-ci-status": () => "report to GitHub after each push from this phone's push button that the local checks passed?",
   "era-seen": () => "dismiss EVERY crash group ERA lists now? Each comes back only if it grows or happens again.",
 };
 

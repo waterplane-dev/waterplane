@@ -198,7 +198,7 @@ export function ClockDirectory({ rows, pending, repoName, online, onOpen, render
         onChoose={() => setChoosing(true)} />
     )}
     {choosing && renderRetime && pickedIds.length > 0 && (
-      <RetimeLayer>{renderRetime(pickedIds, {
+      <RetimeLayer onCancel={() => setChoosing(false)}>{renderRetime(pickedIds, {
         onSent: () => { setChoosing(false); close(); },
         onCancel: () => setChoosing(false),
       })}</RetimeLayer>

@@ -66,6 +66,25 @@ test("attaching never clears it; an explicit clear does, from a closed row by co
   rmSync(root, { recursive: true, force: true });
 });
 
+test("R-sessions-072: a closed row wears its conversation's star, and can be starred and flagged itself", () => {
+  const closed = [{ id: "s1", cwd: "/r", title: "t", closedAt: 9, claudeSessionId: "conv-1" }, { id: "s2", cwd: "/r", title: "u", closedAt: 8 }];
+  const { r, root, emitted, sessions } = setup({ closed });
+  sessions.set("s1", live("s1", "conv-1"));
+  r.setStar("s1", true);
+  sessions.delete("s1");
+  assert.deepEqual(r.listClosed().map((c) => c.starred), [true, false], "said on every row: absent means a host that cannot");
+  r.setStar("conv-1", false); r.setStar("s2", true);
+  assert.deepEqual(r.listClosed().map((c) => c.starred), [false, true]);
+  assert.ok(emitted.some(([e]) => e === "closed"), "answered by a fresh list");
+  r.setFollowUp("conv-1", { by: "hand", at: 7 });
+  assert.equal(r.listClosed()[0].followUp?.by, "hand");
+  const again = setup({ root });
+  const info = { id: "s9", cwd: "/r", title: "t", createdAt: 2, claudeSessionId: "conv-1" };
+  again.r.applyStar(info);
+  assert.equal(info.starred, false, "unstarred while closed stays unstarred when reopened");
+  rmSync(root, { recursive: true, force: true });
+});
+
 test("an unknown id with nothing stored is a no-op", () => {
   const { r, root, emitted } = setup();
   assert.equal(r.setFollowUp("nobody", { by: "hand", at: 1 }), false);

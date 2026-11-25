@@ -29,8 +29,8 @@ import type {
   ClientMessage, Intent, IntentDraft, IntentPatch, IntentTarget, LaunchOpts, RepoTarget, ScheduleEntry, SessionBudget, SessionInfo, UsageInfo,
 } from "@waterplane/shared";
 import {
-  RETIME_NOW_SEG, WHEN_PATCH_OFFLINE, budgetHeldIds, flagWhenDoneOf, fmtWhen, onceIn, pastBudgetToast, previewOf, seedAfterRescue,
-  SEND_DRAFT, whenPatchToast, whenRoute, whenWords, type SendIntent, type SendResume, type SendSeed, type SendTarget, type SendWhen,
+  RETIME_NOW_SEG, WHEN_PATCH_OFFLINE, budgetHeldIds, flagWhenDoneOf, fmtWhen, onceIn, pastBudgetToast, previewOf, repoItemOpts, scheduleEntryOf,
+  seedAfterRescue, SEND_DRAFT, whenPatchToast, whenRoute, whenWords, type SendIntent, type SendResume, type SendSeed, type SendTarget, type SendWhen,
 } from "../../sendIntent";
 import { SendSheet } from "../../SendSheet";
 import type { RenderRetime } from "../../RetimeBar";
@@ -464,33 +464,10 @@ export function useSend(deps: SendDeps) {
       // keeps the stored one (an older bundle never heard of budgets).
       const cleared = editing?.budget && !(i.target.kind === "repo" || i.target.kind === "repos" ? i.target.budget : undefined)
         ? { budget: null } : {};
-      const action: ScheduleEntry["action"] = i.target.kind === "repos"
-        ? { kind: "fanout", dirs: i.target.dirs, text: first, ...(i.target.kind === "repos" && i.target.budget ? { budget: i.target.budget } : cleared),
-            // The sweep's own model (the fan-out sheet's row) rides on the rule;
-            // absent is written absent, which is how an edit clears it.
-            ...(i.target.launch ? { launch: wireLaunch(i.target.launch) } : {}) }
-        // The WHOLE chain travels; `steps` only when there is more than one turn,
-        // so a one-turn rule is written exactly as it always was.
-        : { kind: "backlog", repoDir: i.target.cwd, text: first, autoFire: true, ...(steps.length > 1 ? { steps } : {}),
-            ...(i.target.kind === "repo" && typeof i.target.closeWhenDone === "boolean" ? { closeWhenDone: i.target.closeWhenDone } : {}),
-            ...(flagWhenDoneOf(i.target, i.when) ? { flagWhenDone: true } : {}),
-            ...(i.target.kind === "repo" && i.target.budget ? { budget: i.target.budget } : cleared),
-            // The model each occurrence's session starts on — the sweep arm's
-            // rule above: absent is written absent, which is how an edit clears it.
-            ...(i.target.kind === "repo" && i.target.launch ? { launch: wireLaunch(i.target.launch) } : {}) };
-      const entry: ScheduleEntry = {
+      const entry = scheduleEntryOf(i.target, i.when, steps, {
         id: seed.scheduleId ?? `s_${Date.now().toString(36)}_${randId(4)}`,
-        name: (i.when.name ?? "").trim() || first.split("\n")[0].slice(0, 60),
-        enabled: true,
-        rule: i.when.rule,
-        action,
-        createdAt: Date.now(),
-        // What this phone could see; for a window rule with no reading yet that
-        // is null — "not armed", never "never".
-        nextAt: previewOf(i.when, usage ?? undefined),
-        graceMin: i.when.graceMin,
-        waitUntilFree: i.when.waitUntilFree,
-      };
+        now: Date.now(), wire: wireLaunch, usage: usage ?? undefined, cleared,
+      });
       track("action:schedule.save");
       const offline = queueOp({ t: "schedule.save", entry }, `sched:${entry.id}`, entry.name);
       const chain = steps.length > 1 ? ` · ${steps.length} turns` : "";
@@ -644,11 +621,7 @@ export function useSend(deps: SendDeps) {
             seed.askKey ? (ack) => noteAsk(seed.askKey!, { ack, cwd }) : undefined);
           return true;
         }
-        const q = queueBacklog({
-          text: first, steps, repoDir: cwd, label, autoFire: true, resume: i.target.resume, closeWhenDone: i.target.closeWhenDone, budget: i.target.budget,
-          flagWhenDone: flagWhenDoneOf(i.target, i.when),
-          ...(i.target.launch ? { launch: wireLaunch(i.target.launch) } : {}),
-        });
+        const q = queueBacklog({ ...repoItemOpts(i.target, i.when, steps, wireLaunch), autoFire: true });
         if (q === null) return false;
         const chain = steps.length > 1 ? ` · ${steps.length} turns` : "";
         showToast(q ? `Queued offline${chain} · it reaches the desktop when the link is back`

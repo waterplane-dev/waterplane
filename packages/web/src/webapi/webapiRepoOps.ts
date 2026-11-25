@@ -1,4 +1,4 @@
-import { SLOW_OP_TIMEOUT_MS, cleanOptInRow } from "@waterplane/shared";
+import { SLOW_OP_TIMEOUT_MS, cleanOptInPicks, cleanOptInRow } from "@waterplane/shared";
 import type { SkillWriteRequest, SkillWriteResponse, SlowJob, SlowJobKind } from "@waterplane/shared";
 import type { ProbeResultsView, ProbeStartAnswer, ProbeStartBody, ProbeView, SetupShareBlock, AgentMarkersResponse, AgentPointsResponse, AgentReadingsResponse, OptInChoice, OptInChoiceResult, OptInReport, OptInRow } from "@waterplane/shared";
 import type { ComplianceAcceptRequest, ExposureRunResult, ComplianceAcceptResult, ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceTriageRequest, ContextWeightLimits, GitBranch, HealthIndexResponse, HostSetupFixResult, HostSetupReport, RepoHealthOwnBackfillAnswer, RepoHealthView } from "@waterplane/shared";
@@ -10,7 +10,7 @@ import type { AllReposResponse, EfficiencyRulesState, EfficiencyWriteAnswer, Set
  *  this phone cannot read is dropped, never rounded into an offer. */
 function cleanOptInReport(r: OptInReport): OptInReport {
   const rows = Array.isArray(r?.rows) ? r.rows : [];
-  return { ...r, rows: rows.map(cleanOptInRow).filter((x): x is OptInRow => !!x) };
+  return { ...r, rows: rows.map(cleanOptInRow).filter((x): x is OptInRow => !!x), picks: cleanOptInPicks(r?.picks) };
 }
 
 /** Branches, secrets, setup compliance and repo health. One slice of `api` (see api.ts). */
@@ -74,6 +74,8 @@ export const repoOpsApi = {
   optInChoice: (repoId: string, id: string, choice: OptInChoice | null) =>
     jpost<OptInChoiceResult>(`/api/repos/${repoId}/optins/choice`, { id, choice })
       .then((r) => (r.report ? { ...r, report: cleanOptInReport(r.report) } : r)),
+  // Somebody left this repo's set-up page: the launcher stops offering it.
+  optInSeen: (repoId: string) => jpost<{ ok: boolean; error?: string }>(`/api/repos/${repoId}/optins/seen`, {}),
   // The auto-compact window the checklist writes, host-wide. `null` = back to
   // the shipped default.
   hostSetup: () => jget<HostSetupReport>("/api/host/setup"),

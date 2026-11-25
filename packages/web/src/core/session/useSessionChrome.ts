@@ -13,10 +13,12 @@
  * every bug here was a bug in the conjunction. What this adds is the effects
  * that feed it, in the order App ran them.
  */
-import { useEffect, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import type { SessionInfo } from "@waterplane/shared";
-import { chromeMode, trackKeyboard, KEYBOARD_SETTLE_MS, type KbTrack } from "../../chromeMode";
+import { chromeMode, fullScreenTap, trackKeyboard, KEYBOARD_SETTLE_MS, type KbTrack } from "../../chromeMode";
 import { usePref } from "../prefs";
+import { track } from "../../usage";
+import { installFullScreenKey } from "./fullScreenKey";
 
 export interface SessionChromeDeps {
   activeId: string | null;
@@ -141,8 +143,23 @@ export function useSessionChrome(d: SessionChromeDeps) {
      back to a session and finding the header gone, with no memory of asking for
      it, is the state-management bug and not its symptom. */
   useEffect(() => { if (!activeId) setFullScreen(false); }, [activeId]);
+  /* The corner button's tap and Alt+G, one toggle: the opposite of what is ON
+     SCREEN (`fullScreenTap`), moving both hiders to agree. */
+  const toggleFullScreen = () => {
+    const next = fullScreenTap(chromeIn);
+    track(next.fullScreen ? "action:fullscreen.on" : "action:fullscreen.off");
+    setFullScreen(next.fullScreen);
+    setTypingPeek(next.typingPeek);
+  };
+  const keyRef = useRef({ onSessionScreen, chromeHidden, toggleFullScreen });
+  keyRef.current = { onSessionScreen, chromeHidden, toggleFullScreen };
+  useEffect(() => installFullScreenKey({
+    onSessionScreen: () => keyRef.current.onSessionScreen,
+    hidden: () => keyRef.current.chromeHidden,
+    toggle: () => keyRef.current.toggleFullScreen(),
+  }), []);
   return {
-    fullScreen, setFullScreen, typingPeek, setTypingPeek, dismissedReply, setDismissedReply,
+    toggleFullScreen, fullScreen, setFullScreen, typingPeek, setTypingPeek, dismissedReply, setDismissedReply,
     typingMode, typingPeeking, fullMode, chromeHidden, chromeIn, drawnSheet,
   };
 }

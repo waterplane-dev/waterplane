@@ -6,13 +6,13 @@
  * the tap of "Use this folder" or "Keep …". What cannot be done is a sentence, not a dimmed
  * button — a variable that names the root, or a connection that may not change it.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Folder, FolderOpen } from "lucide-react";
 import { core, useStore } from "../../sdk";
 import { Sheet } from "../../Sheet";
 import { Empty } from "../../Empty";
 import { CantInline } from "../../Unavailable";
-import { checkFolder, saveFolder } from "./actions";
+import { checkFolder, loadRoot, saveFolder } from "./actions";
 import {
   LOCKED_WORDS, checkWords, footerWords, namedWords, pendingWords, pickedWords, reposWords, rootLine, samePath, sheetMode, targetPath,
 } from "./logic";
@@ -29,6 +29,8 @@ export function CodeFolderSheet() {
   const [check, setCheck] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState<"check" | "save" | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Read on opening, whichever door opened it (the first-run card opens the sheet by its id).
+  useEffect(() => { void loadRoot(); }, []);
   // Closing here is a "later" for this guess too (`leaveCodeFolder`, run by the sheet def's onLeave).
   const close = () => core().nav.close("codefolder");
 

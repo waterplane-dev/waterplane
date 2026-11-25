@@ -4,7 +4,7 @@
  * collapsed — its live sessions, each followed by the agent worktrees it made.
  */
 import { Fragment, useLayoutEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, CalendarClock, Camera, Check, ChevronDown, ChevronRight, CircleAlert, CircleSlash, ClipboardCheck, CloudOff, Download, ExternalLink, EyeOff, FileDiff, Flag, FolderTree, GitBranch, Hammer, HeartPulse, Hourglass, Images, LifeBuoy, ListChecks, ListTodo, Loader, Minus, MoreHorizontal, Plus, SendHorizontal, Star, Terminal, X } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarClock, Camera, Check, ChevronDown, ChevronRight, CircleAlert, CircleSlash, ClipboardCheck, CloudOff, Download, ExternalLink, EyeOff, FileDiff, Flag, FolderTree, GitBranch, Hammer, HeartPulse, Hourglass, Images, LifeBuoy, ListChecks, ListTodo, Loader, Minus, MoreHorizontal, Plus, SendHorizontal, SquareCheckBig, Star, Terminal, X } from "lucide-react";
 import type { RepoTarget, SessionInfo } from "@waterplane/shared";
 import { branchLabel, horizonWords, isoWeekOf, repoBranchLabel, rescuedChipText, withShownName } from "@waterplane/shared";
 import { repoAccentStyle } from "../../format";
@@ -25,6 +25,7 @@ import { openAssessFor, openBacklogCut, openBacklogFor } from "../../features/ba
 import { openActivity } from "../../features/activity";
 import { openRepoHealth, openSetup } from "../../features/setup";
 import { openSetupCheck } from "../../features/setupCheck";
+import { openRepoSetup } from "../../features/repoSetup";
 import { healthChip } from "../../healthIndexWords";
 import { openBrowseFor, openGalleryFor, openOutboxFor, pickImageFor } from "../../features/images";
 import type { LauncherProps } from "./types";
@@ -532,6 +533,10 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             <button className="more-act" onClick={() => { track("action:repo.branch"); setRepoMenu(null); setBranchPick(main); setOverlay("branches"); }}><GitBranch size={ICON} />Branch</button>
           </MenuGroup>
           <MenuGroup title="Set up">
+            {/* The page offered once over a first session; this line is where it stays. "this repo" keeps it
+                apart from the group's own title right above it. */}
+            <button className="more-act" title="everything the desktop can turn on in this repo, on one page"
+              onClick={() => { track("action:repo.setuppage"); setRepoMenu(null); openRepoSetup(main.worktreePath); }}><SquareCheckBig size={ICON} />set up this repo</button>
             {/* The checklist's ALWAYS-ON door. The chip above is a FINDINGS
                 badge and says nothing when there is nothing to say — so a clean
                 repo, and one the host has not inspected yet, had no way into its
@@ -633,7 +638,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
   // instead of the next one pushing the last out — a tall header peeked out
   // under a shorter one. The block makes each header leave with its own rows.
   return (
-    <div className="repo-group-block">
+    <div className="repo-group-block" style={repoAccentStyle(repoName)}>
       <span ref={anchorRef} className="repo-group-anchor" aria-hidden />
       {groupHead}
       {idle && !collapsed && (

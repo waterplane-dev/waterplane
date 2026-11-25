@@ -341,7 +341,7 @@ test("costChip is absent rather than $0 — the row falls back to tokens", () =>
   assert.equal(costChip(NaN), null);
   assert.equal(costChip(4.207), "$4.21");
   assert.equal(costChip(0.004), "<$0.01", "a real amount under a cent is not nothing");
-  assert.equal(costChip(1234), "$1.2k");
+  assert.equal(costChip(374), "$374.00", "R-cost-029: two decimals at every size");
 });
 
 test("a dollar figure never appears without the sentence that says it is not a bill", () => {

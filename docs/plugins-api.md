@@ -8,7 +8,7 @@ Start a new plugin from `examples/plugin-template/`; installing one and the list
 it shows up at https://github.com/topics/waterplane-plugin. A plugin is not a fork, so that topic is
 the only place it is counted.
 
-**API version: `2.9.0`** (`PLUGIN_API_VERSION`). A manifest's `apiVersion` loads when it has the
+**API version: `2.12.0`** (`PLUGIN_API_VERSION`). A manifest's `apiVersion` loads when it has the
 same major and a minor no newer than this one; the rules for what bumps which number are under
 `PLUGIN_API_VERSION` below. Why the API looks the way it does: `docs/notes/plugins.md`.
 
@@ -107,12 +107,18 @@ shape for both, so moving an extension out of the repo is a folder move.
 - [`PluginRepoScope`](#pluginreposcope) — interface
 - [`SetupSubject`](#setupsubject) — interface
 - [`SetupFixOutcome`](#setupfixoutcome) — interface
+- [`NewProjectOffer`](#newprojectoffer) — interface
+- [`SetupFixOptions`](#setupfixoptions) — interface
+- [`OptInAnswer`](#optinanswer) — interface
 - [`HandToAgentResult`](#handtoagentresult) — type
 - [`HostPluginModule`](#hostpluginmodule) — interface
 - [`handleAll`](#handleall) — function
 - [`PLUGIN_THERMAL_TIMEOUT_MS`](#plugin_thermal_timeout_ms) — const
 - [`PluginThermalReading`](#pluginthermalreading) — type
 - [`PluginThermalReader`](#pluginthermalreader) — interface
+- [`PLUGIN_SCREEN_CAPTURE_TIMEOUT_MS`](#plugin_screen_capture_timeout_ms) — const
+- [`PluginScreenStill`](#pluginscreenstill) — type
+- [`PluginScreenCapture`](#pluginscreencapture) — interface
 - [`PluginUsageProbe`](#pluginusageprobe) — interface
 - [`PLUGIN_USAGE_PROBE_TIMEOUT_MS`](#plugin_usage_probe_timeout_ms) — const
 - [`PluginLaunchRequest`](#pluginlaunchrequest) — interface
@@ -183,9 +189,15 @@ previous run left behind, keeping the tags still live; scoped to its own items. 
 (the vault's `wp-secret devices rm`); an external plugin's call throws. 2.7 plugins load as-is.
 **2.9** (additive): `PluginCaller.scope` — `"passive"` when the calling device is a passive (kids')
 row, so a plugin can refuse an unlocked kid's phone (the vault does). 2.8 plugins load as-is.
+**2.10** (additive): `setupFix`'s third argument, `newProject` — the fix is offered as a checkbox when
+a person creates a project. 2.9 plugins load as-is.
+**2.11** (additive): `HostPluginApi.optIn` — a plugin answers whether one of core's opt-in offers is
+already on in a repo (the links extension's). 2.10 plugins load as-is.
+**2.12** (additive): `HostPluginApi.screenCapture` — a plugin whose helper holds Screen Recording takes
+the screenshot when the core's own tool is refused (the live desktop's). 2.11 plugins load as-is.
 
 ```ts
-export const PLUGIN_API_VERSION = "2.9.0";
+export const PLUGIN_API_VERSION = "2.12.0";
 ```
 
 ## PLUGIN_API_V2_DOC
@@ -835,7 +847,8 @@ export interface HostPluginApi { … }
 | `repo` | `repo(repoId: string): Promise<PluginRepoScope \| null>` | One repo by its id (the ids `GET /api/repos` hands out), or by its absolute worktree path (realpath-compared against the repos the host lists — a CLI names its repo by path); null when unknown or outside the root. |
 | `setupCheck` | `setupCheck(fn: (repo: SetupSubject) => ComplianceCheck \| null): () => void` | Contribute a row to every repo's setup checklist. Called on each check of each repo, so keep it cheap; null = no row for this repo. A throw drops the row and becomes the plugin's status line. Returns an unregister. |
 | `setupFinding` | `setupFinding(fn: (repo: SetupSubject) => Finding[] \| Promise<Finding[]>): () => void` | Contribute findings to the Setup check (a claim about the repo, this machine or the account, with its evidence and remedy). Asked on each check run of each repo, so keep it cheap. A throw drops these findings and becomes the plugin's status line, as for `setupCheck`. Returns an unregister. Additive: a plugin that never calls it is unchanged. |
-| `setupFix` | `setupFix(id: string, fn: (repo: SetupSubject) => SetupFixOutcome): () => void` | Handle the fix a contributed row names in `fix`. Ids the core owns (`gitignore`, `claude-md`, …) or another plugin already took are refused: the call throws, saying which. Returns an unregister. |
+| `setupFix` | `setupFix(id: string, fn: (repo: SetupSubject) => SetupFixOutcome, opts?: SetupFixOptions): () => void` | Handle the fix a contributed row names in `fix`. Ids the core owns (`gitignore`, `claude-md`, …) or another plugin already took are refused: the call throws, saying which. Returns an unregister. With `newProject` (since 2.10) the fix is also a checkbox on the new-project sheet, and a ticked one runs on the new project before its first commit, so what it writes is committed with it; an older host ignores the argument. |
+| `optIn` | `optIn(id: string, fn: (repo: SetupSubject) => OptInAnswer \| Promise<OptInAnswer>): () => void` | (since 2.11) Answer one offer of core's opt-in catalog (`OPT_INS`) that is about THIS plugin: is it already on in that repo. Asked when a person opens the repo's Opt-ins, so read files, never the network. A throw reads as `unknown` and becomes the plugin's status line; an id core has no offer for is never asked. Returns an unregister. |
 | `handle` | `handle(method: string, fn: (args: unknown, caller: PluginCaller) => unknown \| Promise<unknown>): () => void` | Answer `method` when the phone (or core) calls this plugin — the registry's `call(pluginId, method, args)`. One handler per method; a second replaces the first. The second argument (since 1.8) says who asked: the socket's trust tier and, when it presented a paired device's token, that device's id and name. A handler that ignores it is unchanged. A throw is the caller's `{ ok:false, error }`, and only that: it is how a method refuses, so it never becomes the plugin's status line. Returns an unregister. |
 | `push` | `push(event: string, data?: unknown): string \| null` | Broadcast `event` as `plugin.push` (the web half's `pushes`) to every phone except a passive (kids') device, even an unlocked one (since 2.9; a push carries no caller). Returns null when sent, or a refusal in words (bad event name, not JSON, over PLUGIN_PUSH_MAX, this plugin not running). |
 | `handToAgent` | `handToAgent(repoId: string, prompt: string, opts?: { label?: string; key?: string; fire?: boolean; }): Promise<HandToAgentResult>` | Put `prompt` in that repo's backlog for its agent — the SAME path the phone's and an agent's backlog adds take (`addClientBacklogItem`), so it is contained, persisted, at-most-once by `key`, and fired by the intent ladder. It waits for a person's tap unless `fire` is set, and even then it runs only when the ladder lets it. Never types into a session directly. |
@@ -843,6 +856,7 @@ export interface HostPluginApi { … }
 | `screenReader` | `screenReader(name: string, reader: PluginScreenReader): () => void` | Contribute a SCREEN reader under `name` (since 1.1): the reader for a TUI whose choice dialog has no numbers and is answered by walking a selection (`PluginScreenReader`). A backend this plugin registers may then name it as a `{screen}` provider in `facts.dialogs` — so register it FIRST. THROWS a sentence when the name is not a short lowercase word or is already taken (core's own `claude-numbered` among them). Unregistered with the plugin; the returned function earlier. A reader is measured against ONE binary's screen and pinned by the plugin's own fixtures. |
 | `storeReader` | `storeReader(name: string, reader: PluginStoreReader): () => void` | Contribute a STORE reader under `name` (since 1.1): the reader of a CLI's own conversation record — a database or files on disk it writes (`PluginStoreReader`). A backend may then name it as a `{store}` provider in `facts.transcript`, and the core asks it for the reader view, the context graph, the tool details, which conversation a session is in, and the backend's ledger. Same rules as `screenReader`: register it before the backend; a taken name (`claude-jsonl`) throws. |
 | `thermalReader` | `thermalReader(name: string, reader: PluginThermalReader): () => void` | Contribute a THERMAL reader under `name` (since 1.3): temperature and fan speed for the machine readout, where the core has no reader of its own (macOS keeps the SMC behind root). Asked on the readout's slow cadence, before the core's own sysfs reader; the first reading wins. A reading the core cannot vouch for (non-finite, outside 1..149 °C, a negative rpm) is DROPPED — answer null. A note (`{ note, fix? }`) is shown only when nothing reads. A throw or an answer slower than `PLUGIN_THERMAL_TIMEOUT_MS` counts as no reading. Same naming rules as `screenReader`. |
+| `screenCapture` | `screenCapture(name: string, capture: PluginScreenCapture): () => void` | Contribute a SCREEN CAPTURE under `name` (since 2.12): asked for one still of the desktop only when the core's own screenshot tool failed (macOS refusing node Screen Recording), for a plugin whose helper holds the permission itself. Never asked without a person's tap on the screenshot button. A throw, or no answer within `PLUGIN_SCREEN_CAPTURE_TIMEOUT_MS`, counts as no picture. Same naming rules as `screenReader`. Returns an unregister. |
 | `usageProbe` | `usageProbe(def: PluginUsageProbe): () => void` | Contribute a USAGE PROBE (since 1.7): one account's quota as its own segment beside claude's on the usage chip. `claude` or a taken `source` throws. Null = ABSENT; a throw or timeout keeps the last reading until its reset; an unvouchable window is dropped. Returns an unregister. |
 | `hookSink` | `hookSink(): string` | The loopback URL this plugin's hooks POST to: `http://127.0.0.1:<port>/api/plugin/<id>/hook`. Loopback only, like the core's own hook sink; a remote caller is refused. |
 | `onHook` | `onHook(fn: (payload: unknown, hold: PluginHookHold) => unknown \| Promise<unknown>, opts?: { maxHoldMs?: number; }): () => void` | Receive the posts to `hookSink()`. The handler's return value (JSON) is the HTTP response body; `undefined` answers `{}`. Return a Promise to HOLD the response (a CLI that waits on its hook for a permission answer): the core answers `{}` itself after `maxHoldMs` (default `PLUGIN_HOOK_HOLD_DEFAULT_MS`, at most `PLUGIN_HOOK_HOLD_MAX_MS`) and calls `hold.onExpired` — so keep it BELOW the CLI's own hook timeout, or the CLI kills the hook first. One handler per plugin; a second replaces the first. A throw answers `{}` and becomes the status line. |
@@ -1193,6 +1207,51 @@ export interface SetupFixOutcome { … }
 | `applied` | `applied: boolean` |  |
 | `note` | `note: string` |  |
 
+## NewProjectOffer
+
+*interface*
+
+How a setup fix is offered as a checkbox when a person creates a project (since 2.10).
+
+```ts
+export interface NewProjectOffer { … }
+```
+
+| member | signature | notes |
+|---|---|---|
+| `label` | `label: string` | The checkbox's words, 60 characters at most. |
+| `hint` | `hint: string` | One sentence: what is written into the new project. Said before the tap. |
+| `on` | `on: boolean` | Ticked the first time this phone sees it; after that the phone's own last choice stands. |
+
+## SetupFixOptions
+
+*interface*
+
+A setup fix's third argument: where else it is offered.
+
+```ts
+export interface SetupFixOptions { … }
+```
+
+| member | signature | notes |
+|---|---|---|
+| `newProject` | `newProject?: () => NewProjectOffer \| null` | Asked each time the new-project sheet opens, so keep it cheap; null = not offered now. |
+
+## OptInAnswer
+
+*interface*
+
+`api.optIn`'s answer for one repo (since 2.11): is the offer already on there, and what was read.
+
+```ts
+export interface OptInAnswer { … }
+```
+
+| member | signature | notes |
+|---|---|---|
+| `state` | `state: "on" \| "off" \| "unknown"` | `unknown` = this plugin cannot tell; never a guess. |
+| `detail` | `detail: string` | One sentence naming what was read, drawn on the offer's card. |
+
 ## HandToAgentResult
 
 *type*
@@ -1289,6 +1348,45 @@ export interface PluginThermalReader { … }
 | member | signature | notes |
 |---|---|---|
 | `read` | `read(): Promise<PluginThermalReading>` |  |
+
+## PLUGIN_SCREEN_CAPTURE_TIMEOUT_MS
+
+*const*
+
+How long the core waits for a contributed screen capture before it counts as none.
+
+```ts
+export const PLUGIN_SCREEN_CAPTURE_TIMEOUT_MS = 12000;
+```
+
+## PluginScreenStill
+
+*type*
+
+What a contributed screen capture answers (since 2.12): the whole main display as one JPEG at
+ its real pixel size, or the sentence saying why there is none.
+
+```ts
+export type PluginScreenStill = {
+    jpeg: Uint8Array;
+} | {
+    note: string;
+};
+```
+
+## PluginScreenCapture
+
+*interface*
+
+A screen capture (`api.screenCapture`, since 2.12).
+
+```ts
+export interface PluginScreenCapture { … }
+```
+
+| member | signature | notes |
+|---|---|---|
+| `still` | `still(): Promise<PluginScreenStill>` |  |
 
 ## PluginUsageProbe
 

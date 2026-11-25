@@ -17,11 +17,11 @@ export function sendActions(c: AnnCtx) {
 
   /** Flatten the annotated canvas to a PNG blob + a name/note describing it.
    *  The name/note are derived SYNCHRONOUSLY; only the encode is async, and
-   *  `canvas.toBlob` snapshots the bitmap at call time — so the returned promise
+   *  `live` has the encoder snapshot the bitmap at call time — so the returned promise
    *  is safe to hand off and keep encoding after this sheet is gone. */
   function flattenAsync(): AnnDispatch {
     const canvas = canvasRef.current!;
-    // Repaint WITHOUT the selection chrome first: `toBlob` snapshots this very
+    // Repaint WITHOUT the selection chrome first: the encoder snapshots this very
     // canvas, so a dashed selection box would ship inside the uploaded PNG.
     redraw(true);
     const annotated = shapes.length > 0;
@@ -32,7 +32,7 @@ export function sendActions(c: AnnCtx) {
     // report. The shared encoder bounds it and falls back to `toDataURL`, which
     // fails independently. PNG on purpose: these are marks drawn over a
     // screenshot, and `scaleForUpload` re-encodes on the way up anyway.
-    const blob: Promise<Blob> = encodeCanvas(canvas, "image/png").then((b) => {
+    const blob: Promise<Blob> = encodeCanvas(canvas, "image/png", undefined, { live: true }).then((b) => {
       if (!b) throw new Error("this device could not encode the marked-up image");
       return b;
     });

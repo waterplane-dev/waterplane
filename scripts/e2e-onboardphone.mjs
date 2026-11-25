@@ -66,7 +66,7 @@ try {
   // ── The first-run card: a host that never opened a session ────────────────
   const card = page.locator('[data-card="first-run"]');
   await card.waitFor({ timeout: 20_000 }).catch(() => fail("no first-run card on a fresh host; page errors: " + errors.join(" | ")));
-  for (const words of ["Build your first app", "Open an existing repo", "Try the demo"]) {
+  for (const words of ["Build your first app", "New project", "Clone a repo", "Choose another folder", "Try the demo"]) {
     if (!(await card.getByText(words).count())) await fail(`the card does not offer "${words}"`);
   }
   await shot(page, "card");

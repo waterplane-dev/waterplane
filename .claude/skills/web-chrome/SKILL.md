@@ -42,7 +42,9 @@ The chrome around whatever is on screen: theme, routing and Back, the link store
   gesture does, so a sheet opened from a sheet closes to that sheet. **A sub-view with its own back
   arrow (an opened file, an editor, a detail pane) calls `useBackStep(open, close)`** or the swipe
   pops the whole sheet — `tools/backstep.test.mjs` enforces it. **A new door is a row in `scripts/ui/journey-back-lands.mjs`**, which really taps it and takes Back both ways (`npm run test:ui back-lands`, run before committing per `CLAUDE.md`). Never wire it to a close that
-  DISCARDS typed words (`PadSheet`'s editor is exempt for that). Features get it from `sdk`.
+  DISCARDS typed words (`PadSheet`'s editor is exempt for that). Features get it from `sdk`. **What is drawn OVER the screen (confirm, ask
+  dialog, hint card, popover) calls `useDialogStep(open, dismiss)`**: Back is its backdrop's answer; its entry is dead at once and popped 50 ms later, so a
+  route the ANSWER moves lands first. The same guard names one without it, `journey-back-lands-overlays.mjs` takes Back over each; a new overlay is a row in `backlands/_overlays.mjs`.
 - `resumeRoute.ts` — **landing back where you were when a NEW BUNDLE replaces the running one.** The route is remembered on every change and put back before React mounts, **only when ARMED** by
   `webUpdate.ts` (stage / apply / revert) and consumed once: an ordinary launch still opens the
   launcher, and a bundle that crashes on the restored screen cannot restore it twice. **Only onto a
@@ -131,11 +133,11 @@ The chrome around whatever is on screen: theme, routing and Back, the link store
   carries `keepFocus`, or the pointerdown blurs the box and the button moves out from under the finger
   before its own click lands.
 - **The corner group** (drawn by the terminal area, web-term's `core/session/` file; `.term-zoom`, top right of the TERMINAL *and* the READER, floating for the
-  `conn-banner` reason — a strip in flow refits the grid and SIGWINCHes the PTY): the **reader/CLI
+  `conn-banner` reason — a strip in flow refits the grid and SIGWINCHes the PTY; drawn on `.screen` from `.term-zoom-anchor`, draggable anywhere there, `cornerPlace.ts`): the **reader/CLI
   switch** (moved OFF the header — full screen hides that row), the zoom pair, then **full screen LAST**,
   anchored RIGHT and growing leftward. **It draws and toggles what is ON SCREEN (`chromeHidden`), never
   either switch**. `fullScreenTap` (pure, tested) asks for the opposite of what is visible and moves BOTH
-  the switch and the peek to agree. **Two stored zooms, one per surface** (`waterplane.termZoom` /
+  the switch and the peek to agree; Alt+G (`core/session/fullScreenKey.ts`) is the same `toggleFullScreen`. **Two stored zooms, one per surface** (`waterplane.termZoom` /
   `waterplane.readerZoom`; `uiScaleSteps.ts`'s `termFontPx`/`nextTermZoom` is a multiplier ON the text
   size — smaller font is a BIGGER grid, and the refit's report is what resizes the PTY; the reader is ONE
   `--ui-font` override, `readerScale`). **No px readout** over live output; at an end of the ladder that

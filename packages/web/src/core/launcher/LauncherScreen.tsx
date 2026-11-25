@@ -12,7 +12,6 @@ import { Fragment, useLayoutEffect, useRef } from "react";
 import { Activity, Archive, ArrowDownUp, Cpu, CalendarClock, CircleDot, Hourglass, OctagonPause, Camera, ChevronsDownUp, ChevronsUpDown, CloudOff, Download, Eraser, Flag, Gauge, House, Images, ListOrdered, ListRestart, ListTodo, Loader, Menu, MessageSquare, NotebookPen, Plus, RotateCw, ScrollText, Search, Settings, ShieldAlert, Split, SquareTerminal, Star, Terminal as TerminalIcon, Waypoints, X } from "lucide-react";
 import { BRAND, repoShown } from "@waterplane/shared";
 import { Empty } from "../../Empty";
-import { Logo } from "../Logo";
 import { NetActivity } from "../../NetActivity";
 import { HintToggle } from "../../HintLayer";
 import { ago, baseName, repoAccentStyle } from "../../format";
@@ -37,8 +36,8 @@ import { pickImageFor } from "../../features/images";
 import { useHostPush } from "../../features/hostTools";
 import { ElsewhereChip, HostMenuItem, HostSwitchKey } from "../../features/hosts";
 import { openLocalRt, openNetHealth } from "../../features/tools";
-import { TabsMenuItem } from "../../SessionTabsBar";
-import { FirstRunCard } from "../../features/onboard";
+import { TabsLogo, TabsMenuItem } from "../../SessionTabsBar";
+import { FirstRunCard, useFirstRunWhich } from "../../features/onboard";
 import { WhatsNewLauncherRow } from "../../features/whatsnew";
 import { ProposalsStrip } from "../../features/backlog";
 import { enterDemo, isDemo } from "../../demo/mode";
@@ -84,7 +83,9 @@ const REPOS_STALE_MS = 60_000;
 export function LauncherScreen(p: LauncherProps) {
   const m = useLauncherModel(p);
   const { sessions, recent, repos, reposAt, reposFailAt, launch } = p;
-  const noReposText = noReposWords(listRead({ rows: repos, readAt: reposAt }));
+  // The first-run card already says what to do with no repos; the line under it would say it twice.
+  const firstRunShown = useFirstRunWhich(isDemo()).which !== "none";
+  const noReposText = firstRunShown ? null : noReposWords(listRead({ rows: repos, readAt: reposAt }));
   const { status, connVisible } = p.conn;
   const { tailscaleIp } = p.conn.info;
   const { focusRepo, setOverlay, lastVisitedId } = p.route;
@@ -125,18 +126,18 @@ export function LauncherScreen(p: LauncherProps) {
       <header className="topbar launcher-top">
         {focusRepo ? (
           <div className="brand brand-focus" style={repoAccentStyle(focusRepo)}>
-            <Logo size={32} label="" /><span>{m.shownOf(focusRepo)}</span>
+            <TabsLogo size={32} label="" /><span>{m.shownOf(focusRepo)}</span>
             <button className="focus-clear" title="exit repo focus — show all repos" onClick={clearFocus}><X size={14} /></button>
           </div>
         ) : (
           // The wordmark is the one thing on this bar that says nothing a reading
           // could not: at phone width it pushed the gear onto a second row all by
-          // itself. The MARK stays (it is the tap-free identity and the app icon
-          // people match against); the text goes, and its space becomes chips.
+          // itself. The MARK stays (the app icon people match against, and at phone
+          // width the button for the open tabs); the text goes, and its space becomes chips.
           // The host switcher is a row in the menu (Android shell): a long
           // desktop name here took the whole bar for a rarely asked question.
           // 40 = `.topbar > .key`'s min-height: the mark is as tall as the buttons beside it.
-          <div className="brand"><Logo size={40} /></div>
+          <div className="brand"><TabsLogo size={40} /></div>
         )}
         {launch.permissionMode && RISKY_PERM_MODES.has(launch.permissionMode) && (
           // Standing reminder: the launch default is armed to skip every

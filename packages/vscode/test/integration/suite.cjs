@@ -54,9 +54,9 @@ async function run() {
     assert.equal(ext.isActive, true);
   });
 
-  await check("all four commands are registered", async () => {
+  await check("the commands are registered", async () => {
     const all = new Set(await vscode.commands.getCommands(true));
-    for (const c of ["open", "rescan", "copyPrompt", "healthRefresh"]) assert.ok(all.has(`waterplane.${c}`), `waterplane.${c} missing`);
+    for (const c of ["open", "rescan", "copyPrompt", "healthRefresh", "openApp", "openAppInBrowser", "reloadApp"]) assert.ok(all.has(`waterplane.${c}`), `waterplane.${c} missing`);
   });
 
   await check("waterplane.open shows the panel", async () => {
@@ -164,6 +164,27 @@ async function run() {
     await until("the panel to close", () => !panelTab(), 10_000);
     await vscode.commands.executeCommand("waterplane.open");
     await until("the panel tab again", panelTab, 15_000);
+  });
+
+  await check("the app tab opens once, also with no desktop running, and reloads in place", async () => {
+    const appTabs = () => vscode.window.tabGroups.all.flatMap((g) => g.tabs)
+      .filter((t) => t.input instanceof vscode.TabInputWebview && t.input.viewType.endsWith("waterplane.app"));
+    // A port nothing listens on: this run never contacts, or frames, the person's own desktop.
+    const cfg = vscode.workspace.getConfiguration("waterplane");
+    await cfg.update("desktopUrl", "http://127.0.0.1:9", vscode.ConfigurationTarget.Global);
+    try {
+      await vscode.commands.executeCommand("waterplane.openApp");
+      await until("the app tab", () => appTabs().length === 1, 15_000);
+      await vscode.commands.executeCommand("waterplane.openApp");
+      await vscode.commands.executeCommand("waterplane.reloadApp");
+      assert.equal(appTabs().length, 1, "a second run opened a second tab");
+      await vscode.window.tabGroups.close(appTabs()[0]);
+      await until("the app tab to close", () => appTabs().length === 0, 10_000);
+      await vscode.commands.executeCommand("waterplane.reloadApp"); // with no tab: nothing to do, nothing thrown
+      assert.equal(appTabs().length, 0);
+    } finally {
+      await cfg.update("desktopUrl", undefined, vscode.ConfigurationTarget.Global);
+    }
   });
 
   if (out) fs.writeFileSync(out, JSON.stringify({ vscode: vscode.version, checks }, null, 2));

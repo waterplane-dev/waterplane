@@ -179,37 +179,73 @@ export function withTimeout<T>(p: Promise<T>, fallback: T, ms = SCALE_TIMEOUT_MS
   });
 }
 
-/** How long an encode may take before the fallback is tried. Generous, because
- *  a real 12 MP canvas on a slow phone is seconds — this bounds the failure
- *  mode where the callback never comes at all, not slowness. */
+/** How long `toBlob` may take when the synchronous encoder failed too. Generous: this
+ *  bounds the failure mode where the callback never comes at all, not slowness. */
 const ENCODE_TIMEOUT_MS = 20_000;
+
+/** How long `toBlob` gets before the synchronous encoder is used instead. */
+const ENCODE_PATIENCE_MS = 250;
 
 /**
  * Turn a canvas into bytes, the only way that survives an Android WebView.
  *
- * `canvas.toBlob` is the whole story on a desktop, and on a phone it has three
+ * `canvas.toBlob` is the whole story on a desktop, and on a phone it has four
  * separate failure modes that all look like "nothing happened": it can hand
- * back `null`, it can hand back a zero-length blob, and — the one that costs a
- * hang rather than an error — it can simply never invoke its callback, because
- * the encode could not be allocated. A bare `toBlob` promise therefore never
- * settles and whatever awaited it waits for ever.
+ * back `null`, it can hand back a zero-length blob, it can simply never invoke
+ * its callback because the encode could not be allocated, and it can be SLOW
+ * for a reason that is not the picture: Chromium encodes PNG and JPEG in the
+ * main thread's IDLE time, so anything busy every frame starves it. Measured
+ * 2026-11-24 on a 2036 x 2244 canvas at 1/4 CPU: 85 ms on an idle page, 2.1 s
+ * (PNG 4.8 s) beside 8 ms of work per frame. `toDataURL` is synchronous and
+ * took 91 ms (PNG 168 ms) either way.
  *
- * So: bound it, then try the OTHER encoder. `toDataURL` is synchronous and
- * frequently works where `toBlob` returned null, which is why two encoders are
- * worth the twenty lines — they fail independently.
+ * So: a short wait, then the OTHER encoder. Where that one fails, the callback
+ * still running is given its full time, because the two fail independently.
  *
  * Written once here rather than at each canvas: `collage.ts` learned all of
  * this the hard way and `ImageAnnotator.tsx`, one directory away, still had the
  * bare `toBlob` with no timeout and no fallback — so the one flow whose whole
  * job is "mark up this screenshot and send it" could park on `Sending…` for
  * ever on exactly the device this app is for.
+ *
+ * The synchronous encode reads the canvas when it RUNS. A canvas the caller may
+ * repaint meanwhile is `live`: it is copied first, because the annotator moves
+ * on to the next picture on the same tap and a late read would send that one
+ * under this one's name. Where the copy cannot be made, a live canvas gets
+ * `toBlob` alone, which snapshots when called.
  */
 export async function encodeCanvas(
-  canvas: HTMLCanvasElement, type = "image/jpeg", quality = 0.9,
+  canvas: HTMLCanvasElement, type = "image/jpeg", quality = 0.9, opts: { live?: boolean } = {},
 ): Promise<Blob | null> {
-  const b = await withTimeout(
-    new Promise<Blob | null>((res) => canvas.toBlob(res, type, quality)), null, ENCODE_TIMEOUT_MS);
-  if (b && b.size > 0) return b;
+  const copy = opts.live ? copyCanvas(canvas) : null;
+  const src = copy ?? canvas;
+  const job = new Promise<Blob | null>((res) => src.toBlob(res, type, quality)).catch(() => null);
+  const good = (b: Blob | null): Blob | null => (b && b.size > 0 ? b : null);
+  try {
+    const quick = good(await withTimeout(job, null, ENCODE_PATIENCE_MS));
+    if (quick) return quick;
+    const sync = opts.live && !copy ? null : encodeSync(src, type, quality);
+    return sync ?? good(await withTimeout(job, null, ENCODE_TIMEOUT_MS));
+  } finally {
+    if (copy) copy.width = copy.height = 0;
+  }
+}
+
+/** A canvas of the same pixels, or null where this device cannot hold a second one. */
+function copyCanvas(canvas: HTMLCanvasElement): HTMLCanvasElement | null {
+  try {
+    const c = document.createElement("canvas");
+    c.width = canvas.width;
+    c.height = canvas.height;
+    if (!c.width || c.width !== canvas.width || c.height !== canvas.height) return null;
+    const ctx = c.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(canvas, 0, 0);
+    return c;
+  } catch { return null; }
+}
+
+function encodeSync(canvas: HTMLCanvasElement, type: string, quality: number): Blob | null {
   try {
     const url = canvas.toDataURL(type, quality);
     const comma = url.indexOf(",");

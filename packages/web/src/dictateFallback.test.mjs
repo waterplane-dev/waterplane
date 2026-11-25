@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { askOnLinkBack, dictateFallbackWhy, fallbackHasDoor } from "./dictateFallback.ts";
+import { askOnLinkBack, dictateFallbackWhy, fallbackHasDoor, frameAllowsMic } from "./dictateFallback.ts";
 
 const ok = { available: true };
 
@@ -71,4 +71,14 @@ test("a link already open at mount is not a link coming back", () => {
   let asks = 0;
   askOnLinkBack(true, () => { asks++; })({ status: "open" });
   assert.equal(asks, 0);
+});
+
+test("a frame that refuses the microphone is the only no: no policy API, or one that throws, is a yes", () => {
+  const p = (v) => ({ allowsFeature: () => v });
+  assert.equal(frameAllowsMic({ featurePolicy: p(false) }), false);
+  assert.equal(frameAllowsMic({ permissionsPolicy: p(true), featurePolicy: p(false) }), true);
+  assert.equal(frameAllowsMic({ featurePolicy: p(true) }), true);
+  assert.equal(frameAllowsMic({}), true);
+  assert.equal(frameAllowsMic(undefined), true);
+  assert.equal(frameAllowsMic({ featurePolicy: { allowsFeature() { throw new Error("no"); } } }), true);
 });

@@ -118,7 +118,7 @@ export class SessionManager extends EventEmitter {
       // roster.ts
       rememberRecent: (s) => this.roster.rememberRecent(s), applyStar: (info) => this.roster.applyStar(info),
       applyPromptLabels: (s) => this.roster.applyPromptLabels(s),
-      pushClosed: (entry) => this.roster.pushClosed(entry), publishClosed: () => this.roster.publishClosed(), closedRowOf: (s, alive, exit) => this.roster.closedRowOf(s, alive, exit),
+      pushClosed: (entry) => this.roster.pushClosed(entry), pushClosedAll: (rows) => this.roster.pushClosedAll(rows), closedRowOfLive: (m, by, at) => this.roster.closedRowOfLive(m, by, at), publishClosed: () => { this.roster.publishClosed(); }, closedRowOf: (s, alive, exit) => this.roster.closedRowOf(s, alive, exit),
       closedRow: (id) => this.roster.closedRow(id), dropClosed: (id) => this.roster.dropClosed(id), followUpOf: (id) => this.roster.followUpOf(id), setFollowUp: (id, f) => this.roster.setFollowUp(id, f),
       isWatched: (id) => this.roster.isWatched(id),
       // wall.ts
@@ -450,8 +450,9 @@ export class SessionManager extends EventEmitter {
 
   /**
    * Boot recovery: re-attach every live `waterplane_*` tmux session that has a `live/` record (call
-   * once on startup — this is what makes sessions survive a restart), then delete the records whose
-   * pane is provably gone (`reclaimStaleLive` — only past a `tmux ls` that SUCCEEDED).
+   * once on startup — this is what makes sessions survive a restart), then retire the records whose
+   * pane is provably gone onto *Recently closed* (`reclaimStaleLive` — past a `tmux ls` that SUCCEEDED,
+   * or, when it failed, only those last written before this machine booted).
    */
   rediscover(): void {
     // The orphan sweep is armed from HERE, not from `main.ts`, because its whole correctness rests
@@ -460,7 +461,7 @@ export class SessionManager extends EventEmitter {
     this.armOrphanSweep();
     let out = "";
     try { out = execFileSync("tmux", ["-L", TMUX_SERVER, "ls", "-F", "#{session_name}"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }); }
-    catch { return; } // no server ⇒ nothing running to recover
+    catch { reclaimStaleLive(this.core, null); return; } // no server ⇒ nothing to re-attach; after a reboot this is the usual answer
     const names = new Set(out.split("\n").map((s) => s.trim()).filter(Boolean)); for (const name of names) {
       if (!name.startsWith(TMUX_PREFIX)) continue;
       const id = name.slice(TMUX_PREFIX.length);
@@ -475,7 +476,7 @@ export class SessionManager extends EventEmitter {
       if (!meta) continue;
       try { adoptOrPark(this.core, meta); } catch { /* skip a session we can't attach */ } // unknown backend ⇒ parked: `parked()`
     }
-    reclaimStaleLive(this.core, names); // a failed `ls` returned above, never read as empty; after adoption, so map + parked are the `keep`
+    reclaimStaleLive(this.core, names); // a failed `ls` is never read as empty (above: null); after adoption, so map + parked are the `keep`
   }
   parked(who?: (backendId: string) => string | null): void { if (who) { settleParked(this.core, who); this.channel.sweep(); } else retryParked(this.core); } // `tmux.ts`: no `who` = backends changed, adopt; `who` = plugins settled, close what is left naming its plugin — and reap what a GONE session left behind (`sidechannel.ts`'s `sweep`)
 
@@ -544,7 +545,7 @@ export class SessionManager extends EventEmitter {
   setSessionBudget(id: string, cfg: SessionBudget | null): SessionInfo | null { return this.budget.set(id, cfg); }
   setBudgetCal(cal: SessionBudgetCal | null): void { this.budget.setCal(cal); } settleBudgetEsc(id: string, byPerson = false): void { this.budget.settleEsc(id, byPerson); } budgetTurnEnded(id: string): void { this.budget.turnEnded(id); }
   wantsBudgetUsage(): boolean { return this.budget.wantsUsage(); }
-  liveGrid(id: string): string { return drive.liveGrid(this.core, id); } setMode(id: string, m: PermissionMode): Promise<mode.ModeReply> { return mode.setMode(this.core, id, m); } // ← session.mode (sessions/livemode.ts)
+  liveGrid(id: string): string { return drive.liveGrid(this.core, id); } setMode(id: string, m: PermissionMode): Promise<mode.ModeReply> { return mode.setMode(this.core, id, m); } watchFast(id: string): () => Promise<string | null> { return mode.watchFast(this.core, id); } // ← session.mode (sessions/livemode.ts)
   submitPromptBox(id: string): Promise<{ ok: boolean; placed: boolean }> { return boxes.submitPromptBox(this.core, id); }
 
   waitReady(id: string, quietMs = 1000, timeoutMs = 30000, clock?: Clock): Promise<boolean> { return drive.waitReady(this.core, id, quietMs, timeoutMs, clock); }

@@ -84,3 +84,5 @@ export { CopilotLocalReader, copilotLedger, localLines, localWords, monthStart, 
 export type { CopilotLocalDoc, CopilotModelCount, CopilotRequest } from "../../../extensions/copilot-usage/host/vscodelocal.mts";
 // The loopback guard on the one read of the waterplane desktop (`hostlink.ts`).
 export { desktopBase, forwardable, readLive, readPath } from "../hostlink.js";
+// The app tab without VS Code (`apptab.ts`).
+export { appBase, appHtml, bridgeScript, INSTALL_DOCS, isHostHealth, OpenGate, openableUrl, openMessage, probeHost, remoteRefusal, stopHtml, stopMessage } from "../apptab.js";

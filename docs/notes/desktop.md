@@ -152,9 +152,16 @@ is hidden) saves the WHOLE desktop at full resolution into the session repo's `.
 lands in the phone's gallery. It is the existing `POST /api/host/screenshot` (`screencapture -x`,
 the main display), reached through the SDK's `desktopScreenshot` (`web/src/desktopShot.ts`), not
 the canvas: the stream's picture may be cropped to the zoomed view, scaled to the phone and
-compressed, and the helper has no one-shot capture (adding one would mean a rebuild, and a rebuild
-drops both grants). Measured 2026-10-15 from the launchd host: 3840x2160, real windows, 2.6 MB PNG.
+compressed. Measured 2026-10-15 from the launchd host: 3840x2160, real windows, 2.6 MB PNG.
 
+- **When `screencapture` is refused, wp-desktop takes it** (2026-11-24). macOS judges `screencapture`
+  as NODE, and the grant is on the node binary: a `brew upgrade` (26.12.0 on 10-27) lost it, and the
+  button failed with `could not create image from display` while the stream beside it, judged as
+  `wp-desktop`, ran. `captureDesktop` (core `host.ts`) tries the core's tool first (a lossless PNG),
+  then each `api.screenCapture` (2.12): `host/still.mts` runs `serve` with a native-size JPEG config,
+  q95, no cursor, and keeps the first frame, so the helper is not rebuilt and keeps its grants. It
+  never builds one. Both refused ⇒ one receipt naming both reasons, the permission as the USUAL
+  reason (the same words come from a missing display).
 - **Not gated on control.** The switch gates INPUT; a screenshot is watching, which the open view
   already is. It is drawn only while the view can serve (`availability` true). The route is a device
   token's, POST (side effect), never a peer's (`/api/peer/*` only).
@@ -164,6 +171,14 @@ drops both grants). Measured 2026-10-15 from the launchd host: 3840x2160, real w
   over the toast layer (z 20), so a toast would be said where nobody can read it. It names the file by
   its full path (`<repo>/.claude/outbox/screenshot-….png`), has an open (the viewer, whose close comes
   back to the view, `openFileFrom(…, DESKTOP_SHEET)`), a ×, and gives its room back after 15 s.
+
+- **The second button, *copy on desktop*** (`ClipShotButton`), leaves the same capture in the desktop's
+  OWN clipboard (`POST /api/host/screenshot/clipboard`, core `hostclip.ts`: `captureDesktop` into a
+  private temp folder, then AppKit's pasteboard through `osascript`, or `Clipboard.SetImage` on
+  Windows; the file is removed). Not `screencapture -c`: it is judged as node, as above. A screenshot
+  tool on the watching device captures the scaled stream and fills that device's clipboard; this one is
+  for pasting into an app on the desktop. The picture never travels and no repo is needed. It replaces
+  what the clipboard held, so it is its own button. Not gated on control, like `/api/host/clipboard`.
 
 ## Presets, with the numbers they were measured at
 

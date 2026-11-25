@@ -43,6 +43,7 @@ export interface QueueDeps {
   readModeRef: Ref<boolean>;
   exitedRef: Ref<Set<string>>;
   composeTextRef: Ref<string>;
+  dictationGate: Ref<DictationGate | null>;
   setCompose: Dispatch<SetStateAction<string>>;
   pushHistory(text: string): void;
   openSend(seed: SendSeed): void;
@@ -51,6 +52,14 @@ export interface QueueDeps {
   /** `op.ack` named the session a FOCUSED op made: open it (App's view state). */
   focusSession(sessionId: string): void;
 }
+
+/**
+ * Asked before a picture's submit: is a dictation for the box on screen still
+ * out? True = held — the gate has put `box` in the composer and asked the
+ * person, and calls `go` later, from a render whose box holds the words, or
+ * never. False = nothing is out, submit now.
+ */
+export type DictationGate = (o: { sid: string; box: string; go: () => void }) => boolean;
 
 /** What every file of the queue core reads: App's deps flattened, plus what
  *  `useQueue` owns — refs where a timer or a socket event reads it later. */

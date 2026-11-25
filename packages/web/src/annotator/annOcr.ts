@@ -39,7 +39,7 @@ export function ocrActions(c: {
     const gen = genRef.current;
     setOcr({ phase: "reading" });
     redraw(true); // no selection chrome in what is read
-    const blob = await encodeCanvas(canvas, "image/jpeg", 0.92);
+    const blob = await encodeCanvas(canvas, "image/jpeg", 0.92, { live: true });
     if (gen !== genRef.current) return; // the sheet moved on to another picture
     if (!blob) { setOcr({ phase: "error", error: "this device could not encode the picture" }); return; }
     const r = await api.ocrImage(blob);

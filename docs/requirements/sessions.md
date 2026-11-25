@@ -337,3 +337,18 @@ An AI button remembers the session it last opened and links to it, so the person
 - asked: 2026-11-22
 - shipped: 6d07eb72c
 
+
+### R-sessions-071 · shipped
+A session that nobody closed (the desktop restarted under it, or it ended while waterplane was not running) is listed under Recently closed, marked with why it stopped, with a chip that cuts to exactly those.
+- asked: 2026-11-23
+- shipped: 29bf7fc21
+
+### R-sessions-072 · shipped
+A Recently closed row shows the star and the follow-up flag its session carried, both can be set and cleared there, and a chip for each cuts the list to the marked ones.
+- asked: 2026-11-23
+- shipped: 52d95fa52
+
+### R-sessions-073 · shipped
+`/fast on` and `/fast off` go into a working session at once instead of waiting for its turn, and when the CLI refuses, the phone shows the CLI's own reason in a toast and in the model, effort and mode sheet.
+- asked: 2026-11-24
+- shipped: `slash.ts` `setsInPlace`, `livemode.ts` `watchFast`, `permmode.ts`

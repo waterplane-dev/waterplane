@@ -76,6 +76,11 @@ export function pullSync(this: PullManager, items: PullItem[]): void {
   for (const item of items) {
     const cur = this.records[item.id];
     if (cur) this.records[item.id] = { ...cur, item };
+    // Deleted here by hand. The host answers EACH dismiss with its list, so a
+    // "delete all" reads lists that still name the rows not dismissed yet;
+    // adding those back starts a download of a file just deleted, and a running
+    // row outlives every later list (`syncKeeps`).
+    else if (this.removed.has(item.id)) continue;
     else if (this.shadowed(item)) continue;  // this device already asked for that file
     else this.records[item.id] = { item, state: "queued", received: 0, attempts: 0, updatedAt: Date.now() };
   }
@@ -91,6 +96,7 @@ export function pullSync(this: PullManager, items: PullItem[]): void {
 
 /** A single freshly-queued item (the `pull.new` broadcast). */
 export function pullAdd(this: PullManager, item: PullItem): void {
+  this.removed.delete(item.id);  // freshly queued on the desktop: wanted again
   this.dropSuperseded(item.supersedes ?? []);
   // The host queues what its rules say is worth having; if this device already
   // asked for that exact file by hand, the two are one download, not two rows.

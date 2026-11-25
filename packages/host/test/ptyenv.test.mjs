@@ -7,7 +7,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { defaultLocale, ptyEnv } from "../dist/ptyenv.js";
+import { defaultLocale, ptyEnv, withUserBin } from "../dist/ptyenv.js";
 
 const KEYS = ["LANG", "LC_ALL", "LC_CTYPE"];
 function withLocale(vals, fn) {
@@ -32,4 +32,12 @@ test("ptyEnv supplies the platform's UTF-8 LANG only when no locale is set", () 
   withLocale({ LANG: "de_DE.UTF-8" }, () => assert.equal(ptyEnv("linux").LANG, "de_DE.UTF-8", "a set LANG is kept"));
   withLocale({ LC_CTYPE: "UTF-8" }, () => assert.equal(ptyEnv("linux").LANG, undefined, "LC_CTYPE counts as a locale"));
   withLocale({ LC_ALL: "C" }, () => assert.equal(ptyEnv("darwin").LANG, undefined, "even a non-UTF-8 one is the person's to fix"));
+});
+
+test("withUserBin appends ~/.local/bin when it exists and is missing, and never reorders or invents a PATH", () => {
+  const yes = () => true;
+  assert.equal(withUserBin("/usr/bin:/bin", "/h", yes), "/usr/bin:/bin:/h/.local/bin", "appended, so it can only add a command");
+  assert.equal(withUserBin("/h/.local/bin:/bin", "/h", yes), "/h/.local/bin:/bin", "already listed: unchanged");
+  assert.equal(withUserBin("/bin", "/h", () => false), "/bin", "no such dir: unchanged");
+  assert.equal(withUserBin(undefined, "/h", yes), undefined);
 });

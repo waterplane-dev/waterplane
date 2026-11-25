@@ -7,7 +7,7 @@ import {
 import { BRAND, DEFAULT_AUTOPULL, type AutoPullConfig, type RepoTarget } from "@waterplane/shared";
 import { autoPull, pulls, setAutoPull, type PullRecord } from "./pull";
 import { saveNow } from "./download";
-import { browserPullAsk, downloadAction, downloadStatus, pullGone, stripRows } from "./downloadState";
+import { browserPullAsk, deleteAllLines, downloadAction, downloadStatus, pullGone, stripRows } from "./downloadState";
 import { fmtSize } from "./format";
 import { track } from "./usage";
 import { SheetHead } from "./Sheet";
@@ -17,7 +17,7 @@ import { Empty } from "./Empty";
 import { hostBase, isNativeShell } from "./hostUrl";
 import { LS, lsGet, lsSet } from "./storage";
 import { nativePullSupported } from "./nativePull";
-import { ConfirmButton } from "./Confirm";
+import { askConfirm, ConfirmButton } from "./Confirm";
 import { showToast } from "./toast";
 import {
   allowToggle, autoInstallText, cleanedText, installIntroText, installOffer, installStatusText, installVerbText, repeatedVersionText,
@@ -37,8 +37,10 @@ interface Props {
   /** Ask the host for a repo's rule (it answers `pull.config`). */
   onLoadConfig: (repoDir: string) => void;
   onSaveConfig: (repoDir: string, config: AutoPullConfig) => void;
-  /** Drop one queued item, or the whole host queue when `id` is omitted. */
-  onDismiss: (id?: string) => void;
+  /** Drop one queued item on the desktop. */
+  onDismiss: (id: string) => void;
+  /** Drop exactly these on the desktop, with one toast (`done`). False = the link is down, nothing was sent. */
+  onDismissAll: (ids: string[], done: string) => boolean;
   /** Open the apps list. The install count here is a COUNT ON A CONTROL, so it
    *  opens exactly what it counted rather than leaving a number to re-derive
    *  from rows that may no longer be on the phone (`AppsSheet.tsx`).
@@ -129,7 +131,7 @@ const PRESETS: { label: string; patterns: string[] }[] = [
  * because the question "why hasn't it downloaded?" is answered by one or the
  * other and jumping between sheets to find out is the annoying version.
  */
-export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismiss, onOpenApps, rulesFor, onClose, online = true }: Props) {
+export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismiss, onDismissAll, onOpenApps, rulesFor, onClose, online = true }: Props) {
   const [records, setRecords] = useState<PullRecord[]>([]);
   const [auto, setAuto] = useState(autoPull());
   // `rulesFor` wins over the primary repo — it is the repo whose menu was
@@ -200,6 +202,24 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
   // answers null in a browser, which is what keeps this off every screen that
   // is not the Android shell.
   const installIntro = (onOpenApps || records.some((r) => isApkRow(r.item))) ? installIntroText(caps, allow) : null;
+  // "delete all" under one section head: exactly the rows that section drew when
+  // it was tapped, the per-row remove for each. The desktop is told FIRST: a row
+  // it still lists comes back as a fresh download at the next start.
+  const deleteAll = async (rows: PullRecord[]) => {
+    const n = rows.length === 1 ? rows[0].item.name : `${rows.length} downloads`;
+    if (!await askConfirm({ title: `Delete ${n}?`, lines: deleteAllLines(rows), confirmLabel: `delete ${rows.length}` })) return;
+    track("action:pull.deleteall");
+    const fromHost = rows.filter((r) => !r.local).map((r) => r.item.id);
+    if (fromHost.length && !onDismissAll(fromHost, `deleted ${n}`)) return;
+    for (const r of rows) void pulls.remove(r.item.id);
+    if (!fromHost.length) showToast(`deleted ${n}`);
+  };
+  // From two rows up: one row's own delete is the same tap.
+  const deleteAllButton = (rows: PullRecord[]) => rows.length > 1 && (
+    <button className="link-btn danger" data-hint="pull.deleteall" onClick={() => { void deleteAll(rows); }}>
+      <Trash2 size={12} /> delete all
+    </button>
+  );
   const bgCapable = (typeof navigator !== "undefined" && "serviceWorker" in navigator
     && "BackgroundFetchManager" in self && !hostBase()) || nativePullSupported();
 
@@ -295,18 +315,10 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
               <RotateCw size={12} /> resume all
             </button>
           )}
-          {/* Clearing has two halves, because the queue has two sources: the
-              host's own rules and this phone's taps (`download.ts`). Dismissing
-              only the host's left every local row on screen — a button that
-              visibly did nothing for exactly the rows this app adds most of.
-              Bytes already here are never dropped by it. */}
-          {records.length > 0 && (
-            <button className="link-btn" data-hint="pull.clearall" onClick={() => {
-              track("action:pull.clearall");
-              for (const r of records) if (r.local && (r.state !== "done" || r.evicted)) void pulls.remove(r.item.id);
-              onDismiss();
-            }}><X size={12} /> clear queue</button>
-          )}
+          {/* It replaced "clear queue", which told only the desktop: a row whose
+              bytes were cleared after it installed is `done`, `sync()` keeps
+              those, and so a list of installed builds never got shorter. */}
+          {deleteAllButton(active)}
         </span>
       </div>
       {/* Why nothing is moving. A stalled queue with no explanation is the exact
@@ -322,7 +334,10 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
 
       {finished.length > 0 && (
         <>
-          <div className="section">On this device <span className="section-hint">· {finished.length}</span></div>
+          <div className="section">
+            On this device <span className="section-hint">· {finished.length}</span>
+            <span className="head-acts">{deleteAllButton(finished)}</span>
+          </div>
           <div className="list">
             {finished.map((r) => <PullRow key={r.item.id} rec={r} repos={repos} onDismiss={onDismiss} caps={caps} allow={allow} siblings={siblings}
               onAllow={(pkg) => { const next = toggleAllow(allow, pkg); setAllow(next); writeInstallAllow(next); }} />)}
@@ -469,7 +484,7 @@ const dedupe = (xs: string[]) => Array.from(new Set(xs));
  * line below exists to answer one of those.
  */
 function PullRow({ rec, repos, onDismiss, caps, allow, onAllow, siblings }: {
-  rec: PullRecord; repos: RepoTarget[]; onDismiss: (id?: string) => void;
+  rec: PullRecord; repos: RepoTarget[]; onDismiss: (id: string) => void;
   caps: InstallCaps; allow: string[]; onAllow: (pkg: string) => void;
   /** Every row's app identity, for `repeatedVersionText`. */
   siblings: readonly { name: string; pkg?: string; pkgVersion?: string; mtime?: number }[];
@@ -559,7 +574,7 @@ function PullRow({ rec, repos, onDismiss, caps, allow, onAllow, siblings }: {
       <Row as="button" kind="grow" title={item.relPath} onClick={tap}>
         <RowTitle>{icon} {item.name}</RowTitle>
         <RowSub title={item.mtime ? `created ${fmtWhenFull(item.mtime)}${item.ts ? ` · queued ${fmtWhenFull(item.ts)}` : ""}` : undefined}>
-          {/* Who asked for it. The auto switch, "clear queue" and the "nothing is
+          {/* Who asked for it. The auto switch, "delete all" and the "nothing is
               moving" line all treat the two sources differently, so the row has
               to say which it is. */}
           {/* The name is resolved HERE as well as stored, because a row made

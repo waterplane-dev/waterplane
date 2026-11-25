@@ -149,3 +149,17 @@ Screens keep a left gutter so content never sits flush against the left edge, in
 - asked: 2026-11-22, 2026-11-22
 - shipped: 9551d9491, e71ff2d0b
 
+### R-layout-035 · shipped
+In the reader a drag grip under the agent rows and the outline's "N turns" line shortens them, the last row first; a single row has no grip and is never cut, and the status strip above and the cached-copy notice are never cut.
+- asked: 2026-11-25
+- shipped: a507cfe5f
+
+### R-layout-036 · shipped
+In the reader a drag grip under the outline makes it shorter or taller against the conversation, which always keeps a line or two; a tap puts the usual height back.
+- asked: 2026-11-25
+- shipped: a507cfe5f
+
+### R-layout-037 · shipped
+On a list pane too narrow for both columns, a repo card's count chips go under New session and its lines, never over them; a card with room keeps the chips beside it, and its ⋯ and × stay on the name's line.
+- asked: 2026-11-25 (owner, with a screenshot of the app in a VS Code tab: "the marked thing already looks broken")
+- shipped: 2026-11-25; test: scripts/ui/journey-desktop-workspace.mjs

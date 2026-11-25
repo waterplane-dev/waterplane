@@ -44,6 +44,8 @@ export interface NewRepoOpts {
    * app id (see `templateName`). An unknown template is an error, never a path.
    */
   template?: TemplateId;
+  /** Runs on a seeded (not bare, not template) project BEFORE the first commit, so what it writes is in it. */
+  extras?: (dir: string) => { notes: string[]; problems: string[] };
 }
 
 export const TEMPLATES = ["android-hello", "web-hello"] as const;
@@ -153,6 +155,8 @@ export interface NewRepoResult {
   files: string[];
   /** Non-fatal problem worth showing (e.g. no git identity configured). */
   warning?: string;
+  /** What the ticked set-up options did, in words. */
+  notes?: string[];
 }
 
 /**
@@ -212,13 +216,15 @@ export async function newRepo(
   } else {
     files = opts.setup === false ? [] : seedProject(dir, projectName, opts.description);
   }
+  const extra = opts.extras && opts.template === undefined && opts.setup !== false ? opts.extras(dir) : null;
   // An initial commit (empty if nothing was seeded) so `git worktree add` — and
   // therefore backlog parallel mode — works immediately.
-  const warning = await firstCommit(dir, files.length ? "Initial project scaffold" : "init");
+  const commitWarning = await firstCommit(dir, files.length ? "Initial project scaffold" : "init");
+  const warning = [commitWarning, ...(extra?.problems ?? [])].filter(Boolean).join(" · ");
   const branch = await pexec("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: dir })
     .then((r) => r.stdout.trim())
     .catch(() => DEFAULT_BRANCH);
-  return { path: dir, branch, files, ...(warning ? { warning } : {}) };
+  return { path: dir, branch, files, ...(extra?.notes.length ? { notes: extra.notes } : {}), ...(warning ? { warning } : {}) };
 }
 
 /**
@@ -264,6 +270,8 @@ function seedProject(dir: string, projectName: string, description?: string): st
   return written;
 }
 
+// The drops without a trailing slash: `check-ignore` (the setup checklist) misses `x/` in a fresh clone,
+// where the dir does not exist yet.
 const GITIGNORE = `node_modules/
 dist/
 build/
@@ -274,8 +282,9 @@ build/
 
 # ${BRAND.name}: per-repo daemon state + the phone↔repo file drops.
 ${BRAND.stateDirName}/
-.claude/inbox/
-.claude/outbox/
+.claude/inbox
+.claude/outbox
+.outbox
 .claude/settings.local.json
 `;
 

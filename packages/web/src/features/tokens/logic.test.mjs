@@ -39,7 +39,7 @@ test("usageFace: subscription, unknown and an old host keep the two windows", ()
 
 test("usageFace: an API or cloud account reads dollars, or a bare door, never windows", () => {
   const api = { profile: "api", source: "probe" };
-  assert.match(usageFace(api, view(412), when).chip.text, /^Oct \$412 \/ \$2000/);
+  assert.match(usageFace(api, view(412), when).chip.text, /^Oct \$412\.00 \/ \$2,000\.00/);
   assert.deepEqual(usageFace({ profile: "cloud", source: "setting" }, view(null), when), { kind: "door" });
   assert.deepEqual(usageFace(api, null, when), { kind: "door" });
 });

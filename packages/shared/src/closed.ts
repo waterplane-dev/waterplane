@@ -66,7 +66,7 @@ export function closedItemFacts(i: Pick<Intent, "state" | "result"> | undefined)
   };
 }
 
-const CLOSED_BY: ReadonlySet<string> = new Set<ClosedBy>(["you", "replaced", "auto-done", "auto-slot", "exited", "limit"]);
+const CLOSED_BY: ReadonlySet<string> = new Set<ClosedBy>(["you", "replaced", "auto-done", "auto-slot", "exited", "limit", "reboot", "lost"]);
 const KINDS: ReadonlySet<string> = new Set<SessionOriginKind>(["hand", "fork", "backlog", "schedule", "agent", "fanout", "resurrect"]);
 const ITEM_STATES: ReadonlySet<string> = new Set(["done", "failed", "canceled"]);
 

@@ -274,6 +274,21 @@ export function uploadFns(c: QueueCtx): UploadFns {
     const targetIsActive = !buf.target || activeIdRef.current === targetId;
     const base = composeTextRef.current;
     const withDraft = base ? `${base}${base.endsWith(" ") ? "" : " "}${joined}` : joined;
+    // Words being dictated for this box are not in it yet: the compose bar's own question, never a
+    // submit that leaves them behind. Held, the paths are in the draft and the answer finishes it.
+    if (targetIsActive && buf.target && targetId && (buf.queue || (buf.submit && sess))
+      && c.dictationGate.current?.({ sid: targetId, box: withDraft, go: () => finishUploads(buf, refs, c.composeTextRef.current) })) return;
+    finishUploads(buf, refs, null);
+  }
+  /** The batch's answer. `held` = the box as a dictation left it: the paths are already in it. */
+  function finishUploads(buf: UploadBuf, refs: string[], held: string | null) {
+    const joined = refs.join(" ");
+    const adoptedTo = buf.target ? adoptedSession(loadAdoptions(), buf.target.id) : null;
+    const targetId = adoptedTo ?? buf.target?.id;
+    const sess = targetId ? sessionsRef.current.find((s) => s.id === targetId && s.running) : null;
+    const targetIsActive = !buf.target || activeIdRef.current === targetId;
+    const base = composeTextRef.current;
+    const withDraft = held ?? (base ? `${base}${base.endsWith(" ") ? "" : " "}${joined}` : joined);
     if (buf.queue && buf.target) {
       // *when it's free*, on a message that carries a picture: the desktop pins
       // it to the session the images were annotated for and types it in when

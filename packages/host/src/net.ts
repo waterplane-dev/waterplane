@@ -1,8 +1,11 @@
 import { createSocket } from "node:dgram";
 import { access, constants } from "node:fs/promises";
 import { hostname, networkInterfaces } from "node:os";
+import type { TLSSocket } from "node:tls";
+import { envName } from "@waterplane/shared";
 import { RUNNING_IN_WSL } from "./branddirs.js";
 import { execFileP } from "./proc.js";
+import { isLoopbackName, noteFrontDoors, unknownDoor, unverifiedName } from "./origin.js";
 
 
 /**
@@ -59,7 +62,7 @@ export function hostHeaderIsLocal(h: string | string[] | undefined): boolean {
   if (host.startsWith("[")) host = host.slice(1, host.indexOf("]") === -1 ? undefined : host.indexOf("]"));
   else if (host.split(":").length === 2) host = host.split(":")[0];
   if (!host) return true;
-  return host === "localhost" || host === "::1" || host === "0.0.0.0" || /^127\.\d+\.\d+\.\d+$/.test(host);
+  return isLoopbackName(host);
 }
 
 /**
@@ -75,6 +78,8 @@ export function localProcessRefusal(remoteAddress: string | undefined, headers: 
   // A front proxy that forgets its headers makes every remote caller loopback; a local process
   // names this machine in Host, a request relayed for a tailnet name does not.
   if (!hostHeaderIsLocal(headers.host)) return "local only — a request named for another host is not a process on this desktop";
+  // …and a page under a name the LAN answers for may call loopback by address: only `Origin` says so.
+  if (unverifiedName(headers, "loopback") !== null) return "local only — a page under a name the network can fake is not a process on this desktop";
   return null;
 }
 
@@ -84,7 +89,11 @@ export function localProcessRefusal(remoteAddress: string | undefined, headers: 
  * so it is `tailscale` — gated when "gate Tailscale" is on, which before this
  * never applied to anyone using the https address. Only ever a DOWNGRADE from
  * loopback (a local process adding the header loses its exemption, nothing
- * more), and never touches a non-loopback peer. The token gate (`server/http.ts`,
+ * more), and never touches a non-loopback peer.
+ *
+ * A loopback or tailnet request under a name only the local network vouches for (`unverifiedName`) is
+ * `unknown`: the address is real, but the page asking may be anybody's. It needs a token and can never
+ * manage auth, like a Wi-Fi client. Again only ever a downgrade. The token gate (`server/http.ts`,
  * `server/wsops.ts`) asks this; `localProcessRefusal` keeps its own stricter test.
  */
 export function requestPeerKind(remoteAddress: string | undefined | null, headers: Readonly<Record<string, string | string[] | undefined>>): PeerKind {
@@ -94,8 +103,35 @@ export function requestPeerKind(remoteAddress: string | undefined | null, header
   // tailnet request never carries it). Treat it as public: always needs a
   // token, can never manage auth. A local process adding it only loses trust.
   if (kind === "loopback" && headers["tailscale-funnel-request"] !== undefined) return "public";
+  if ((kind === "loopback" || kind === "tailscale") && unverifiedName(headers, kind) !== null) return "unknown";
   if (kind === "loopback" && (isProxied(headers) || !hostHeaderIsLocal(headers.host))) return "tailscale";
   return kind;
+}
+
+/**
+ * The name in this request that made it `unknown` (`requestPeerKind`), host part only, or null when
+ * no name did: the request is what its address says. A Funnel request is public first.
+ */
+export function unprovenName(remoteAddress: string | undefined | null, headers: Readonly<Record<string, string | string[] | undefined>>): string | null {
+  const kind = peerKind(remoteAddress);
+  if (kind !== "loopback" && kind !== "tailscale") return null;
+  const raw = requestPeerKind(remoteAddress, headers) === "unknown" ? unverifiedName(headers, kind) : null;
+  return raw === null ? null : raw.toLowerCase().replace(/^[a-z][a-z0-9+.-]*:\/\//, "").replace(/:\d+$/, "");
+}
+
+const namesSaid = new Set<string>();
+/**
+ * The log line for a request refused only because of the name it came under, once per name (a handful
+ * at most: the origin gate has already refused every name that is not ours). Null when there is
+ * nothing to say.
+ */
+export function unverifiedNameLine(remoteAddress: string | undefined | null, headers: Readonly<Record<string, string | string[] | undefined>>): string | null {
+  const kind = peerKind(remoteAddress);
+  const name = kind === "loopback" || kind === "tailscale" ? unverifiedName(headers, kind)?.toLowerCase() ?? null : null;
+  if (name === null || namesSaid.size >= 20 || namesSaid.has(name)) return null;
+  namesSaid.add(name);
+  return `a request under ${JSON.stringify(name)} needs the password or a device token: another device on the network can answer for that name. ` +
+    `Open this desktop by its Tailscale address, or as localhost on the desktop itself; for a reverse proxy with a certificate, list its https origin in ${envName("ALLOWED_ORIGINS")}.`;
 }
 
 /**
@@ -106,6 +142,29 @@ export function requestPeerKind(remoteAddress: string | undefined | null, header
  */
 export function isEncryptedSocket(socket: object): boolean {
   return (socket as { encrypted?: boolean }).encrypted === true;
+}
+
+/** The SNI each handshake on a listener of ours asked for, as `noteTlsServerName` judged it. */
+const serverNames = new WeakMap<object, string>();
+
+/**
+ * Remember the name a finished handshake asked for. Called once per connection, by the TLS listener
+ * that serves a browser certificate, and never again: a renegotiation does not rename a socket.
+ *
+ * A TLS 1.2 resumption is remembered as nameless: no certificate is picked there and what OpenSSL then
+ * reports has been the resumed session's name, not this hello's (on node 26 it is nothing at all). In
+ * TLS 1.3 the name is always this hello's, and it resumes no session made under another name. Every
+ * browser speaks 1.3.
+ */
+export function noteTlsServerName(socket: TLSSocket): void {
+  if (serverNames.has(socket)) return;
+  const name = socket.servername as string | false | null | undefined;
+  serverNames.set(socket, name && (socket.getProtocol() === "TLSv1.3" || socket.isSessionReused() === false) ? name : "");
+}
+
+/** The server name of this socket's handshake; null on a plain socket, with no SNI, and on any listener that does not note it. */
+export function tlsServerName(socket: object | undefined): string | null {
+  return socket && isEncryptedSocket(socket) ? serverNames.get(socket) || null : null;
 }
 
 /** This desktop's name as a person would call it: the OS hostname, minus the
@@ -249,11 +308,80 @@ export async function tailscaleDnsName(): Promise<string | null> {
  * Connection shortcut to a different app entirely.
  */
 export async function serveHttpsUrl(port: number): Promise<string | null> {
+  return (await serveFrontDoors(port)).usable;
+}
+
+/**
+ * Every https front door of `port`: the `usable` one, and the `shadowed` one (or null each). A door
+ * whose `Host` reads like a plain dial of the plain listener (`serve --https=8770` for a daemon on
+ * 8770, or the bare 443 for a daemon on 80) cannot be told from a page dialing straight, which is
+ * the one request `origin.ts` `hostProof` refuses a name for. Handing that URL out would lock out
+ * whoever follows it, so it is not advertised; the doctor says why.
+ */
+export async function serveFrontDoors(port: number): Promise<{ usable: string | null; shadowed: string | null }> {
   const bin = await tailscaleBin();
-  if (!bin) return null;
+  if (!bin) return { usable: null, shadowed: null };
   try {
     const { stdout } = await execFileP(bin, ["serve", "status", "--json"]);
-    const cfg = JSON.parse(stdout) as {
+    return sortFrontDoors(stdout, port);
+  } catch { return { usable: null, shadowed: null }; /* no tailnet / CLI failed */ }
+}
+
+interface ServeNode { TCP?: Record<string, { TCPForward?: string }>; Web?: Record<string, { Handlers?: Record<string, { Proxy?: string }> }> }
+
+/**
+ * Every port `tailscale serve` hands to our `port` on, from `serve status --json`: https, http and raw
+ * TCP doors, those of a foreground `serve` and of Services included. Null when it cannot be read.
+ */
+export function serveDoorPorts(statusJson: string, port: number): number[] | null {
+  let cfg: (ServeNode & { Foreground?: Record<string, ServeNode>; Services?: Record<string, ServeNode> }) | null;
+  try { cfg = JSON.parse(statusJson); } catch { return null; }
+  if (!cfg || typeof cfg !== "object" || Array.isArray(cfg)) return null;
+  const out = new Set<number>();
+  const tail = (s: string) => Number(s.slice(s.lastIndexOf(":") + 1));
+  for (const node of [cfg, ...Object.values(cfg.Foreground ?? {}), ...Object.values(cfg.Services ?? {})]) {
+    for (const [hostPort, entry] of Object.entries(node?.Web ?? {})) {
+      for (const h of Object.values(entry?.Handlers ?? {})) {
+        let target: URL;
+        try { target = new URL(h?.Proxy ?? ""); } catch { continue; }
+        if (Number(target.port || (target.protocol === "https:" ? 443 : 80)) === port) out.add(tail(hostPort));
+      }
+    }
+    for (const [p, h] of Object.entries(node?.TCP ?? {})) if (h?.TCPForward && tail(h.TCPForward) === port) out.add(Number(p));
+  }
+  return [...out];
+}
+
+/** The serve config's doors to `port`, or null: no CLI, no answer, not readable. */
+export async function readDoorPorts(port: number): Promise<number[] | null> {
+  const bin = await tailscaleBin();
+  if (!bin) return null;
+  return execFileP(bin, ["serve", "status", "--json"], { timeout: 3000 }).then(({ stdout }) => serveDoorPorts(stdout, port), () => null);
+}
+
+const DOORS_AGAIN_MS = 10_000;
+let doorsReadAt = 0;
+let doorsReading: Promise<void> | null = null;
+/**
+ * Read the doors again, if this loopback request names one we do not know: `tailscale serve` may have
+ * been run since. Null: nothing to wait for. At most one reading per `DOORS_AGAIN_MS`, shared by whoever
+ * waits; one that fails leaves what is known.
+ */
+export function learnFrontDoors(remoteAddress: string | undefined, headers: Readonly<Record<string, string | string[] | undefined>>, port: number, read = readDoorPorts, now = Date.now()): Promise<void> | null {
+  const host = Array.isArray(headers.host) ? headers.host[0] : headers.host;
+  if (peerKind(remoteAddress) !== "loopback" || !unknownDoor(host)) return null;
+  if (doorsReading) return doorsReading;
+  if (now - doorsReadAt < DOORS_AGAIN_MS) return null;
+  doorsReadAt = now;
+  doorsReading = read(port).then((ports) => { if (ports) noteFrontDoors(ports); }, () => { /* unread: as before */ }).finally(() => { doorsReading = null; });
+  return doorsReading;
+}
+
+/** `tailscale serve status --json` sorted into the two kinds of door for `port` (see `serveFrontDoors`). */
+export function sortFrontDoors(statusJson: string, port: number): { usable: string | null; shadowed: string | null } {
+  const out: { usable: string | null; shadowed: string | null } = { usable: null, shadowed: null };
+  try {
+    const cfg = JSON.parse(statusJson) as {
       Web?: Record<string, { Handlers?: Record<string, { Proxy?: string }> }>;
     };
     for (const [hostPort, entry] of Object.entries(cfg.Web ?? {})) {
@@ -261,11 +389,16 @@ export async function serveHttpsUrl(port: number): Promise<string | null> {
         if (!h.Proxy) continue;
         let target: URL;
         try { target = new URL(h.Proxy); } catch { continue; }
-        if (Number(target.port) !== port) continue;
+        // `new URL` drops a default port: `http://127.0.0.1:80` has none.
+        if (Number(target.port || (target.protocol === "https:" ? 443 : 80)) !== port) continue;
         // ":443" is the bare https URL; any other port has to be shown.
-        return hostPort.endsWith(":443") ? `https://${hostPort.slice(0, -4)}` : `https://${hostPort}`;
+        const url = hostPort.endsWith(":443") ? `https://${hostPort.slice(0, -4)}` : `https://${hostPort}`;
+        // The port a browser spells in `Host`: none for 443, which reads as 80.
+        const spelled = hostPort.endsWith(":443") ? 80 : Number(hostPort.slice(hostPort.lastIndexOf(":") + 1));
+        if (spelled === port) out.shadowed ??= url;
+        else out.usable ??= url;
       }
     }
-  } catch { /* no tailnet / CLI failed / unparseable */ }
-  return null;
+  } catch { /* unparseable */ }
+  return out;
 }

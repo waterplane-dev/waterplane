@@ -5,11 +5,11 @@
 import { execFile } from "node:child_process";
 
 export interface RunResult { code: number | null; stdout: string; stderr: string; timedOut: boolean; error?: string }
-export type Runner = (bin: string, argv: string[], opts: { timeoutMs: number; cwd?: string }) => Promise<RunResult>;
+export type Runner = (bin: string, argv: string[], opts: { timeoutMs: number; cwd?: string; /** Laid over this process's own environment; undefined removes a name. */ env?: Record<string, string | undefined> }) => Promise<RunResult>;
 
 /** Run `bin argv` with no shell, killed (SIGKILL) after `timeoutMs`. Resolves, never rejects. */
 export const run: Runner = (bin, argv, opts) => new Promise((resolve) => {
-  execFile(bin, argv, { timeout: opts.timeoutMs, killSignal: "SIGKILL", cwd: opts.cwd, maxBuffer: 16 * 1024 * 1024, encoding: "utf8" },
+  execFile(bin, argv, { timeout: opts.timeoutMs, killSignal: "SIGKILL", cwd: opts.cwd, env: opts.env ? { ...process.env, ...opts.env } : undefined, maxBuffer: 16 * 1024 * 1024, encoding: "utf8" },
     (err, stdout, stderr) => {
       if (!err) { resolve({ code: 0, stdout, stderr, timedOut: false }); return; }
       const e = err as NodeJS.ErrnoException & { code?: number | string; killed?: boolean; signal?: string };
@@ -18,6 +18,8 @@ export const run: Runner = (bin, argv, opts) => new Promise((resolve) => {
       resolve({ code, stdout: stdout ?? "", stderr: stderr ?? "", timedOut, error: typeof e.code === "string" ? `${e.code}` : e.message });
     });
 });
+
+export const firstLine = (s: string) => s.split("\n").map((l) => l.trim()).find(Boolean) ?? "";
 
 /** Map `items` through `fn` with at most `limit` in flight. Order kept. */
 export async function pool<T, R>(items: readonly T[], limit: number, fn: (t: T) => Promise<R>): Promise<R[]> {

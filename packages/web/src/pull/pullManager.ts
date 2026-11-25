@@ -36,7 +36,7 @@ export class PullManager {
   /** When the native queue was last read. See `syncNativeSoon`. */
   lastNativeSync = 0;
   /** Ids removed by hand this page lifetime: never adopted back from the
-   *  native list (`pullAdoptNative`). */
+   *  native list (`pullAdoptNative`) or the host's (`pullSync`). */
   removed = new Set<string>();
 
   // ── subscription ──────────────────────────────────────────────────

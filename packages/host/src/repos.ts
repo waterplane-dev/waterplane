@@ -6,6 +6,7 @@ import { RUNNING_IN_WSL, wslMountPath } from "./branddirs.js";
 import { env } from "./env.js";
 import { execFileP as pexec } from "./proc.js";
 import { displayNameOf, noteScannedNames } from "./reponames.js";
+import { setupUnseen } from "./setupprefs.js";
 
 
 export function targetId(worktreePath: string): string {
@@ -75,6 +76,12 @@ async function repoWorktrees(repoDir: string): Promise<{ path: string; branch: s
   return gitWorktrees(repoDir);
 }
 
+/** A caller's own copy. The seen mark is read HERE, not in the scan: a listing answered from the
+ *  last scan must not offer a set-up page that was closed since. */
+function copyOut(t: RepoTarget): RepoTarget {
+  return { ...t, ...(t.isPrimary && setupUnseen(t.worktreePath) ? { setupUnseen: true as const } : {}) };
+}
+
 /** One scan per root at a time: the launcher, the setup sweep and the transport survey ask at
  *  once, and on a slow disk each full walk is seconds. A caller arriving mid-scan shares it. */
 const inflight = new Map<string, Promise<RepoTarget[]>>();
@@ -100,7 +107,7 @@ export async function discoverTargets(root: string): Promise<RepoTarget[]> {
       .finally(() => inflight.delete(root));
     inflight.set(root, p);
   }
-  return (await p).map((t) => ({ ...t }));
+  return (await p).map(copyOut);
 }
 
 /** The newest finished scan per root — `listTargets`' answer while the next one runs. */
@@ -121,7 +128,7 @@ export async function listTargets(root: string, budgetMs = 1500): Promise<RepoTa
   const late = new Promise<null>((r) => { timer = setTimeout(() => r(null), budgetMs); });
   const won = await Promise.race([fresh.catch(() => null), late]);
   clearTimeout(timer);
-  return won ?? last.map((t) => ({ ...t }));
+  return won ?? last.map(copyOut);
 }
 
 /**
@@ -131,7 +138,7 @@ export async function listTargets(root: string, budgetMs = 1500): Promise<RepoTa
  */
 export async function cachedTargets(root: string): Promise<RepoTarget[]> {
   const last = lastScan.get(root);
-  return last ? last.map((t) => ({ ...t })) : discoverTargets(root);
+  return last ? last.map(copyOut) : discoverTargets(root);
 }
 
 const SCRATCH_WORKTREE_RE = new RegExp(`^${BRAND.slug}-(probe|own-backfill)-`);

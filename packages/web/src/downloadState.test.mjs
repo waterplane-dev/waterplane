@@ -15,7 +15,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { PLAIN_ROUTE_NO_APK } from "@waterplane/shared";
-import { apkFetchRefusal, autoSaveEligible, browserPullAsk, downloadAction, downloadStatus, fileMatch, needsFetch, pumpEligible, stripRows, syncKeeps } from "./downloadState.ts";
+import { apkFetchRefusal, autoSaveEligible, browserPullAsk, deleteAllLines, downloadAction, downloadStatus, fileMatch, needsFetch, pumpEligible, stripRows, syncKeeps } from "./downloadState.ts";
 
 const rec = (over = {}) => ({
   item: { id: "l_x", repoId: "r", repoDir: "", repoName: "repo", name: "app.apk", relPath: ".claude/outbox/app.apk", size: 1000, mtime: 5, ts: 5, source: "manual" },
@@ -350,4 +350,21 @@ test("an APK is not fetched over a plain route, by name or by type; any other fi
   assert.equal(apkFetchRefusal({ name: "build", mime: "application/vnd.android.package-archive" }, true), PLAIN_ROUTE_NO_APK);
   assert.equal(apkFetchRefusal({ name: "app.apk" }, false), null);
   assert.equal(apkFetchRefusal({ name: "report.md" }, true), null);
+});
+
+test("delete all: an unsaved file is counted as the only copy, a saved one as staying", () => {
+  const lines = deleteAllLines([
+    rec({ state: "done" }),
+    rec({ state: "done", savedAt: 1, savedPresent: true }),
+    rec({ state: "done", savedAt: 1, droppedAt: 1 }),
+    rec({ state: "done", savedAt: 1, savedPresent: false }),
+    rec({ state: "queued", received: 5 }),
+  ]);
+  assert.match(lines[0], /^2 are not known to be in/);
+  assert.match(lines[1], /^2 stay in the Downloads folder/);
+  assert.match(lines[2], /^1 is not finished/);
+});
+
+test("delete all: installed and cleared rows hold nothing, so only the standing line is said", () => {
+  assert.equal(deleteAllLines([rec({ state: "done", evicted: true, cleanedAt: 1 })]).length, 1);
 });

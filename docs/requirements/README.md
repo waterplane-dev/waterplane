@@ -39,10 +39,10 @@ What this project is expected to do, as the person asked for it. Format and rule
 | [metrics](metrics.md) | 9 | 82 | 1 |
 | [models](models.md) | 3 | 13 | 0 |
 | [monitoring](monitoring.md) | 0 | 11 | 0 |
-| [navigation](navigation.md) | 0 | 23 | 0 |
+| [navigation](navigation.md) | 0 | 24 | 0 |
 | [notifications](notifications.md) | 1 | 26 | 0 |
 | [offline](offline.md) | 3 | 8 | 0 |
-| [onboarding](onboarding.md) | 2 | 25 | 1 |
+| [onboarding](onboarding.md) | 2 | 34 | 1 |
 | [outline](outline.md) | 1 | 5 | 0 |
 | [peers](peers.md) | 0 | 16 | 0 |
 | [performance](performance.md) | 0 | 3 | 0 |
@@ -53,7 +53,7 @@ What this project is expected to do, as the person asked for it. Format and rule
 | [reliability](reliability.md) | 3 | 13 | 0 |
 | [requirements](requirements.md) | 2 | 7 | 1 |
 | [search](search.md) | 0 | 3 | 0 |
-| [security](security.md) | 3 | 29 | 0 |
+| [security](security.md) | 3 | 30 | 0 |
 | [sessions](sessions.md) | 4 | 63 | 3 |
 | [settings](settings.md) | 2 | 14 | 0 |
 | [shell](shell.md) | 1 | 16 | 1 |
@@ -63,11 +63,11 @@ What this project is expected to do, as the person asked for it. Format and rule
 | [sync](sync.md) | 1 | 6 | 0 |
 | [tabs](tabs.md) | 4 | 15 | 0 |
 | [token-stats](token-stats.md) | 0 | 11 | 0 |
-| [toolbar](toolbar.md) | 1 | 10 | 0 |
+| [toolbar](toolbar.md) | 1 | 11 | 0 |
 | [ui](ui.md) | 32 | 111 | 2 |
 | [updates](updates.md) | 3 | 15 | 0 |
 | [uploads](uploads.md) | 0 | 4 | 0 |
 | [usage](usage.md) | 2 | 30 | 0 |
-| [vault](vault.md) | 16 | 157 | 1 |
+| [vault](vault.md) | 16 | 172 | 1 |
 | [voice](voice.md) | 1 | 6 | 0 |
 | [voice-input](voice-input.md) | 0 | 8 | 0 |

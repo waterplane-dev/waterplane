@@ -29,6 +29,7 @@ import { pinHeaderView } from "./headerViews";
 import { tallyTitle, turnTally } from "../sessions/tags";
 import { closeToolbarMenu, setToolbarOpen } from "../../features/toolbarCfg";
 import { showToast } from "../../toast";
+import { openExternal } from "../../openExternal";
 import { track } from "../../usage";
 import type { Connection } from "../conn/useConnection";
 import { gitPending, gitSyncText, gitTitle } from "../../gitCounts";
@@ -212,7 +213,7 @@ export function ToolbarMenu({ c, usedOrder, refreshTerminal }: {
   return (
     <div className="toolbar" role="menu" aria-label="toolbar">
       <Button title="refresh terminal" onClick={() => { closeToolbarMenu(); refreshTerminal(); }}><RotateCw size={ICON} /> Refresh terminal</Button>
-      {active.remoteUrl && <Button onClick={() => { closeToolbarMenu(); window.open(active.remoteUrl, "_blank"); }} title="open in app"><Smartphone size={ICON} /> Open in app</Button>}
+      {active.remoteUrl && <Button onClick={() => { closeToolbarMenu(); if (!openExternal(active.remoteUrl!)) showToast("Could not open the app link - the browser blocked it or it is not an http(s) address."); }} title="open in app"><Smartphone size={ICON} /> Open in app</Button>}
       {TOOLBAR_GROUPS.map((g) => {
         const rows = orderedToolbarItems(toolbarCfg, usedOrder).filter((t) => toolbarGroup(t.id) === g).map((t) => renderToolbarItem(c, t)).filter((n) => n != null && n !== false);
         return rows.length ? <div key={g} className="toolbar-group" role="group" aria-label={g}><div className="toolbar-group-head">{g}</div>{rows}</div> : null;

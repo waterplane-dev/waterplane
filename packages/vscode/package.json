@@ -1,9 +1,9 @@
 {
   "name": "waterplane",
-  "displayName": "waterplane: Cost & Context for Claude Code and Copilot",
+  "displayName": "waterplane: Claude Code Usage, Cost & Context (+ Copilot)",
   "publisher": "waterplane-dev",
   "version": "0.9.16",
-  "description": "What each Claude Code prompt cost, the context window over time, and what your CLAUDE.md, AGENTS.md and Copilot instructions cost every request — read from files on this machine. Copilot's monthly quota on request, with your VS Code GitHub sign-in, and a waterplane desktop on this machine if you switch that on; nothing else touches the network. No telemetry.",
+  "description": "See what each Claude Code prompt cost and why, the context window over time, and what CLAUDE.md costs every request. Copilot usage too. Reads local logs, no telemetry.",
   "license": "MIT",
   "icon": "icon.png",
   "repository": {
@@ -14,18 +14,40 @@
   "engines": {
     "vscode": "^1.90.0"
   },
+  "pricing": "Free",
+  "bugs": {
+    "url": "https://github.com/waterplane-dev/waterplane/issues"
+  },
+  "galleryBanner": {
+    "color": "#12151c",
+    "theme": "dark"
+  },
   "categories": [
+    "AI",
     "Visualization",
     "Other"
   ],
   "keywords": [
+    "claude",
     "claude code",
-    "tokens",
+    "claude code usage",
+    "claude code cost",
+    "claude code sessions",
+    "usage",
     "cost",
+    "tokens",
+    "token usage",
     "context window",
     "claude.md",
+    "agents.md",
+    "subagents",
+    "prompt cache",
     "github copilot",
-    "agents.md"
+    "copilot usage",
+    "copilot quota",
+    "premium requests",
+    "status bar",
+    "statistics"
   ],
   "extensionKind": [
     "workspace",
@@ -84,6 +106,24 @@
         "command": "waterplane.copilotQuotaOff",
         "title": "Stop reading Copilot's quota",
         "category": "waterplane"
+      },
+      {
+        "command": "waterplane.openApp",
+        "title": "Open waterplane",
+        "category": "waterplane",
+        "icon": "$(window)"
+      },
+      {
+        "command": "waterplane.openAppInBrowser",
+        "title": "Open in browser",
+        "category": "waterplane",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "waterplane.reloadApp",
+        "title": "Reload the app tab",
+        "category": "waterplane",
+        "icon": "$(refresh)"
       }
     ],
     "configuration": {
@@ -107,8 +147,9 @@
         },
         "waterplane.desktopUrl": {
           "type": "string",
+          "scope": "machine",
           "default": "",
-          "description": "Read the live rate-limit windows, budget and other backends' ledgers for All sessions from a waterplane desktop on THIS machine (e.g. http://127.0.0.1:8770). Empty = off. Only a loopback address is ever read."
+          "description": "Read the live rate-limit windows, budget and other backends' ledgers for All sessions from a waterplane desktop on THIS machine (e.g. http://127.0.0.1:8770). Empty = those readings are off, and Open waterplane looks at http://127.0.0.1:8770. Only a loopback address is ever read."
         },
         "waterplane.healthSeconds": {
           "type": "number",
@@ -150,6 +191,18 @@
           "group": "navigation@1"
         }
       ],
+      "editor/title": [
+        {
+          "command": "waterplane.openAppInBrowser",
+          "when": "activeWebviewPanelId == 'waterplane.app' && waterplane.appAnswered",
+          "group": "navigation"
+        },
+        {
+          "command": "waterplane.reloadApp",
+          "when": "activeWebviewPanelId == 'waterplane.app'",
+          "group": "navigation"
+        }
+      ],
       "commandPalette": [
         {
           "command": "waterplane.show",
@@ -158,6 +211,14 @@
         {
           "command": "waterplane.pickSession",
           "when": "false"
+        },
+        {
+          "command": "waterplane.openAppInBrowser",
+          "when": "activeWebviewPanelId == 'waterplane.app' && waterplane.appAnswered"
+        },
+        {
+          "command": "waterplane.reloadApp",
+          "when": "activeWebviewPanelId == 'waterplane.app'"
         }
       ]
     }

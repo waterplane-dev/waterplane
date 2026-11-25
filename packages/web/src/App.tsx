@@ -13,7 +13,7 @@ import { viewerHandles } from "./docKind";
 import { showToast } from "./toast";
 import { CLAUDE, backendIdOf, hasCap } from "./backendCaps";
 import { useRepoColors } from "./repoColors";
-import { openRepoHealth, openSetup } from "./features/setup"; import { openSetupCheck } from "./features/setupCheck"; import { openSkillsFor } from "./skillsDoor"; import { openContextById } from "./features/context"; import { openBuildFor } from "./features/build";
+import { openRepoHealth, openSetup } from "./features/setup"; import { openSetupCheck } from "./features/setupCheck"; import { openSkillsFor } from "./skillsDoor"; import { askNewTab } from "./newSheetTab"; import { openContextById } from "./features/context"; import { openBuildFor } from "./features/build";
 import { useUsedOrderSnapshot } from "./features/toolbarCfg";
 import { usePullRecords } from "./features/pull";
 import { openScheduleCut, useSchedules } from "./features/schedule";
@@ -48,7 +48,7 @@ import { useTabStripBridge } from "./core/sessions/useTabStripBridge";
 import { useOutsideOpens } from "./core/route/useOutsideOpens";
 import { useQueueSignals } from "./core/queue/useQueueSignals";
 import { useHostState } from "./core/sessions/useHostState";
-import { CliUpdateBanner, InsecureBanner, PhoneSetupBanner, UpdatesBanner, unlockSignIns } from "./core/Banners";
+import { CertExpiryBanner, CliUpdateBanner, InsecureBanner, PhoneSetupBanner, UpdatesBanner, unlockSignIns } from "./core/Banners";
 import { SessionScreen } from "./core/session/SessionScreen";
 import { useSessionChrome } from "./core/session/useSessionChrome";
 import { LauncherScreen } from "./core/launcher/LauncherScreen";
@@ -163,7 +163,7 @@ export function App() {
   const q = useQueue({
     conn, sessions, backends, repos, activeId, setActiveId, setLastVisitedId: (id) => setLastVisitedId(id),
     overlayRef, setOverlay, wantNavRef, buffers, readModeRef, exitedRef,
-    composeTextRef: composeNow, setCompose, pushHistory,
+    composeTextRef: composeNow, dictationGate: draft.dictationGate, setCompose, pushHistory,
     openSend: (seed) => openSend(seed), sendTargetFor: (sid, cwd) => sendTargetFor(sid, cwd),
     repoForCwd: (cwd) => repoForCwd(cwd),
     // The op created/named a session and the user was looking at the tap that
@@ -189,7 +189,7 @@ export function App() {
   // below this line.
   const launchCore = useLaunch({
     backends, setOverlay, geomRef, queue: q,
-    setRepos, setReposAt, setReposFailAt, root, repos, active,
+    setRepos, setReposAt, setReposFailAt, root, repos, active, activeId, overlay,
     openingCwds: () => openingCwds, repoForCwd: (cwd) => repoForCwd(cwd),
   });
   const {
@@ -325,8 +325,8 @@ export function App() {
       uploads: q.uploads, queueImageUpload,
     },
     nav: {
-      overlay, open: setOverlay, close: closeSheet, attach, openRepo, openSend, startSessionWithPrompt, openBacklogCut,
-      openScheduleCut, closeSession, openPlugin: (id) => openPluginFromNotification(id), openRepoHealth, openSetup: (id, aim) => (aim?.region && aim.region !== "setup" ? openSetup(id, { region: aim.region, ...(aim.focus ? { focus: aim.focus } : {}) }) : openSetupCheck(id, aim?.focus === "findings" ? { weight: "finding" } : {})), openSetupCheck, openSkills: (id, target) => openSkillsFor(id, CLAUDE, target), openContext: openContextById,
+      overlay, open: setOverlay, close: closeSheet, attach, openRepo: (t) => openRepo(t, false), openSend, startSessionWithPrompt, openBacklogCut,
+      openScheduleCut, closeSession, openPlugin: (id) => openPluginFromNotification(id), openRepoHealth, openSetup: (id, aim) => (aim?.region && aim.region !== "setup" ? openSetup(id, { region: aim.region, ...(aim.focus ? { focus: aim.focus } : {}) }) : openSetupCheck(id, aim?.focus === "findings" ? { weight: "finding" } : {})), openSetupCheck, openSkills: (id, target) => openSkillsFor(id, CLAUDE, target), openContext: openContextById, openNew: (tab) => { askNewTab(tab); setOverlay("new"); },
       followFire: (id) => { wantNavRef.current = true; firedIdRef.current = id; },
       openPadAt,
       sendSeeded: () => sendSeedRef.current != null,
@@ -383,6 +383,7 @@ export function App() {
         <QueueBars q={q} status={status} reconnectAsk={reconnectAsk} setReconnectAsk={setReconnectAsk}
           autoSend={autoSend} confirmQueue={confirmQueue} pullRecords={pullRecords} setOverlay={setOverlay} />
         <InsecureBanner httpsUrl={httpsUrl} />
+        <CertExpiryBanner tlsName={conn.info.tlsName} tlsNameUntil={conn.info.tlsNameUntil} />
         <PhoneSetupBanner onOpen={() => setOverlay("phonesetup")} />
         <CliUpdateBanner update={update} liveAsk={liveAsk} liveSend={liveSend} /><UpdatesBanner />
       </>} />

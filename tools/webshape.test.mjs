@@ -610,6 +610,7 @@ const SEND_SPLIT_FILES = {
   "send/useRuleFields.ts": 120, // the at-rule's fields, shared with BuildScheduleForm
   "send/useSendSheet.ts": 300, // was 350: the at-rule fields moved to useRuleFields.ts
   "sendIntent/sendChain.ts": 175,
+  "sendIntent/sendDurable.ts": 65,
   "sendIntent/sendClock.ts": 150,
   "sendIntent/sendFlag.ts": 30,
   "sendIntent/sendLabels.ts": 308, // +the flag-when-done clause on the To row; +3 `// closed:` notes (local/total-wire-words)
@@ -654,8 +655,8 @@ const TV_FACADES = { "TranscriptView.tsx": 100 };
 const TV_SPLIT_FILES = {
   "transcript/TvBlocks.tsx": 100,
   "transcript/TvFindBar.tsx": 60,
-  "transcript/TvOutline.tsx": 40,
-  "transcript/TvAgents.tsx": 60,
+  "transcript/TvOutline.tsx": 70,
+  "transcript/TvTop.tsx": 75,
   "transcript/TvStrips.tsx": 100,
   "transcript/TvTail.tsx": 110,
   "transcript/TvTurn.tsx": 171,
@@ -1022,13 +1023,13 @@ const WEBCLIENT_SPLIT_FILES = {
   "webapi/webapiAskRules.ts": 30,
   "webapi/webapiBg.ts": 30,
   "webapi/webapiBody.ts": 50, // a body read with a stall fuse + progress, and JSON under it
-  "webapi/webapiClipboard.ts": 25,
+  "webapi/webapiClipboard.ts": 43, // +fallback keeps focus and selection
   "webapi/webapiFetch.ts": 105,
   "webapi/webapiFiles.ts": 153, // +fileBlob, the gallery combine's bytes; +abortXhr, the stall record
   "webapi/webapiGit.ts": 94, // +pull, +log/show/fetch, +blob progress, +explain, +the PR card (lease, merge, auto-merge, close, log), +the explain job's state, +check, +push up to
-  "webapi/webapiHost.ts": 183, // +dictate setup start/state (local whisper on a tap), +on-device whole-picture OCR, +plugin README (About fold), +handleAt (done on another desktop's alerts)
+  "webapi/webapiHost.ts": 189, // +screenshot into the desktop clipboard, +dictate setup start/state (local whisper on a tap), +on-device whole-picture OCR, +plugin README (About fold), +handleAt (done on another desktop's alerts)
   "webapi/webapiNet.ts": 155,
-  "webapi/webapiRepoOps.ts": 149, // +the Setup check (read, all repos, waive) and the efficiency-rules write (plan P1); earlier: // +skills switch (read, write, recommend); +opt-ins (read, choice, and the row cleaner); +compliance accept (exposure watch); +exposure re-run; +repo-health re-cut; +agent readings; +agent points and markers; +own readings read back (R-metrics-065); +setup block to the outbox (R-metrics-073); +lookup probe view, results, start (R-metrics-074)
+  "webapi/webapiRepoOps.ts": 151, // +the set-up page's seen mark; earlier: +the Setup check (read, all repos, waive) and the efficiency-rules write (plan P1); earlier: // +skills switch (read, write, recommend); +opt-ins (read, choice, and the row cleaner); +compliance accept (exposure watch); +exposure re-run; +repo-health re-cut; +agent readings; +agent points and markers; +own readings read back (R-metrics-065); +setup block to the outbox (R-metrics-073); +lookup probe view, results, start (R-metrics-074)
   "webapi/webapiRepos.ts": 70, // +plainFolders/initPlainFolder, rescan names a folder with no git; +setRepoDisplayName, the name a repo is shown under
   "webapi/webapiRoot.ts": 20,
   "webapi/webapiSessions.ts": 119, // +screenTail, the offline terminal of a session this phone never attached
@@ -1038,14 +1039,14 @@ const WEBCLIENT_SPLIT_FILES = {
   "gallery/DocIcon.tsx": 30,
   "gallery/GalleryBar.tsx": 105, // where/what moved to GalleryFilters
   "gallery/GalleryFilters.tsx": 65,
-  "gallery/GalleryPickBar.tsx": 30,
+  "gallery/GalleryPickBar.tsx": 31, // +the door to the file tree
   "gallery/GalleryGrid.tsx": 105, // +the empty grid under a time cut, with its way out; +the combine pick on a tile
   "gallery/GallerySessionPick.tsx": 65,
   "gallery/GalleryTiles.tsx": 60,
   "gallery/GalleryViewer.tsx": 151,
   "gallery/galleryCuts.ts": 20,
   "gallery/galleryPick.ts": 20,
-  "gallery/galleryTypes.ts": 140,
+  "gallery/galleryTypes.ts": 144, // +onBrowse, initialSince
   "gallery/galleryUrls.ts": 25,
   "gallery/useGallery.tsx": 205,
   "gallery/useGalleryListing.ts": 190,

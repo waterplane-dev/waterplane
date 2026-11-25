@@ -13,7 +13,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { clipClosedText, closedItemFacts, cleanClosedRow, cleanFollowUp } from "@waterplane/shared";
 import type { ClosedBy, FollowUp, Intent, PluginBadge, SessionInfo } from "@waterplane/shared";
-import type { ClosedRow, RecentRow, Session, SessionCore } from "./core.js";
+import type { ClosedRow, LiveMeta, RecentRow, Session, SessionCore } from "./core.js";
 import { onRulesChanged, sessionRules } from "../answergate.js";
 import { derive, resolveBackend } from "../backends/index.js";
 import { hostStateDir } from "../branddirs.js";
@@ -214,13 +214,14 @@ export class RosterSlice {
     return this.recentlyClosed.map((c) => this.withFollowUp(c));
   }
 
-  /** A closed row wearing its conversation's follow-up flag as it is NOW —
+  /** A closed row wearing its conversation's star, follow-up flag and bookmark as they are NOW —
    *  the store owns the flag, so a stale copy persisted on a row is replaced. */
   private withFollowUp(c: ClosedRow): ClosedRow {
     const f = this.followUps.get(c.claudeSessionId ?? c.id) ?? this.followUps.get(c.id);
     const b = this.bookmarks.get(c.cwd, c.claudeSessionId);
-    const { followUp: _f, bookmark: _b, ...rest } = c;
-    return { ...rest, ...(f ? { followUp: f } : {}), ...(b ? { bookmark: b } : {}) };
+    const { followUp: _f, bookmark: _b, starred: _s, ...rest } = c;
+    const starred = this.stars.has(c.claudeSessionId ?? c.id) || this.stars.has(c.id);
+    return { ...rest, starred, ...(f ? { followUp: f } : {}), ...(b ? { bookmark: b } : {}) };
   }
 
   /** A bookmark moved: re-stamp the live session(s) of that conversation and
@@ -292,21 +293,57 @@ export class RosterSlice {
     };
   }
 
+  /**
+   * The closed row for a session that is only a `live/` record any more: its
+   * pane ended while this host was not running (a reboot, a tmux server killed
+   * at the desk), so there is no `Session` to ask. Same facts as `closedRowOf`,
+   * read from what the session left on disk; what is not there is absent.
+   */
+  closedRowOfLive(m: LiveMeta, by: ClosedBy, closedAt: number): ClosedRow {
+    const h = this.core.loadHistory(m.id);
+    const last = h[h.length - 1];
+    const words = promptWords(h);
+    const lastActiveAt = last?.outputAt ?? last?.sentAt;
+    const o = m.origin;
+    const txt = (k: string, v: unknown) => { const c = clipClosedText(v); return c ? { [k]: c } : {}; };
+    return {
+      id: m.id, cwd: m.cwd, title: m.title, closedAt, launch: m.launch, alive: false, closedBy: by,
+      ...(m.claudeSessionId ? { claudeSessionId: m.claudeSessionId } : {}),
+      ...(m.backendSessionId ? { backendSessionId: m.backendSessionId } : {}),
+      ...(o ? { kind: o.kind } : {}),
+      ...txt("itemId", o?.itemId), ...txt("itemLabel", o?.itemLabel), ...txt("fromSession", o?.fromSession),
+      ...(typeof m.createdAt === "number" ? { openedAt: m.createdAt } : {}),
+      ...(typeof lastActiveAt === "number" ? { lastActiveAt } : {}),
+      ...(h.length > 0 ? { turns: h.length } : {}),
+      ...txt("firstPrompt", words[0]?.text), ...txt("lastPrompt", words[words.length - 1]?.text),
+      ...txt("tabTitle", this.core.loadSummary(m.id)?.tab),
+    };
+  }
+
   /** Push (or re-push) one entry onto the newest-first reopen stack. */
-  pushClosed(entry: ClosedRow): void {
-    this.recentlyClosed = [entry, ...this.recentlyClosed.filter((c) => c.id !== entry.id)]
-      .slice(0, RosterSlice.CLOSED_LIMIT);
-    this.publishClosed();
+  pushClosed(entry: ClosedRow): void { this.pushClosedAll([entry]); }
+
+  /** Push several at once, newest first as given: one write, one broadcast. False
+   *  when the stack could not be written down — a caller that deletes the only
+   *  other record of these sessions (`reclaimStaleLive`) must then keep it. A
+   *  batch larger than the stack is kept whole until the next push trims it. */
+  pushClosedAll(entries: readonly ClosedRow[]): boolean {
+    const ids = new Set(entries.map((e) => e.id));
+    this.recentlyClosed = [...entries, ...this.recentlyClosed.filter((c) => !ids.has(c.id))]
+      .slice(0, Math.max(RosterSlice.CLOSED_LIMIT, entries.length));
+    return this.publishClosed();
   }
 
   /** Broadcast the stack and write it down (tmp+rename — a half-written file
-   *  read at the next boot would lose the whole list, not one row). */
-  publishClosed(): void {
+   *  read at the next boot would lose the whole list, not one row). Returns
+   *  whether it reached the disk. */
+  publishClosed(): boolean {
     this.core.emit("closed", this.listClosed());
     try {
       mkdirSync(hostStateDir(this.core.root), { recursive: true });
       writeJsonAtomic(this.closedPath, this.recentlyClosed);
-    } catch { /* non-fatal — writeJsonAtomic removed its own tmp file */ }
+      return true;
+    } catch { return false; /* non-fatal — writeJsonAtomic removed its own tmp file */ }
   }
 
   /** Forget all remembered recent sessions (clears the persisted list). */
@@ -442,14 +479,17 @@ export class RosterSlice {
 
   /** Toggle a session's manual "prima interest" star. Persists durably. */
   setStar(id: string, starred: boolean): void {
-    const s = this.core.sessions.get(id);
-    if (!s) return;
-    const key = this.starKey(s.info);
+    const s = this.core.sessions.get(id)
+      ?? [...this.core.sessions.values()].find((x) => x.info.claudeSessionId === id);
+    const closed = s ? undefined : this.recentlyClosed.find((c) => c.claudeSessionId === id || c.id === id);
+    if (!s && !closed) return;
+    const own = s ? s.info.id : closed!.id;
+    const key = s ? this.starKey(s.info) : closed!.claudeSessionId ?? closed!.id;
     if (starred) this.stars.add(key);
-    else { this.stars.delete(key); this.stars.delete(s.info.id); }
-    s.info.starred = starred;
+    else { this.stars.delete(key); this.stars.delete(own); }
     this.persistStars();
-    this.core.emit("updated", s.info);
+    if (s) { s.info.starred = starred; this.core.emit("updated", s.info); }
+    else this.core.emit("closed", this.listClosed());
   }
 
   // ── Watched sessions ─────────────────────────────────────────────────────

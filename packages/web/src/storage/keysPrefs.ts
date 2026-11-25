@@ -193,6 +193,8 @@ export const LS_PREFS = {
    *  list button sits in the machine strip instead (owner, 2026-11-20). Its own
    *  key so a phone that once stored "on" still gets the new default. */
   sessionTabsPhone: lsKey("sessionTabs.phone"),
+  /** The open-tabs count drawn on the launcher's logo (`TabsLogo`). Default on. */
+  logoCount: lsKey("logoCount"),
   sessionTabsCount: lsKey("sessionTabs.count"),
   sessionTabsOrder: lsKey("sessionTabs.order"), sessionTabsLimit: lsKey("sessionTabs.limit"),
   /**

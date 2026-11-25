@@ -12,10 +12,15 @@
 //
 // Phase C (the SAME root, restarted): the pin did not move. Phase D: the TLS port taken by someone
 // else, then a broken own leaf: the plain host runs regardless, no TLS listener.
+//
+// Phase E (phase B's root again, with a browser certificate on its key): the name counts only on its
+// own handshake under its own Host and Origin, over HTTP and `/ws`, token still required; by address
+// the notice, the pin and the app's origin are as before. Then the file goes bad: notice only, host up.
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
-import { createHash, X509Certificate } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, statSync } from "node:fs";
+import { createHash, createPrivateKey, X509Certificate } from "node:crypto";
+import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { request as httpRequest } from "node:http";
 import { request } from "node:https";
 import { createServer, connect as netConnect } from "node:net";
 import { tmpdir } from "node:os";
@@ -25,6 +30,7 @@ import { WebSocket } from "ws";
 import { freePort, waitForHost } from "./lib-e2e.mjs";
 import { E, SLUG, STATE, WS_PROTOCOL, rootEnv } from "./lib-brand.mjs";
 import { watchdog } from "./lib-watchdog.mjs";
+import { issueBrowserCert } from "../packages/host/dist/lanca.js";
 import { lanIps } from "../packages/host/dist/net.js";
 
 const newRoot = () => mkdtempSync(join(tmpdir(), `${SLUG}-lantls-`));
@@ -44,7 +50,7 @@ const boot = async (port, root, knobs) => {
   host.stderr.on("data", (d) => { log += d; });
   await waitForHost(port);
 };
-const stop = () => new Promise((r) => { if (!host || host.exitCode !== null) return r(); host.once("exit", r); host.kill(); });
+const stop = () => new Promise((r) => { if (!host || host.exitCode !== null || host.signalCode !== null) return r(); host.once("exit", r); host.kill(); });
 const finish = async () => { await stop(); process.exit(failed ? 1 : 0); };
 watchdog(() => { console.log("FAIL: e2e-lantls hung"); host?.kill("SIGKILL"); process.exit(1); }, 90_000).unref();
 
@@ -65,9 +71,9 @@ const answers = (addr, port) => new Promise((r) => {
 });
 
 /** One HTTPS request, by IP, trusting nothing but the check after it. */
-function tlsGet(addr, port, path, { method = "GET", headers = {}, body } = {}) {
+function tlsGet(addr, port, path, { method = "GET", headers = {}, body, servername } = {}) {
   return new Promise((resolve, reject) => {
-    const req = request({ host: addr, port, path, method, rejectUnauthorized: false, headers: { ...(body ? { "content-type": "application/json" } : {}), ...headers } }, (res) => {
+    const req = request({ host: addr, port, path, method, rejectUnauthorized: false, agent: false, ...(servername === undefined ? {} : { servername }), headers: { ...(body ? { "content-type": "application/json" } : {}), ...headers } }, (res) => {
       let text = "";
       res.on("data", (d) => { text += d; });
       res.on("end", () => { let json = null; try { json = JSON.parse(text); } catch { /* not json */ } resolve({ status: res.statusCode, json, text, headers: res.headers }); });
@@ -258,10 +264,100 @@ async function phaseD(lan) {
   await stop();
 }
 
+async function phaseE(lan, root, port, tlsPort, first) {
+  const NAME = "desk.home.arpa";
+  const file = join(root, STATE, "lan-browser.json");
+  const cert = issueBrowserCert(createPrivateKey(JSON.parse(readFileSync(keyFile(root), "utf8")).key), NAME);
+  const keyBytes = readFileSync(keyFile(root), "utf8");
+  writeFileSync(file, JSON.stringify(cert), { mode: 0o600 });
+  await boot(port, root, { [E.ALLOW_PUBLIC]: "1", [E.TLS_PORT]: String(tlsPort) });
+  check(await logSays(/listening https:.*for browsers https:\/\/desk\.home\.arpa/), "browser certificate: the log says the name");
+  const host = `${NAME}:${tlsPort}`;
+  const origin = `https://${host}`;
+  const at = (path, headers = {}, more = {}) => tlsGet(lan, tlsPort, path, { servername: NAME, ...more, headers: { host, ...headers } });
+  const auth = bearer(first.tok);
+
+  check((await presented(lan, tlsPort, { servername: NAME, rejectUnauthorized: true, ca: cert.caCert })).authorized === true, "a verifier that trusts the CA accepts the handshake by name");
+  check((await presented(lan, tlsPort, { servername: NAME })).pin === first.pin, "by name: the same key the phones pin");
+  const byIp = await presented(lan, tlsPort);
+  check(byIp.pin === first.pin && byIp.x.raw.equals(new X509Certificate(first.cert).raw), "by address: the very leaf of before");
+  check(readFileSync(keyFile(root), "utf8") === keyBytes, "lan-tls.json is untouched");
+
+  check((await at("/api/health", { origin })).status === 401, "by name, right origin, no token: 401");
+  check((await at("/api/health", { origin, ...bearer("not-a-real-token") })).status === 401, "by name, wrong token: 401");
+  const ok = await at("/api/health", { origin, ...auth });
+  check(ok.status === 200 && ok.headers["access-control-allow-origin"] === undefined, "by name with a token: 200, and the origin is not reflected");
+  check((await at("/api/lan/identity", { origin, ...auth })).status === 403, "by name the peer is still lan: /api/lan/identity refused");
+  check((await at("/api/auth/token", { origin, ...auth }, { method: "POST", body: { deviceName: "bred by name" } })).status === 403, "by name, POST /api/auth/token refused");
+  check(!/This port is for the app/.test((await at("/")).text), "by name: the app (or its 503), not the notice");
+  check(/This port is for the app/.test((await tlsGet(lan, tlsPort, "/")).text), "by address: the notice");
+  const login = await at("/api/auth/login", { origin }, { method: "POST", body: { password: "e2e-lantls-password" } });
+  check(login.status === 200 && /; Secure;/.test(String(login.headers["set-cookie"])), `a login by name sets a Secure cookie (${login.status})`);
+  const plainLogin = await tlsGet(lan, tlsPort, "/api/auth/login", { method: "POST", body: { password: "e2e-lantls-password" } });
+  check(plainLogin.status === 200 && !/Secure/.test(String(plainLogin.headers["set-cookie"])), "a login by address sets the cookie it always did");
+
+  for (const [label, r] of [
+    ["no SNI", await tlsGet(lan, tlsPort, "/api/health", { servername: "", headers: { host, origin, ...auth } })] /* `https` would take the SNI off Host */,
+    ["another SNI", await at("/api/health", { origin, ...auth }, { servername: "mac.local" })],
+    ["an http Origin", await at("/api/health", { origin: `http://${host}`, ...auth })],
+    ["another port's Origin", await at("/api/health", { origin: `https://${NAME}`, ...auth })],
+    ["the app's Origin", await at("/api/health", { origin: "http://localhost", ...auth })],
+    ["a trailing dot in Host", await at("/api/health", { host: `${NAME}.:${tlsPort}`, ...auth })],
+    ["proxied", await at("/api/health", { origin, "x-forwarded-for": "100.64.0.9", ...auth })],
+    ["cross-site, opaque read", await at("/api/repos/nope/artifact?path=a.png", { "sec-fetch-site": "cross-site", ...auth })],
+  ]) check(r.status === 403, `by name, ${label}: 403 (${r.status})`);
+  // The plain port, on every address it has.
+  for (const addr of ["127.0.0.1", lan]) {
+    for (const h of [`${NAME}:${port}`, host]) {
+      const r = await new Promise((resolve, reject) => {
+        const q = httpRequest({ host: addr, port, path: "/api/health", headers: { host: h, origin, ...auth } }, (res) => { res.resume(); resolve(res.statusCode); });
+        q.once("error", reject);
+        q.end();
+      });
+      check(r === 403, `plain ${addr}, Host ${h}: 403 (${r})`);
+    }
+  }
+  const named = { rejectUnauthorized: false, servername: NAME, headers: { host }, origin };
+  const protocols = [WS_PROTOCOL, `${WS_PROTOCOL}-tok.${first.tok}`];
+  const wss = `wss://${lan}:${tlsPort}/ws`;
+  const good = await openWs(wss, protocols, named);
+  check(good.first?.t === "welcome" && good.first.clientKind === "lan", `/ws by name with a token: welcome, kind lan (${good.first?.clientKind ?? good.first})`);
+  check(good.first?.tlsSpki === first.pin, "and welcome still names the same pin");
+  good.ws.close();
+  const bare = await openWs(wss, [WS_PROTOCOL], named);
+  check(bare.first?.t === "authRequired", "/ws by name without a token: authRequired");
+  bare.ws.close();
+  for (const [label, url, opts] of [
+    ["another SNI", wss, { ...named, servername: "mac.local" }],
+    ["an http Origin", wss, { ...named, origin: `http://${host}` }],
+    ["a Host of another port", wss, { ...named, headers: { host: NAME } }],
+    ["the plain port, loopback", `ws://127.0.0.1:${port}/ws`, { headers: { host }, origin }],
+    ["the plain port, LAN", `ws://${lan}:${port}/ws`, { headers: { host }, origin }],
+  ]) {
+    const code = await new Promise((resolve) => {
+      const ws = new WebSocket(url, protocols, opts);
+      ws.on("message", () => resolve("a message"));
+      ws.on("close", (c) => resolve(c));
+      ws.on("error", () => resolve("error"));
+    });
+    check(code === 1008, `/ws by name, ${label}: 1008 (${code})`);
+  }
+  await stop();
+
+  writeFileSync(file, "{");
+  await boot(port, root, { [E.ALLOW_PUBLIC]: "1", [E.TLS_PORT]: String(tlsPort) });
+  check(await logSays(/listening https:/), "a corrupt browser certificate: the TLS listener is up");
+  check((log.match(/browser certificate is not served/g) ?? []).length >= 1, "and the log says it is not served");
+  check((await presented(lan, tlsPort, { servername: NAME })).pin === first.pin, "the pin as before");
+  check(/This port is for the app/.test((await at("/")).text) && (await at("/api/health", { origin, ...auth })).status === 403, "the notice, and the name is a stranger's");
+  check((await tlsGet(lan, tlsPort, "/api/health", { headers: auth })).status === 200 && readFileSync(file, "utf8") === "{", "the app's route works; the file is left alone");
+  await stop();
+}
+
 try {
   const lan = lanAddress();
   await phaseA(lan);
-  if (!lan) console.log("SKIP: phases B-D — this machine has no private LAN IPv4 to bind");
+  if (!lan) console.log("SKIP: phases B-E — this machine has no private LAN IPv4 to bind");
   else {
     const root = newRoot();
     const port = await freePort();
@@ -269,6 +365,7 @@ try {
     const first = await phaseB(lan, root, port, tlsPort);
     await phaseC(lan, root, port, tlsPort, first);
     await phaseD(lan);
+    await phaseE(lan, root, port, tlsPort, first);
   }
 } catch (e) {
   check(false, `threw: ${e?.stack || e}`);

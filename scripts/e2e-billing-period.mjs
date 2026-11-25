@@ -21,9 +21,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
 import { E, SLUG, rootEnv } from "./lib-brand.mjs";
-import { waitForHost } from "./lib-e2e.mjs";
+import { freePort, waitForHost } from "./lib-e2e.mjs";
 
-const PORT = 8887;
+const PORT = await freePort(); // never a fixed port: anything else listening on it fails the suite
 const ROOT = mkdtempSync(join(tmpdir(), `${SLUG}-billperiod-`));
 const HOME = mkdtempSync(join(tmpdir(), `${SLUG}-billperiod-home-`));
 const REPO = join(ROOT, "proj");

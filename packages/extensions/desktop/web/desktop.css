@@ -1,0 +1,4 @@
+/* The toolbar row holds three worded modes and three icon buttons. On a phone's width they do not fit
+   with the modes' own icons (13 px over at 390, 43 at 360): there the word alone stays. */
+.desk-bar { container-type: inline-size; }
+@container (max-width: 480px) { .desk-bar .seg > svg { display: none; } }

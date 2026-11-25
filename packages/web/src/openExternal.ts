@@ -17,6 +17,7 @@
  * mechanism differs by shell, and getting it wrong is silent in both directions.
  */
 import { isNativeShell } from "./hostUrl";
+import { openInVscode } from "./vscodeShell";
 
 /** Only these may be handed to the platform. A `javascript:` or `intent:` URL
  *  arriving from screen-scraped terminal text is not a link, it is an injection. */
@@ -34,6 +35,8 @@ function safe(url: string): boolean {
  */
 export function openExternal(url: string): boolean {
   if (!safe(url)) return false;
+  // Framed in an editor tab, where `window.open` is dead: the frame's owner opens it.
+  if (openInVscode(url)) return true;
   if (isNativeShell()) {
     // Handed to the shell, which confirms and opens it outside. Assigning
     // `location.href` is the ONLY form that reaches `shouldOverrideUrlLoading`

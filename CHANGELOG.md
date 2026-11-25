@@ -5,6 +5,41 @@ version — so entries are grouped by the release they shipped in. A fixed secur
 vulnerability in what ships is listed under a **Security:** bullet of the release that
 fixed it, with its CVE or GHSA id when one exists.
 
+## 0.1.37
+
+### New
+
+- **Each repo has a set-up page.** It is offered once over a repo's first session and stays in the repo menu. You tick what you want, including a Links pin and, for Android repos, download and install by itself. With no repos yet, the first-run card offers a new project, a clone or another folder.
+- **New projects can be set up further as they are created.** Tick boxes for what else this desktop can set up, extensions included, and it is done before the first commit.
+- **Every repo card gets a health score without any setup.** The hourly check takes a repo's first reading. Repos without tests or source still show no score.
+- **A laptop browser can open the app over plain LAN with real HTTPS.** `waterplane lan-cert issue|show|remove` manages a certificate for one name, and phones that are already paired are not affected.
+- **Recently closed shows stars and follow-up flags.** You can toggle them on a row and filter the list to either.
+- **Remote desktop can copy a screenshot on the desktop.** A second button beside the camera puts the picture in the desktop's own clipboard.
+- **The logo opens your open tabs on a phone.** It shows how many there are, and you can hide the number from its card or in Settings.
+- **You can arrange the session screen more freely.** Drag the floating buttons anywhere, resize the agent rows and outline in the reader, and press Alt+G on a keyboard to toggle full screen.
+- **Gallery, Downloads and Links do more.** "Browse files" opens the repo's file tree from the gallery, each Downloads section has "delete all", and Links can look at the cloud through a named sign-in command when gcloud is signed out.
+- **The leave-the-app dialog offers "Copy link".** This needs the new APK.
+
+### Fixed
+
+- **Sessions stopped by a reboot no longer vanish.** They are listed under Recently closed with their prompts and tab name, marked "stopped unexpectedly".
+- **Back closes what is on top and keeps the screen.** Dialogs, hint cards and popovers close first, and a dialog with typed words stays and says so.
+- **Send & run on a picture waits for your dictation.** Words that arrive while it asks are no longer sent past or cleared.
+- **Combine pictures saves faster on a busy page.** The JPEG no longer waits for an idle moment.
+- **Sessions find tools in `~/.local/bin`.** Sessions and builds started by the desktop now have it on their PATH.
+- **`/fast` works while a session is busy.** It is sent at once, and a refusal from the CLI is shown.
+- **Screenshots work in more cases on macOS.** The desktop helper takes the picture when Node is refused the screen, and a refusal says which setting to allow.
+- **Repo cards draw cleanly.** Chips no longer cover New session in a narrow pane, and the frame and colour edge are no longer cut by lines and gaps.
+- **Costs read consistently.** Dollar amounts show two decimals, and a cost notice no longer keeps coming back for some sessions.
+- **A nearly full disk no longer leaves half-written files.** The browser certificate, update lock and recordings are written completely or report an error.
+- **A prompt that appears while the screen is being read is no longer missed.**
+
+### Security
+
+- **Other websites can no longer put the app in a frame.**
+- **A name your local network answers for is no longer trusted by its address.** A web page using a `.local` or short host name could connect as if it were on the desktop itself or on Tailscale. Such connections now need the password or a device token, and a password sign-in there ends after 12 hours.
+- **`*.ts.net` names are trusted on the desktop only on real front-door ports.** A hand-made forward on another port no longer counts unless its origin is listed in the allowed origins.
+
 ## 0.1.36
 
 ### New

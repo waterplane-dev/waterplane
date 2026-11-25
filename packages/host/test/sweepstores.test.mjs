@@ -14,7 +14,7 @@
 import "../../../scripts/lib-tmuxiso.mjs"; // any tmux this test starts runs in a socket dir of its own
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -169,4 +169,71 @@ test("an unstamped (older) record is judged only by a host on the default socket
 
 test("a record with no facts (unreadable, unparseable) is kept", () => {
   assert.deepEqual(staleLiveIds(["aaaa1111"], tmux(), NOW, new Map(), HOUR, SERVER), []);
+});
+
+// ── a reboot (R-sessions-071) ────────────────────────────────────────────────
+test("R-sessions-071: after a reboot a failed `tmux ls` still retires what predates the boot, and nothing younger", () => {
+  const f = facts({ aaaa1111: [0.5, SOCK], bbbb2222: [0.1, SOCK] });
+  const bootedAt = NOW - 0.25 * HOUR;
+  assert.deepEqual(staleLiveIds(["aaaa1111", "bbbb2222"], null, NOW, f, HOUR, SERVER, new Set(), bootedAt), ["aaaa1111"], "younger than the age gate, older than the boot");
+  assert.deepEqual(staleLiveIds(["aaaa1111"], null, NOW, f, HOUR, SERVER), [], "no boot time ⇒ no proof");
+  assert.deepEqual(staleLiveIds(["aaaa1111"], tmux("aaaa1111"), NOW, f, HOUR, SERVER, new Set(), bootedAt), [], "a listing that names it wins over the clock");
+  assert.deepEqual(staleLiveIds(["aaaa1111"], null, NOW, facts({ aaaa1111: [0.5, "/tmp/other"] }), HOUR, SERVER, new Set(), bootedAt), [], "another server's record is not ours");
+});
+
+const { reclaimStaleLive } = await import("../dist/sessions/tmux.js");
+const { RosterSlice } = await import("../dist/sessions/roster.js");
+const { TMUX_SOCKET_ID } = await import("../dist/sessions/knobs.js");
+
+/** A state dir with `live/` records, under a core with the real roster. */
+function hostWith(records) {
+  const root = mkdtempSync(join(tmpdir(), "waterplane-lost-"));
+  const live = join(root, ".waterplane", "live");
+  mkdirSync(live, { recursive: true });
+  for (const [id, r] of Object.entries(records)) {
+    writeFileSync(join(live, `${id}.json`), JSON.stringify({ id, cwd: "/r", title: "r", launch: { model: "opus" }, createdAt: NOW - 5 * HOUR, claudeSessionId: `c-${id}`, origin: { kind: "hand" }, tmuxSocket: TMUX_SOCKET_ID, ...r.meta }));
+    const t = new Date(NOW - r.ageH * HOUR);
+    utimesSync(join(live, `${id}.json`), t, t);
+  }
+  const core = {
+    root, sessions: new Map(), hasLiveTmux: () => false, emit: () => true,
+    loadHistory: (id) => records[id]?.history ?? [], loadSummary: (id) => records[id]?.summary ?? null,
+  };
+  const r = new RosterSlice(core);
+  core.closedRow = (id) => r.closedRow(id); core.pushClosedAll = (x) => r.pushClosedAll(x); core.closedRowOfLive = (...a) => r.closedRowOfLive(...a);
+  return { core, r, root, left: () => readdirSync(live).map((f) => f.replace(".json", "")).sort() };
+}
+
+test("R-sessions-071: a session the reboot stopped is listed with what it left behind, BEFORE its record goes", () => {
+  const bootedAt = NOW - 0.25 * HOUR;
+  const h = hostWith({
+    aaaa1111: { ageH: 3, history: [{ kind: "prompt", text: "early work", sentAt: NOW - 3 * HOUR }], summary: { tab: "early work" } },
+    bbbb2222: { ageH: 3, history: [{ kind: "prompt", text: "fix the list", sentAt: NOW - 2 * HOUR }, { kind: "command", text: "/compact", sentAt: NOW - HOUR }] },
+    cccc3333: { ageH: 0.1 },
+  });
+  assert.deepEqual(reclaimStaleLive(h.core, null, NOW, bootedAt).sort(), ["aaaa1111", "bbbb2222"]);
+  assert.deepEqual(h.left(), ["cccc3333"], "written since the boot ⇒ kept");
+  const rows = JSON.parse(readFileSync(join(h.root, ".waterplane", "closed.json"), "utf8"));
+  assert.deepEqual(rows.map((x) => x.id), ["bbbb2222", "aaaa1111"], "the one used last is first");
+  for (const x of rows) { assert.equal(x.closedBy, "reboot"); assert.equal(x.closedAt, bootedAt); assert.equal(x.claudeSessionId, `c-${x.id}`); assert.equal(x.alive, false); }
+  assert.equal(rows[0].lastPrompt, "fix the list", "a typed command is not what it was for");
+  assert.equal(rows[1].tabTitle, "early work");
+  rmSync(h.root, { recursive: true, force: true });
+});
+
+test("R-sessions-071: a pane gone without a reboot is `lost`; a row a person already made is kept", () => {
+  const h = hostWith({ aaaa1111: { ageH: 3 }, bbbb2222: { ageH: 3 } });
+  h.r.pushClosed({ id: "bbbb2222", cwd: "/r", title: "r", closedAt: 5, closedBy: "you" });
+  reclaimStaleLive(h.core, new Set(), NOW, NOW - 100 * HOUR);
+  assert.deepEqual(h.r.listClosed().map((x) => [x.id, x.closedBy, x.closedAt]), [["aaaa1111", "lost", NOW], ["bbbb2222", "you", 5]]);
+  assert.deepEqual(h.left(), []);
+  rmSync(h.root, { recursive: true, force: true });
+});
+
+test("R-sessions-071: rows that could not be written down delete no record", () => {
+  const h = hostWith({ aaaa1111: { ageH: 3 } });
+  h.core.pushClosedAll = () => false;
+  assert.deepEqual(reclaimStaleLive(h.core, new Set(), NOW, undefined), []);
+  assert.deepEqual(h.left(), ["aaaa1111"]);
+  rmSync(h.root, { recursive: true, force: true });
 });

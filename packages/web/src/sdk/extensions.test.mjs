@@ -56,6 +56,15 @@ test("the apps door: the first manifest declaring one whose extension is ON; non
   assert.equal(pickAppsDoor(fs, (id) => id === "c").feature, "c");
 });
 
+test("an opt-in's door: the manifest naming that offer whose extension is ON; none on ⇒ null (R-onboarding-032)", async () => {
+  const { pickOptInDoor } = await import("./extensions.ts");
+  const open = () => {};
+  const fs = [{ id: "a" }, { id: "links", optInDoors: { links: open } }];
+  assert.deepEqual(pickOptInDoor(fs, "links", () => true), { feature: "links", open });
+  assert.equal(pickOptInDoor(fs, "links", () => false), null);
+  assert.equal(pickOptInDoor(fs, "apk-install", () => true), null);
+});
+
 test("watchExtensionEnabled fires again when the first LIVE list lands, even if it changed nothing", () => {
   // A cached "on" that the live list confirms: the boot that errored on the cache gets a second chance.
   const src = createStore([view("ocr", true)]), live = createStore(false);

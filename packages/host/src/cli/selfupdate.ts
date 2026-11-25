@@ -26,8 +26,8 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
-  closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync,
-  renameSync, rmSync, symlinkSync, writeFileSync, writeSync,
+  closeSync, existsSync, fstatSync, ftruncateSync, linkSync, mkdirSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync,
+  renameSync, rmSync, statSync, symlinkSync, writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
@@ -38,6 +38,7 @@ import { identity } from "./index.js";
 import { sigPolicy, sigRefusal, type SigPolicy } from "./releasesig.js";
 import { plistEnv, unitEnv } from "./service.js";
 import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
+import { writeAll } from "../writeall.js";
 import { readSnapshot, restoreState, snapshotState } from "./statesnap.js";
 
 // ── pure parts (pinned by packages/host/test/selfupdate.test.mjs) ──────────
@@ -247,25 +248,91 @@ function runtimeVersion(dataDir: string): string | null {
   } catch { return null; }
 }
 
-/** One update at a time per install: `versions/.update.lock` holding a pid. */
-function takeLock(dataDir: string): (() => void) | string {
+/** A lock whose pid is not readable yet is being written by another updater; older than this, its writer died. */
+const LOCK_FRESH_MS = 60_000;
+
+/** Why the lock at `path` is still somebody's, or null: its holder is gone. Throws ENOENT when there is none. */
+function lockHeld(path: string): string | null {
+  const text = readFileSync(path, "utf8").trim();
+  const pid = /^[1-9]\d*$/.test(text) ? Number(text) : 0;
+  if (!pid) return Date.now() - statSync(path).mtimeMs < LOCK_FRESH_MS ? "another update is starting (its lock names no process yet). Try again in a minute." : null;
+  try { process.kill(pid, 0); return `another update is running (pid ${pid}).`; } catch { return null; }
+}
+
+/**
+ * One update at a time per install: `versions/.update.lock` holding a pid, and never holding less. The pid is
+ * written whole to a file of this process's own and LINKED into place, so nobody can read a lock before its
+ * pid is in it: an empty one read as "pid 0, dead", was removed, and let a second update run. Where a filesystem
+ * has no hard links the lock is written in place, and an unreadable one counts as held for a minute instead.
+ *
+ * The holder keeps the lock FILE open and empties it before it removes it, so a release counts wherever the file
+ * is. An updater may have moved it aside at that moment (`takeOver`) and put it back afterwards: a lock that
+ * still named this process then would refuse every update for as long as it lives, and the daemon lives long.
+ */
+export function takeLock(dataDir: string): (() => void) | string {
   const lock = join(dataDir, "versions", ".update.lock");
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const fd = openSync(lock, "wx");
-      writeSync(fd, String(process.pid));
-      closeSync(fd);
-      return () => rmSync(lock, { force: true });
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== "EEXIST") return `could not take ${lock}: ${String(e)}`;
-      const pid = Number(readFileSync(lock, "utf8").trim());
-      let alive = false;
-      if (pid > 0) { try { process.kill(pid, 0); alive = true; } catch { alive = false; } }
-      if (alive) return `another update is running (pid ${pid}).`;
-      rmSync(lock, { force: true });
+  const mine = `${lock}.${process.pid}`;
+  const pid = String(process.pid);
+  const place = (path: string, flags: string): number => {
+    const fd = openSync(path, flags);
+    try { writeAll(fd, pid); return fd; } catch (e) { closeSync(fd); rmSync(path, { force: true }); throw e; }
+  };
+  let open: number | null = null;
+  const release = (fd: number) => (): void => {
+    if (open === null) return;
+    open = null;
+    const own = fstatSync(fd);
+    try { ftruncateSync(fd, 0); } catch { /* removed below */ }
+    try { const at = statSync(lock); if (at.ino === own.ino && at.dev === own.dev) rmSync(lock, { force: true }); } catch { /* gone already */ }
+    closeSync(fd);
+  };
+  let got = false;
+  try {
+    open = place(mine, "w");
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        try { linkSync(mine, lock); } catch (e) {
+          if ((e as NodeJS.ErrnoException).code === "EEXIST") throw e;
+          const fd = place(lock, "wx");
+          closeSync(open);
+          open = fd;
+        }
+        got = true;
+        return release(open);
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+      }
+      const why = takeOver(lock, `${mine}.old`);
+      if (why) return why;
     }
+    return `could not take ${lock}.`;
+  } catch (e) { return `could not take ${lock}: ${String(e)}`; }
+  finally {
+    if (!got && open !== null) closeSync(open);
+    rmSync(mine, { force: true });
   }
-  return `could not take ${lock}.`;
+}
+
+/**
+ * Remove a lock whose holder is gone; → why not. It is moved aside and read AGAIN before it is deleted: two
+ * updaters can both find the same dead holder, and the second must not delete the lock the first took meanwhile.
+ */
+function takeOver(lock: string, aside: string): string | null {
+  try {
+    const held = lockHeld(lock);
+    if (held) return held;
+    renameSync(lock, aside);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return null; // released meanwhile: try for it again
+    throw e;
+  }
+  const took = lockHeld(aside);
+  // A living one after all: put back, never over a lock taken meanwhile. Released meanwhile, it is empty by now.
+  if (took) try { linkSync(aside, lock); } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "EEXIST" && !existsSync(lock)) { renameSync(aside, lock); return took; }
+  }
+  rmSync(aside, { force: true });
+  return took;
 }
 
 /** Extract a `.tar.gz` holding ONE top dir into `parent/<final>`, atomically. */

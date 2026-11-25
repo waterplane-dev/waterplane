@@ -797,7 +797,11 @@ export function refreshRepoHealth(
   deps: RepoHealthDeps = {},
   scope: string | null = null,
   /** Only ever from a person's tap on the refusal's remedy — never the weekly sweep. */
-  opts: { recut?: boolean } = {},
+  opts: {
+    recut?: boolean;
+    /** `update` alone: a repo no person has refreshed gets its numbers, and no files in its outbox. */
+    measureOnly?: boolean;
+  } = {},
 ): Promise<RepoHealthView> {
   const key = keyOf(wt, scope);
   // A tap while a run is in flight JOINS it, recut or not: two `update`s on
@@ -813,7 +817,7 @@ export function refreshRepoHealth(
   }
   const started = (async () => {
     try {
-      return await runRefresh(wt, deps, scope, opts.recut === true);
+      return await runRefresh(wt, deps, scope, opts.recut === true, opts.measureOnly === true);
     } finally {
       inflight.delete(key);
     }
@@ -822,7 +826,7 @@ export function refreshRepoHealth(
   return started;
 }
 
-async function runRefresh(wt: string, deps: RepoHealthDeps, scope: string | null = null, recut = false): Promise<RepoHealthView> {
+async function runRefresh(wt: string, deps: RepoHealthDeps, scope: string | null = null, recut = false, measureOnly = false): Promise<RepoHealthView> {
   const now = deps.now ?? Date.now;
   const engine = engineOf(deps)(wt);
   // Nothing to run it with: the read answers the same view, sentence included,
@@ -848,7 +852,7 @@ async function runRefresh(wt: string, deps: RepoHealthDeps, scope: string | null
     // repo — the engine refuses both under a scope — so running them here
     // would either fail the refresh or overwrite the repo's own narrative with
     // a subtree's.
-    for (const s of (scope ? SCOPED_REFRESH_STEPS : REFRESH_STEPS)) {
+    for (const s of (scope || measureOnly ? SCOPED_REFRESH_STEPS : REFRESH_STEPS)) {
       step = s as RepoHealthOutcome["step"];
       const proc = await step1(deps, engine, wt, s, (chunk) => {
         for (const line of chunk.split("\n")) {

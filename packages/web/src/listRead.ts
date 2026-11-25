@@ -2,7 +2,7 @@
  * A host list as the phone holds it: its rows, and when the host last answered for them (`readAt`,
  * epoch ms; 0 = never on this device). An empty array alone is two states — not read yet, and read
  * with nothing in it — and two readers of the same `[]` used to decide them opposite ways: the
- * launcher said "No repos under host root." before the first read, the git screen said "waiting"
+ * launcher said "No repos in the code folder yet." before the first read, the git screen said "waiting"
  * for ever on a host with no repos (design round 2026-10-30 W4). Every reader asks this, never
  * `rows.length` on its own.
  */

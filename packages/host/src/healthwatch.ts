@@ -6,9 +6,15 @@
  * for `/api/repos`, and the one push a called move earns.
  *
  *  - **Weekly refresh.** An hourly sweep runs `refreshRepoHealth` for every repo
- *    that already has a series file and whose last host refresh is over 7 days
- *    old — SEQUENTIALLY, never two engines at once. A repo with no series file
- *    is never started: measuring a repo for the first time is a person's tap.
+ *    whose last host refresh is over 7 days old — SEQUENTIALLY, never two
+ *    engines at once.
+ *  - **A repo with no series is measured by the same sweep** (owner 2026-11-23:
+ *    the readings show without setting anything up). It runs `update` ONLY and
+ *    stays that way on the weekly runs until a person taps refresh: `narrate`
+ *    and `html` write into the outbox, and nobody asked for those. The state dir
+ *    is ignored locally first (`stateignore.ts`), a repo whose "Repo health
+ *    series" offer was declined is left alone, and the first reading never
+ *    pushes: its last week's marks are stored as already said.
  *  - **Boot computes without refreshing**, so the chip has a value at once.
  *  - **`/api/repos` reads the cache only** (`summaryFor`); the engine never runs
  *    in a request path. Unknown ⇒ absent, never 0. The cache is keyed to the
@@ -34,10 +40,12 @@ import {
 import { hostStateDir } from "./branddirs.js";
 import { contextLimitsFor } from "./compliance.js";
 import { discoverTargets } from "./repos.js";
-import { refreshRepoHealth, resolveRepoHealthEngine } from "./repohealth.js";
+import { canReadRepoHealth, refreshRepoHealth, resolveRepoHealthEngine } from "./repohealth.js";
 import { engineApproved } from "./repohealthapproval.js";
 import { env } from "./env.js";
 import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
+import { optInChoices } from "./setupprefs.js";
+import { ensureStateDirIgnored } from "./stateignore.js";
 
 const SWEEP_MS = Math.max(5_000, Number(env("HEALTH_SWEEP_MS") || 60 * 60_000));
 /** A repo is refreshed when its last refresh is older than this. */
@@ -53,8 +61,11 @@ export interface HealthWatchDeps {
   root: string;
   /** Primary worktrees to consider. */
   repos(): Promise<{ id: string; repoName: string; worktreePath: string }[]>;
-  /** Run the engine for one worktree; true when it finished cleanly. */
-  refresh(wt: string): Promise<boolean>;
+  /** Run the engine for one worktree; true when it finished cleanly. `measureOnly`
+   *  = the `update` step alone, for a repo no person has ever refreshed. */
+  refresh(wt: string, measureOnly: boolean): Promise<boolean>;
+  /** May a repo with no series be measured for the first time? Default: yes. */
+  mayStart?(wt: string): boolean;
   /** The context-weight warn line for this repo, or null. */
   warnChars(wt: string): number | null;
   notify(kind: "health", p: { title: string; body: string; tag: string; open: NotifyOpen }): void;
@@ -70,7 +81,7 @@ export interface HealthWatchDeps {
   statePath?: string;
 }
 
-interface Stored { lastRefresh?: number; notified?: string; /** `<week>:alert:<subject>` keys already pushed (current week only). */ alerted?: string[] }
+interface Stored { lastRefresh?: number; /** Only ever measured by the sweep, never by a tap: the sweep runs `update` alone. */ auto?: true; notified?: string; /** `<week>:alert:<subject>` keys already pushed (current week only). */ alerted?: string[] }
 
 /** The series file for a worktree: current state dir name first, then each legacy one. */
 export function seriesPathOf(wt: string): string | null {
@@ -113,6 +124,7 @@ export class HealthWatch {
       if (!v || typeof v !== "object") continue;
       this.state.set(wt, {
         lastRefresh: Number.isFinite(v.lastRefresh) ? v.lastRefresh : undefined,
+        auto: v.auto === true ? true : undefined,
         notified: typeof v.notified === "string" ? v.notified : undefined,
         alerted: Array.isArray(v.alerted) ? v.alerted.filter((x: unknown) => typeof x === "string") : undefined,
       });
@@ -214,8 +226,7 @@ export class HealthWatch {
    * texts), and a called move's body follows it; either alone is sent as itself.
    */
   private maybeNotify(wt: string, repoId: string, repoName: string, r: HealthIndexResponse): void {
-    const move = this.maybeNotifyMove(wt, repoName, r);
-    const severe = this.maybeNotifySevere(wt, r);
+    const { move, severe } = this.marksOf(wt, repoName, r);
     const tag = `health:${repoId}`;
     // A tap lands on this repo's health chart, never on the bare launcher.
     const open: NotifyOpen = { to: "repohealth", repoId };
@@ -225,6 +236,11 @@ export class HealthWatch {
     } else if (move) {
       this.deps.notify("health", { title: move.title, body: move.body, tag, open });
     }
+  }
+
+  /** What is news now, REMEMBERED as said. The caller sends it, or (a first reading) does not. */
+  private marksOf(wt: string, repoName: string, r: HealthIndexResponse) {
+    return { move: this.maybeNotifyMove(wt, repoName, r), severe: this.maybeNotifySevere(wt, r) };
   }
 
   private maybeNotifyMove(wt: string, repoName: string, r: HealthIndexResponse): { title: string; body: string } | null {
@@ -252,10 +268,11 @@ export class HealthWatch {
     return !(tried !== undefined && now - tried < RETRY_MS);
   }
 
-  /** Note that a refresh succeeded elsewhere (the manual route) and recompute. */
-  refreshed(wt: string): HealthIndexResponse {
+  /** Note that a refresh succeeded (the manual route: `byPerson`) and recompute. */
+  refreshed(wt: string, byPerson = true): HealthIndexResponse {
     const k = keyOf(wt);
-    this.state.set(k, { ...this.state.get(k), lastRefresh: this.now() });
+    const st = this.state.get(k);
+    this.state.set(k, { ...st, lastRefresh: this.now(), auto: byPerson ? undefined : st?.auto });
     this.persist();
     return this.recompute(wt);
   }
@@ -268,12 +285,22 @@ export class HealthWatch {
       for (const r of repos) {
         const wt = r.worktreePath;
         try {
-          if (this.text(wt) === null) { this.cache.delete(keyOf(wt)); continue; }
-          if (this.weekly() && this.due(wt)) {
-            this.lastAttempt.set(keyOf(wt), this.now());
+          const k = keyOf(wt);
+          const first = this.text(wt) === null;
+          if (first) this.cache.delete(k);
+          const may = !first || (this.deps.mayStart?.(wt) ?? true);
+          if (may && this.weekly() && this.due(wt)) {
+            this.lastAttempt.set(k, this.now());
+            // Before the run: one killed half-way has still written a series.
+            if (first) { this.state.set(k, { ...this.state.get(k), auto: true }); this.persist(); }
             let ok = false;
-            try { ok = await this.deps.refresh(wt); } catch (e) { this.logOnce(wt, e); }
-            if (ok) this.refreshed(wt);
+            try { ok = await this.deps.refresh(wt, this.state.get(k)?.auto === true); } catch (e) { this.logOnce(wt, e); }
+            if (ok) this.refreshed(wt, false);
+          }
+          if (first) {
+            // A first reading is no news: store this week's marks, send nothing.
+            if (this.text(wt) !== null) this.marksOf(wt, r.repoName, this.recompute(wt));
+            continue;
           }
           this.maybeNotify(wt, r.id, r.repoName, this.recompute(wt));
         } catch (e) { this.logOnce(wt, e); }
@@ -302,11 +329,13 @@ export function createHealthWatch(root: string, notify: HealthWatchDeps["notify"
   return new HealthWatch({
     root, notify,
     repos: async () => (await discoverTargets(root)).filter((t) => t.isPrimary).map((t) => ({ id: t.id, repoName: t.displayName || t.repoName /* the name a push SAYS; the id is the key */, worktreePath: t.worktreePath })),
-    refresh: async (wt) => {
+    mayStart: (wt) => canReadRepoHealth(wt) && optInChoices(wt)["repo-health"] !== "declined",
+    refresh: async (wt, measureOnly) => {
       // A repo's own committed engine never runs unapproved: skip, don't throw.
       // (The bundled engine's refresh drops the repo's own commands by itself.)
       if (resolveRepoHealthEngine(wt)?.kind === "repo" && !engineApproved(wt, root)) return false;
-      return (await refreshRepoHealth(wt, { root })).last?.ok === true;
+      if (measureOnly && !(await ensureStateDirIgnored(wt))) return false;
+      return (await refreshRepoHealth(wt, { root }, null, { measureOnly })).last?.ok === true;
     },
     warnChars: (wt) => contextLimitsFor(wt).effective.maxChars ?? null,
   });

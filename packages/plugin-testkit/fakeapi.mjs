@@ -89,7 +89,7 @@ export function fakeApi(opts = {}) {
   const calls = {
     backend: [], onHook: [], setStatus: [], onSettings: [], on: [], setBadge: [], decision: [], ruleAllows: [], bind: [], log: [],
     seedSettings: [], suggest: [], answer: [], meter: [], notify: [], notifyDone: [], notifyDoneExcept: [], revokeDevice: [], handle: [], push: [], handToAgent: [], route: [], stream: [],
-    offerFile: [], screenReader: [], storeReader: [], thermalReader: [], usageProbe: [], setupCheck: [], setupFinding: [], setupFix: [], sessionOf: [],
+    offerFile: [], screenReader: [], storeReader: [], thermalReader: [], screenCapture: [], usageProbe: [], setupCheck: [], setupFinding: [], setupFix: [], optIn: [], sessionOf: [],
   };
   const screens = new Map();
   const sessions = new Map();
@@ -152,6 +152,7 @@ export function fakeApi(opts = {}) {
     setupCheck: (fn) => reg(calls.setupCheck, fn),
     setupFinding: (fn) => reg(calls.setupFinding, fn),
     setupFix: (fid, fn) => reg(calls.setupFix, { id: fid, fn }),
+    optIn: (oid, fn) => reg(calls.optIn, { id: oid, fn }),
     handle: (method, fn) => reg(calls.handle, { method, fn }),
     push: (event, data) => { calls.push.push({ event, data }); return null; },
     handToAgent: async (repoId, prompt, o) => { calls.handToAgent.push({ repoId, prompt, opts: o }); return { ok: false, reason: "fake" }; },
@@ -168,6 +169,7 @@ export function fakeApi(opts = {}) {
     screenReader: (name, reader) => reg(calls.screenReader, { name, reader }),
     storeReader: (name, reader) => reg(calls.storeReader, { name, reader }),
     thermalReader: (name, reader) => reg(calls.thermalReader, { name, reader }),
+    screenCapture: (name, capture) => reg(calls.screenCapture, { name, capture }),
     usageProbe: (def) => reg(calls.usageProbe, def),
     hookSink: () => opts.sink ?? `http://127.0.0.1:9/api/plugin/${id}/hook`,
     onHook: (fn, o) => reg(calls.onHook, { fn, opts: o }),

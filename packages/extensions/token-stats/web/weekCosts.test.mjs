@@ -21,7 +21,7 @@ test("rows: newest first, uncovered weeks left out, bars against the dearest", (
 
 test("takeaway: a figure no row prints — the median, and the running week against it", () => {
   const rows = weekCostRows([cell(3, 3000), cell(2, 1000), cell(1, 0), cell(0, 500)]);
-  assert.equal(weekCostTakeaway(rows), "Median of 2 finished weeks: $2,000; this week so far is 25% of that.");
+  assert.equal(weekCostTakeaway(rows), "Median of 2 finished weeks: $2,000.00; this week so far is 25% of that.");
 });
 
 test("takeaway: one finished week, and none", () => {

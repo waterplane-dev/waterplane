@@ -14,14 +14,15 @@
 import { createServer } from "node:net";
 import { accessSync, constants, existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { tailscaleBin, serveHttpsUrl, lanIps } from "./net.js";
+import { tailscaleBin, serveFrontDoors, lanIps } from "./net.js";
 import { dictateStatusLive } from "./dictate.js";
 import { builtinDoctorChecks, externalDoctorChecks } from "./plugins/builtin.js";
 import { hostSecretDir } from "./secrets.js";
 import { ptyMax, ptyOpen } from "./ptycap.js";
 import { lanIdentityPresent } from "./lanid.js";
-import { lanTlsDoctor } from "./lantls.js";
+import { lanBrowserDoctor, lanTlsDoctor } from "./lantls.js";
 import { env } from "./env.js";
+import { aliasesWithoutCertificate } from "./origin.js";
 import { logTag, BRAND, envName, claudeConfigDirFromEnv, NODE_MIN, nodeMeetsMin } from "@waterplane/shared";
 import { homedir, release } from "node:os";
 import { findKeepTask, INTEROP_PROBE, interopFromProbe, isWsl, keepAliveCommand, nativeWindowsCheck, wslChecks } from "./doctorwsl.js";
@@ -391,7 +392,7 @@ function checkReachability(i: DoctorInput): Check {
       id: "reachable",
       status: "warn",
       detail: `no Tailscale IP; bound to the LAN via ${envName("ALLOW_PUBLIC")}=1`,
-      fix: "Set a LAN password in Settings → LAN access. Until you do, LAN devices are refused.",
+      fix: "Set a LAN password in Settings › Connection › LAN password. Until you do, LAN devices are refused.",
     };
   }
   return {
@@ -419,7 +420,7 @@ export function checkLan(i: Pick<DoctorInput, "root" | "port" | "allowPublic">, 
       id: "lan",
       status: "warn",
       detail: `LAN bound at ${at} (${envName("ALLOW_PUBLIC")}=1) but no password is set — every LAN device is refused`,
-      fix: "Set a LAN password in Settings → LAN access from this machine or over Tailscale.",
+      fix: "Set a LAN password in Settings › Connection › LAN password from this machine or over Tailscale.",
     };
   }
   const identity = lanIdentityPresent(i.root);
@@ -431,10 +432,31 @@ export function checkLan(i: Pick<DoctorInput, "root" | "port" | "allowPublic">, 
   };
 }
 
+/**
+ * `host-names`: an `ALLOWED_HOSTS` name nobody vouches for (`origin.ts` `unverifiedName`) is asked for
+ * the password even on this machine and over Tailscale. Quiet when there is none.
+ */
+export function checkHostNames(i: Pick<DoctorInput, "port">, names: string[] = aliasesWithoutCertificate()): Check | null {
+  if (!names.length) return null;
+  return {
+    id: "host-names",
+    status: "warn",
+    detail: `${names.join(", ")} (${envName("ALLOWED_HOSTS")}) asks for the LAN password, on this machine and over Tailscale too: another device on the network could answer for such a name`,
+    fix: `Behind a reverse proxy with a certificate, list its https origin in ${envName("ALLOWED_ORIGINS")}. Otherwise open the Tailscale address, or http://localhost:${i.port} here, where no password is asked.`,
+  };
+}
+
 /** `lan-tls`: the encrypted LAN port, its number and short pin, or that it is off and why (`lantls.ts`). Always a row: "off" is the answer to the first thing a person checks. */
 export function checkLanTls(i: Pick<DoctorInput, "root" | "port" | "allowPublic">, ips: string[] = lanIps()): Check {
   const hostEnv = env("HOST");
   return { id: "lan-tls", ...lanTlsDoctor({ root: i.root, allowPublic: i.allowPublic, plainPort: i.port, boundLan: ips, binds: hostEnv ? [hostEnv] : ips }) };
+}
+
+/** `lan-browser`: the certificate a laptop's browser trusts on the LAN (`lanca.ts`). No row when none was issued. */
+export function checkLanBrowser(i: Pick<DoctorInput, "root" | "port" | "allowPublic">, ips: string[] = lanIps(), now?: Date): Check | null {
+  const hostEnv = env("HOST");
+  const row = lanBrowserDoctor({ root: i.root, allowPublic: i.allowPublic, plainPort: i.port, boundLan: ips, binds: hostEnv ? [hostEnv] : ips }, now);
+  return row && { id: "lan-browser", ...row };
 }
 
 /** How close to expiry is worth a line. A node key is good for 180 days by
@@ -523,7 +545,15 @@ async function checkSecureContext(i: DoctorInput): Promise<Check> {
   // is proxying to our port before claiming the phone is on plain HTTP.
   const bin = await tailscaleBin();
   if (bin) {
-    const front = await serveHttpsUrl(i.port);
+    const { usable: front, shadowed } = await serveFrontDoors(i.port);
+    if (!front && shadowed) {
+      return {
+        id: "secure-context",
+        status: "warn",
+        detail: `tailscale serve fronts port ${i.port} at ${shadowed}, but that address reads as a plain dial of this port: a request through it is asked for a token and is not advertised`,
+        fix: `Move it to another https port, e.g. \`tailscale serve --bg --https=8443 http://127.0.0.1:${i.port}\` (or --https=443 when the daemon is not on 80), then browse that name.`,
+      };
+    }
     if (front) {
       return {
         id: "secure-context",
@@ -712,8 +742,9 @@ export async function runChecks(i: DoctorInput, skipPort = false, skipNetwork = 
     overlaysCheck(),
     ...serviceChecks(),
     checkReachability(i),
-    ...[checkLan(i)].filter((c): c is Check => c !== null),
+    ...[checkLan(i), checkHostNames(i)].filter((c): c is Check => c !== null),
     checkLanTls(i),
+    ...[checkLanBrowser(i)].filter((c): c is Check => c !== null),
     ...(tskey ? [tskey] : []),
     secure,
     ...(port ? [port] : []),

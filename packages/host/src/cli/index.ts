@@ -72,6 +72,8 @@ usage: ${BRAND.slug} <command>
                               check for, apply, or undo a newer release (with its state)
   pair [--port N] [--json]    mint a pairing code on this desktop's running host and
                               print the link and code to add it from a phone
+  lan-cert issue|show|remove  a certificate for this desktop that a laptop's browser on
+                              the same network can trust (\`lan-cert help\`)
   help                        this text
 `;
 
@@ -107,6 +109,7 @@ export async function main(argv: string[]): Promise<number> {
     case "version": case "--version": case "-v": console.log(versionLine()); return 0;
     case "service": return lazy("./service.js", "service", rest);
     case "pair": return lazy("./pair.js", "pair", rest);
+    case "lan-cert": return lazy("./lancert.js", "lan-cert", rest);
     case "setup-check": return lazy("./setupcheck.js", "setup-check", rest);
     case "update": return lazy("./selfupdate.js", "update", rest);
     case "help": case "--help": case "-h": console.log(HELP); return 0;

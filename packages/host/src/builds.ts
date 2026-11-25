@@ -45,6 +45,7 @@ import { basename as basenameOf, extname, isAbsolute, join, relative, resolve, s
 import { createHash, randomUUID } from "node:crypto";
 import * as pty from "node-pty";
 import type { IPty } from "node-pty";
+import { userBinEnv } from "./ptyenv.js";
 import { spawnFailure } from "./ptycap.js";
 import type { BuildArtifact, BuildParamAnswer, BuildConfig, BuildRun, Intent } from "@waterplane/shared";
 import {
@@ -413,7 +414,7 @@ export class BuildManager extends EventEmitter {
       try {
         const { stdout } = await execFileP(SHELL, ["-lc", p.optionsCmd], {
           cwd: root, encoding: "utf8", timeout: OPTIONS_TIMEOUT_MS, maxBuffer: OPTIONS_MAX_BYTES,
-          env: { ...process.env, CI: "1" },
+          env: { ...process.env, ...userBinEnv(), CI: "1" },
         });
         const { options, total } = parseParamOptions(stdout);
         // stderr is deliberately not read: a listing that warns on the way is
@@ -578,7 +579,7 @@ export class BuildManager extends EventEmitter {
         // and here as well: a command that would rather read "$<PREFIX>PARAM_APP"
         // than trust a verbatim substitution gets to, and a script the button
         // calls can read one the command line never mentions.
-        env: { ...process.env, TERM: "xterm-256color", CI: "1", ...paramEnv(p.params ?? {}) },
+        env: { ...process.env, ...userBinEnv(), TERM: "xterm-256color", CI: "1", ...paramEnv(p.params ?? {}) },
       });
     } catch (e) {
       // A build is a PTY like a session is, so it fails the same way when the

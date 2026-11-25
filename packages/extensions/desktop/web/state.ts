@@ -7,11 +7,11 @@
  * The probe is re-asked when the view is opened and on every reconnect (`welcome`). While it has
  * never answered, the view counts as available — the view itself then says what the desktop says.
  */
-import { core, createStore, desktopScreenshot, extStorage, featureSheetId, pluginClient } from "@waterplane/sdk";
+import { core, createStore, desktopScreenshot, desktopScreenshotToClipboard, extStorage, featureSheetId, pluginClient } from "@waterplane/sdk";
 import { PLUGIN_ID, type DesktopMethods } from "../shared/wire.mts";
 import { cleanDraft } from "./keys.ts";
 import { cleanChoice, type QualityChoice } from "./quality.ts";
-import { SHOT_BUSY, SHOT_NO_REPO, SHOT_OFFLINE, entryAvailability, shotReceipt, type ProbeState } from "./words.ts";
+import { CLIP_SHOT_BUSY, SHOT_BUSY, SHOT_NO_REPO, SHOT_OFFLINE, clipShotReceipt, entryAvailability, shotReceipt, type ProbeState } from "./words.ts";
 
 const DESKTOP_SHEET = featureSheetId("desktop", "view");
 /** `DesktopMethods` is an interface (no implicit index signature); its mapped copy satisfies `PluginMethods`. */
@@ -128,12 +128,12 @@ export function setDraft(text: string): void {
 }
 
 /**
- * The screenshot button's state: whether one is being taken, and the receipt line the view shows
+ * The two screenshot buttons' state: which one is being taken, if any, and the receipt line the view shows
  * (in the picture's column, so it is seen in fullscreen too, where the app's toast sits under the
  * desktop). `file` is what the receipt's open button opens.
  */
 export interface ShotState {
-  busy: boolean;
+  busy: false | "file" | "clip";
   line: string | null;
   file: { repoId: string; relPath: string; mtime: number } | null;
 }
@@ -165,13 +165,26 @@ export async function takeDesktopShot(): Promise<void> {
   if (!repo) { shotLine({ busy: false, line: SHOT_NO_REPO, file: null }); return; }
   if (c.conn.status !== "open") { shotLine({ busy: false, line: SHOT_OFFLINE, file: null }); return; }
   c.say.track("action:desktop.shot");
-  shotLine({ busy: true, line: SHOT_BUSY, file: null });
+  shotLine({ busy: "file", line: SHOT_BUSY, file: null });
   const r = await desktopScreenshot(repo.id);
   shotLine({
     busy: false,
     line: shotReceipt(r, repo.repoName),
     file: "file" in r ? { repoId: repo.id, relPath: r.file.relPath, mtime: r.file.mtime } : null,
   });
+}
+
+/**
+ * The same capture into the desktop's OWN clipboard, so it can be pasted into an app over there; the
+ * picture never travels. Needs no repo. One capture at a time, whichever button.
+ */
+export async function copyDesktopShot(): Promise<void> {
+  if (shot.get().busy) return;
+  const c = core();
+  if (c.conn.status !== "open") { shotLine({ busy: false, line: SHOT_OFFLINE, file: null }); return; }
+  c.say.track("action:desktop.shot.clip");
+  shotLine({ busy: "clip", line: CLIP_SHOT_BUSY, file: null });
+  shotLine({ busy: false, line: clipShotReceipt(await desktopScreenshotToClipboard()), file: null });
 }
 
 /** The receipt's open: the viewer on that file, whose close comes back to the live view. */

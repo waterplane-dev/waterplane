@@ -25,24 +25,29 @@
  * `sightings`), plus the time `setupprefs.ts` remembered from a session's
  * history as it was recorded (`noteOptInSends`) — a closed session's history
  * is deleted with it. That stamps `row.sent`, which never changes `state`:
- * sent is not on. `requirements` asks the plugin registry
- * through `setupcontrib.ts` whether its fix is registered.
+ * sent is not on. The two `apk-*` offers read core's `apkRepoFacts` with the repo's download rule
+ * and the synced install list, both handed in by the route (absent ⇒ `unknown`). `requirements` asks the plugin registry
+ * through `setupcontrib.ts` whether its fix is registered; `links` asks the links extension
+ * (`api.optIn`), whose pins core never reads.
  */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { join } from "node:path";
 import {
-  OPT_INS, REPOHEALTH_OWN_FILE, isStandingSchedule, optInMarkedIds, optInMarker, ruleRecurs,
-  type BranchRules, type HistoryEntry, type Intent, type Lifecycle, type OptInRow, type OptInSent, type OptInSentStatus, type OptInState,
+  DEFAULT_AUTOPULL, OPT_INS, OPT_IN_PICKS_FILE, OPT_IN_PICKS_MAX_BYTES, REPOHEALTH_OWN_FILE, cleanOptInPicks, isStandingSchedule, optInMarkedIds, optInMarker, ruleRecurs,
+  type AppRepoFacts, type AutoPullConfig, type BranchRules, type HistoryEntry, type Intent, type Lifecycle, type OptInAnswer, type OptInPick, type OptInRow, type OptInSent, type OptInSentStatus, type OptInState,
 } from "@waterplane/shared";
-import { repoSharedDir } from "./branddirs.js";
+import { apkRepoFacts } from "./apkcheck.js";
+import { matches } from "./autopull.js";
+import { repoSharedDir, repoStateDir } from "./branddirs.js";
 import { seriesPathOf } from "./healthwatch.js";
-import { contributedFixIds } from "./plugins/setupcontrib.js";
+import { contributedFixIds, contributedOptIn } from "./plugins/setupcontrib.js";
 import { canReadRepoHealth } from "./repohealth.js";
 import { exposureWatchProbe } from "./exposurewatch.js";
 import { cachedBranchRules } from "./branchrules.js";
 import { LOCAL_CI_SWITCH, isRunnableHook } from "./localcistatus.js";
+import { containedReal } from "./paths.js";
 import { noteOptInSent, optInChoices, optInSentTimes } from "./setupprefs.js";
 
 export interface OptInDeps {
@@ -51,6 +56,8 @@ export interface OptInDeps {
   standingPrompts(worktree: string): string[] | null;
   /** Fix ids registered right now. Defaults to the plugin registry's. */
   fixIds?(): string[];
+  /** What the plugin behind an offer says. Defaults to the plugin registry's. */
+  plugin?(id: string, worktree: string): Promise<OptInAnswer | null>;
   /** The person's words. Defaults to the prefs store. */
   choices?(worktree: string): Record<string, "declined" | "done">;
   /** Where this offer's words are held right now (`optInSightings`); `null` = could not be read. */
@@ -59,6 +66,10 @@ export interface OptInDeps {
   sentTimes?(worktree: string): Record<string, number>;
   /** The CACHED branch rules (never a network read). Defaults to `branchrules.ts`'. */
   rules?(worktree: string): BranchRules | undefined;
+  /** This repo's download rule; absent ⇒ the probe answers `unknown`. */
+  pullRule?(worktree: string): AutoPullConfig;
+  /** The packages the phone lets install by themselves (synced); `null` = no phone sent the list. */
+  installAllow?(): string[] | null;
 }
 
 /** One place an offer's marked words are held right now. */
@@ -216,6 +227,46 @@ async function exposureWatch(wt: string): Promise<Probe> {
   return { relevant: true, ...exposureWatchProbe(wt) };
 }
 
+const NO_APP = "No Android app module found in this repo.";
+
+/** The repo's app modules as `apkRepoFacts` reads them. The build list is not needed here. */
+function appFacts(wt: string, pull: AutoPullConfig): Promise<AppRepoFacts[]> {
+  return apkRepoFacts({ id: "", repoName: "", worktreePath: wt }, [], pull, matches);
+}
+
+async function apkDownload(wt: string, deps: OptInDeps): Promise<Probe> {
+  const rule = deps.pullRule?.(wt);
+  const apps = await appFacts(wt, rule ?? DEFAULT_AUTOPULL);
+  if (!apps.length) return unfit(NO_APP);
+  if (!rule) return { relevant: true, state: "unknown", detail: "This repo's download rule could not be read." };
+  if (!rule.enabled) return { relevant: true, state: "off", detail: "This repo's download rule is off, so each new build stays on the desktop until you download it." };
+  const apk = apps[0].newestApk;
+  if (apps[0].autoPull.newestMatches === false && apk) {
+    const why = rule.maxBytes > 0 && apk.size > rule.maxBytes ? "it is over the rule's size cap" : "it is outside the rule's patterns";
+    return { relevant: true, state: "off", partial: true, detail: `The download rule is on but does not take the newest APK (${apk.rel}): ${why}. Downloads › rules changes it.` };
+  }
+  return { relevant: true, state: "on", detail: "This repo's download rule is on." };
+}
+
+async function apkInstall(wt: string, deps: OptInDeps): Promise<Probe> {
+  const apps = await appFacts(wt, DEFAULT_AUTOPULL);
+  if (!apps.length) return unfit(NO_APP);
+  const named = apps.filter((a) => a.pkg);
+  if (!named.length) return { relevant: true, state: "unknown", detail: "The app's package name is not a literal in its gradle file, so it could not be looked up." };
+  const allow = deps.installAllow?.() ?? null;
+  if (!allow) return { relevant: true, state: "unknown", detail: "No phone has told this desktop which apps may install by themselves." };
+  const off = named.filter((a) => ![a.pkg!, ...(a.variants ?? [])].some((p) => allow.includes(p)));
+  return off.length
+    ? { relevant: true, state: "off", detail: `Off for ${off.map((a) => a.pkg).join(", ")}: a new build waits until you tap install.` }
+    : { relevant: true, state: "on", detail: `On for ${named.map((a) => a.pkg).join(", ")}. Android's own permission to install is per phone; the app's card there shows it.` };
+}
+
+/** Off with the extension off too: the card then says where it is switched on. */
+async function links(wt: string, deps: OptInDeps): Promise<Probe> {
+  const a = await (deps.plugin ?? contributedOptIn)("links", wt);
+  return { relevant: true, ...(a ?? { state: "off" as const, detail: "The links extension is off on this desktop, so no links are kept." }) };
+}
+
 /** One row per catalog entry, in catalog order. Never throws: a probe that does becomes `unknown`. */
 export async function inspectOptIns(worktree: string, deps: OptInDeps): Promise<OptInRow[]> {
   const choices = (deps.choices ?? optInChoices)(worktree);
@@ -232,6 +283,9 @@ export async function inspectOptIns(worktree: string, deps: OptInDeps): Promise<
     "npm-supply-chain": () => npmSupplyChain(worktree),
     "gcp-cleanup": () => gcpCleanup(worktree),
     "exposure-watch": () => exposureWatch(worktree),
+    "links": () => links(worktree, deps),
+    "apk-download": () => apkDownload(worktree, deps),
+    "apk-install": () => apkInstall(worktree, deps),
     "local-ci-status": () => localCiStatus(worktree, deps),
   };
   return Promise.all(OPT_INS.map(async (d) => {
@@ -245,6 +299,20 @@ export async function inspectOptIns(worktree: string, deps: OptInDeps): Promise<
     if (sent) row.sent = sent;
     return row;
   }));
+}
+
+/**
+ * What an agent asked to look suggested (`optInLookPrompt`), off the repo's own state dir. Repo bytes:
+ * a plain file inside the worktree, bounded, strictly cleaned, and only ever SHOWN. Anything else is none.
+ */
+export function readOptInPicks(worktree: string): OptInPick[] {
+  try {
+    const p = containedReal(worktree, join(repoStateDir(worktree), OPT_IN_PICKS_FILE));
+    if (!p) return [];
+    const st = lstatSync(p);
+    if (!st.isFile() || st.size > OPT_IN_PICKS_MAX_BYTES) return [];
+    return cleanOptInPicks((JSON.parse(readFileSync(p, "utf8")) as { picks?: unknown } | null)?.picks);
+  } catch { return []; }
 }
 
 function realOf(p: string): string { try { return realpathSync(p); } catch { return p; } }

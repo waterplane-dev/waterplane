@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { ArrowDownToLine, ArrowUpFromLine, type LucideIcon } from "lucide-react";
+import { useDialogStep } from "./backStep";
 import { Button } from "./kit/Button";
 import { coveringKey, sharesFact, stow, stowVersion, subscribeStow, trayAdd, trayEntries, unstow } from "./stow";
 import { track } from "./usage";
@@ -93,6 +94,7 @@ export function StowCorner({ iconSize }: { iconSize: number }) {
   const rows = useSyncExternalStore(subscribeStow, trayEntries);
   const [open, setOpen] = useState(false);
   useEffect(() => { if (!rows.length) setOpen(false); }, [rows.length]);
+  useDialogStep(open && rows.length > 0, () => setOpen(false));
   if (!rows.length) return null;
   const n = rows.length;
   const label = `${n} hidden strip${n > 1 ? "s" : ""} — tap to bring ${n > 1 ? "them" : "it"} back`;

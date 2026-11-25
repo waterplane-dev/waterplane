@@ -212,6 +212,20 @@ const FAST_OFF_RE = /\bFast mode OFF\b|\bdoesn['’]t have fast mode\b|\bFast mo
 /** The refusal when an account cannot use it: `Fast mode unavailable: Fast
  *  mode requires usage credits · /usage-credits to turn them on` (2.1.30x). */
 const FAST_WHY_RE = /\bFast mode unavailable:([^·]*)/;
+/** The refusals with no `unavailable:` prefix (2.1.331: `Fast mode is not
+ *  available` when CLAUDE_CODE_DISABLE_FAST_MODE is set). Typed at a WORKING
+ *  session the answer is a right-aligned notice above the composer that goes
+ *  within seconds, else the command's `⎿` row: only those two places count, to
+ *  the row's end, so a sentence in the conversation is not a refusal. */
+const FAST_BARE_WHY_RE = /^Fast mode (?:is not available(?: on this provider| in the Agent SDK)?$|is currently unavailable$|has been disabled by your organization$|requires (?:usage credits|a paid subscription)\b)/;
+function bareFastRefusal(row: string): string | null {
+  const at = row.indexOf("Fast mode ");
+  if (at < 0) return null;
+  const lead = row.slice(0, at);
+  if (!lead.endsWith(" ".repeat(8)) && !lead.trimEnd().endsWith("⎿")) return null;
+  const said = row.slice(at).trimEnd();
+  return FAST_BARE_WHY_RE.test(said) ? said.split("·")[0].trim() : null;
+}
 
 /**
  * Fast mode as the NEWEST line above the composer says it, or null when no
@@ -221,15 +235,24 @@ export function readFastMode(screen: string): boolean | null {
   const rows = screen.split("\n");
   const frame = composerFrame(rows);
   for (let i = (frame ? frame.top : rows.length) - 1; i >= 0; i--) {
-    if (FAST_OFF_RE.test(rows[i])) return false;
+    if (FAST_OFF_RE.test(rows[i]) || bareFastRefusal(rows[i])) return false;
     if (FAST_ON_RE.test(rows[i])) return true;
   }
   return null;
 }
 
+/** How many rows above the composer are a fast-mode answer of the CLI's. A
+ *  count that GREW is a new answer; an old row still on screen is not one. */
+export function fastAnswerRows(screen: string): number {
+  const rows = screen.split("\n");
+  const frame = composerFrame(rows);
+  return rows.slice(0, frame ? frame.top : rows.length)
+    .filter((r) => FAST_OFF_RE.test(r) || FAST_ON_RE.test(r) || bareFastRefusal(r)).length;
+}
+
 /**
- * Why the CLI refused fast mode, when the NEWEST fast-mode row on screen is
- * its `Fast mode unavailable: …` refusal; null otherwise (on, off, or nothing).
+ * Why the CLI refused fast mode, when the NEWEST fast-mode row on screen is a
+ * refusal (either shape above); null otherwise (on, off, or nothing).
  */
 export function readFastRefusal(screen: string): string | null {
   const rows = screen.split("\n");
@@ -237,6 +260,8 @@ export function readFastRefusal(screen: string): string | null {
   for (let i = (frame ? frame.top : rows.length) - 1; i >= 0; i--) {
     const m = FAST_WHY_RE.exec(rows[i]);
     if (m) return m[1].trim() || "the CLI gave no reason";
+    const bare = bareFastRefusal(rows[i]);
+    if (bare) return bare;
     if (FAST_OFF_RE.test(rows[i]) || FAST_ON_RE.test(rows[i])) return null;
   }
   return null;

@@ -1,16 +1,45 @@
-# waterplane: Cost & Context for Claude Code and Copilot
+# waterplane: Claude Code Usage, Cost & Context (+ Copilot)
 
-What each Claude Code prompt cost, the context window over time, the token split, and what your `CLAUDE.md`, `AGENTS.md` and Copilot instructions cost every request. Read from files on this machine. GitHub Copilot's monthly quota on request. No telemetry.
+**See what each Claude Code prompt cost, why, and what is filling the context window.** Read from the log files already on this machine. No account, no telemetry, nothing to configure.
 
-![The Session view: a four-hour session's cost split by token kind, and its context window over time with a cold start and a compaction](media/listing-session.png)
+![What each prompt cost: thirteen prompts of one session with cost, context and requests, the dearest one picked](media/listing2-prompts.png)
 
-![All sessions: the last seven days' tokens and cost by kind, and where the week went, per repo and hour](media/listing-all.png)
+## Start here
 
-![Repo health: a fictional repo's health score over sixteen weeks, held down by its untested modules, with what each reading added or took away](media/listing-health.png)
+1. Install it and open a folder you have used Claude Code in.
+2. Click the waterplane icon in the activity bar, or run **waterplane: Open cost & context**.
 
-*Fictional repos, a generated session (its token shape scaled from real use) and a generated git history (`npm run screenshots`).*
+Your sessions are listed at once; reading every log on the machine takes a few seconds the first time. Costs are list prices, so on a subscription they compare prompts with each other and [are not your bill](#dollars-are-list-prices-not-your-bill).
 
-## What it shows
+## What you get
+
+- **The cost of every prompt**, with its tokens split into input, output, cache read and cache write, and the context it carried. The status bar shows the running session.
+- **The context window over time**, with every compaction and cold cache rebuild marked, and subagents in their own lanes.
+- **What your instructions cost on every request**: `CLAUDE.md`, `AGENTS.md`, Copilot instructions, rules and skills, each with who reads it. The figure also stands above the first line of the file itself.
+- **Findings**: what to change in the agent's setup, ranked. Nothing is changed for you.
+- **Copilot Chat** usage on this machine, and GitHub's own monthly quota when you ask for it (with the GitHub sign-in VS Code already holds).
+- **Repo health over time** from the folder's git history.
+- **The waterplane app in a tab**: your repos and their live Claude Code sessions, if you run the free [waterplane desktop](https://waterplane.dev) on this machine. Everything above works without it.
+
+### Where the money went
+
+![The Session view: a session's cost split by token kind, and its context window over time with a cold start and a compaction](media/listing2-session.png)
+
+### The whole week, per repo and hour
+
+![All sessions: the last seven days' tokens and cost by kind, and where the week went, per repo and hour](media/listing2-all.png)
+
+### Your live sessions in a tab
+
+![The waterplane app in an editor tab, in its demo: the repos on the left, a Claude Code session with its terminal and two new screenshots on the right](media/listing2-app.png)
+
+### Repo health
+
+![Repo health: a fictional repo's health score over sixteen weeks, held down by how few commits change a test, with what each reading added or took away](media/listing2-health.png)
+
+*Fictional repos and generated sessions (token shapes scaled from real use); the app tab shows the app's demo (`npm run screenshots`).*
+
+## Every view in detail
 
 Two parts: the **waterplane tree** in the activity bar on the left is the navigation, and the **panel** — an editor tab in the centre — shows the one view you picked there. Open both from the status bar item or with **waterplane: Open cost & context** from the command palette. Opened fresh, the panel shows **All sessions**, or the **Session** view while a session is live (written to in the last 30 minutes); while it stays open, hidden behind other tabs included, it keeps the view you left it on.
 
@@ -56,15 +85,22 @@ The status bar item follows the same rule. While a session is being worked on it
 
 With several workspace folders open, the panel follows the folder of your active editor; the tree's folder row picks another.
 
+## The app in a tab
+
+**waterplane: Open waterplane** (command palette, or the first row of the waterplane tree) opens the waterplane app in an editor tab: the same app as on the phone, with your repos and their live Claude Code sessions. It needs a waterplane desktop already running on this machine ([how to install it](https://github.com/waterplane-dev/waterplane/blob/main/docs/install.md)), at `http://127.0.0.1:8770` or at the loopback address in `waterplane.desktopUrl`. The extension never starts one and runs no command; when none answers, the tab says so and offers to check again.
+
+A tap on a link in the app opens it in your browser, the link icon at the top right of the tab opens the app itself there, and the refresh icon loads the tab afresh. The microphone and notifications do not work inside a VS Code tab; use the browser for those. In a remote window (SSH, WSL, a container, VS Code in a browser) the app is not opened: there, loopback is shared with everyone who has an account on that machine.
+
 ## Privacy
 
 - No telemetry. One network request, off until you turn it on: **read them from GitHub** on All sessions › Copilot Chat reads `api.github.com/copilot_internal/user` with the GitHub sign-in VS Code already holds — GitHub's internal endpoint, so a shape the extension does not know shows as no figure — then again every 10 minutes. **stop reading GitHub** in the same place turns it off.
-- Off until you turn it on: **the waterplane desktop on this machine** (`waterplane.desktopUrl`, or the switch at the top of All sessions) — plain `GET`s of its read-only token routes, and only to a loopback address (`127.0.0.1`, `localhost`, `::1`); any other host in the setting is refused, and nothing is sent but the request.
+- Off until you turn it on: **token readings from the waterplane desktop on this machine** (`waterplane.desktopUrl`, or the switch at the top of All sessions) — plain `GET`s of its read-only token routes, and only to a loopback address (`127.0.0.1`, `localhost`, `::1`); any other host in the setting is refused, and nothing is sent but the request.
+- Only after you run **waterplane: Open waterplane**: one `GET` of `/api/health` per check at that same loopback address (or the default one, when the setting is empty), then the app's own page from it, in a frame that can show no page from any other address. The framed app can ask the extension for one thing, to open an `http` or `https` link in your browser; it cannot read your files, your clipboard or the editor through it. In a remote window nothing is contacted.
 - It reads only the `claude` CLI's local logs under `~/.claude/projects` (or `CLAUDE_CONFIG_DIR`), plus the agent-instruction files listed above in your workspace folder.
 - The repo-health engine runs `git` on this machine against the folder's own history — read-only object reads (`rev-list`, `log`, `ls-tree`, `cat-file`); it never runs `git fetch`, `pull` or `push`, never touches the index or the working tree, and writes its series only into VS Code's global storage for this extension. `dist/healthworker.mjs` is the one file that can start a process, and the only program it starts is `git` — never a command a repo declares in `.waterplane-shared/health.json`.
 - It reads, and never writes, a waterplane series already in your folder (`.waterplane/repohealth*.jsonl`).
 - It writes only its own cache and series, in VS Code's global storage for this extension.
-- The one thing it opens in a browser is a link to waterplane.dev or the extension marketplace, when you click it.
+- What it opens in a browser, when you click it: a link to waterplane.dev or the extension marketplace, and from the app tab the app itself, its install page, or a link in the app.
 
 ## Dollars are list prices, not your bill
 
@@ -82,6 +118,9 @@ Costs are what the API would have charged at published list prices (as of the da
 ## Commands
 
 - **waterplane: Open cost & context**
+- **waterplane: Open waterplane**: the app in an editor tab.
+- **waterplane: Open in browser**: the app tab's app in your browser, while that tab is active.
+- **waterplane: Reload the app tab**: checks for the desktop again and loads the tab afresh, while it is active.
 - **waterplane: Re-read Claude Code logs**
 - **waterplane: Copy an optimisation prompt**
 - **waterplane: Measure repo health from git history** (`waterplane.healthRefresh`): opens the Repo health view and measures the active folder.
@@ -90,7 +129,7 @@ Costs are what the API would have charged at published list prices (as of the da
 
 waterplane is also a phone app that remote-drives the real `claude` CLI on your desktop over Tailscale, with these same cost and context readings on the phone. See [waterplane.dev](https://waterplane.dev).
 
-"Claude Code" is named here only to say what the logs come from. This extension is not made or endorsed by Anthropic.
+"Claude Code" and "Copilot" are named here only to say whose logs are read. This extension is not made or endorsed by Anthropic, GitHub or Microsoft.
 
 ## License
 

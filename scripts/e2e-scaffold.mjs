@@ -38,7 +38,7 @@ bootWait(PORT, 900, async () => {
     }
 
     const ignore = readFileSync(join(r.path, ".gitignore"), "utf8");
-    check([`${STATE}/`, ".claude/inbox/", ".claude/outbox/"].every((l) => ignore.includes(l)), "gitignore covers the working dirs");
+    check([`${STATE}/`, "\n.claude/inbox\n", "\n.claude/outbox\n", "\n.outbox\n"].every((l) => ignore.includes(l)), "gitignore covers the working dirs");
     check(git(r.path, "status", "--porcelain") === "", "working tree clean after the initial commit");
 
     const readme = readFileSync(join(r.path, "README.md"), "utf8");
@@ -48,6 +48,33 @@ bootWait(PORT, 900, async () => {
     // The seeded file is the agent's first context in this repo — an unnamed
     // "this repository" tells it nothing the path didn't already say.
     check(claudeMd.includes("fresh-proj"), "CLAUDE.md names the project");
+
+    // Ticked options need the token the sheet's own read minted, from a browser's Origin.
+    const opts = await fetch(base + "/api/repo/options").then((x) => x.json());
+    check(opts.options.some((o) => o.id === "auto-compact") && !!opts.confirm, "the desktop lists its set-up options");
+    const create = (body, headers = { origin: base }) => fetch(base + "/api/repo", { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) }).then(async (x) => ({ status: x.status, ...(await x.json()) }));
+    const noTok = await create({ name: "ticked", options: ["auto-compact"] });
+    const noOrigin = await create({ name: "ticked", options: ["auto-compact"], confirm: opts.confirm }, {});
+    check(noTok.status === 403 && noOrigin.status === 403 && !existsSync(join(ROOT, "ticked")), "options without the token or an Origin are refused and nothing is created");
+    const ticked = await create({ name: "ticked", options: ["auto-compact"], confirm: opts.confirm });
+    check(ticked.notes?.length === 1 && !ticked.warning, "the ticked option is reported");
+    check(git(ticked.path, "ls-files").split("\n").includes(".claude/settings.json"), "what it wrote is in the first commit");
+    const again = await create({ name: "ticked2", options: ["auto-compact"], confirm: opts.confirm });
+    check(again.status === 403, "the token works once");
+
+    // R-onboarding-033: the repo it made says this desktop has a set-up page, the listing offers it, and the
+    // mark (Back, skip, done) ends the offer. Idempotent, for an unknown repo a 404, never a GET.
+    check(r.setupPage === true, "a created repo says the desktop has a set-up page");
+    const listed = async () => (await (await fetch(base + "/api/repos")).json()).targets.find((t) => t.worktreePath === realpathSync(r.path) || t.worktreePath === r.path);
+    const offered = await listed();
+    check(offered?.setupUnseen === true, "the new repo is listed as unseen");
+    check(offered?.worktreePath === r.path, `the create answers the path the listing has (${r.path} / ${offered?.worktreePath})`);
+    const seen = (id, method = "POST") => fetch(`${base}/api/repos/${id}/optins/seen`, { method, ...(method === "POST" ? { headers: { "content-type": "application/json" }, body: "{}" } : {}) });
+    check((await seen(offered.id, "GET")).status === 404, "the mark is not a GET");
+    check((await listed()).setupUnseen === true, "a GET marked nothing");
+    for (const n of ["marked", "marked again"]) { const s = await seen(offered.id); check(s.status === 200 && (await s.json()).ok === true, `the page is ${n}`); }
+    check((await listed()).setupUnseen === undefined, "a seen repo is offered nothing");
+    check((await seen("no-such-repo")).status === 404, "an unknown repo is a 404");
 
     // Opting out keeps the old bare behaviour.
     const bare = await post("/api/repo", { name: "bare", setup: false });

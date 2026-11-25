@@ -6,11 +6,11 @@
  */
 import { useState } from "react";
 import { KeyRound, Lock, RotateCw } from "lucide-react";
-import { BRAND } from "@waterplane/shared";
+import { BRAND, NAME_SIGNIN_HOURS } from "@waterplane/shared";
 import { api } from "../../api";
 import { heldTokens, sealedMode } from "../../deviceToken";
-import { goneLead, shellCase } from "./logic";
-import { isNativeShell, requestHostSetup } from "../../hostUrl";
+import { askedName, goneLead, shellCase } from "./logic";
+import { hostBase, isNativeShell, requestHostSetup } from "../../hostUrl";
 import { useStore } from "../../sdk";
 import { gate } from "./store";
 import { unlocked } from "./actions";
@@ -53,6 +53,8 @@ export function AuthGate({ reconnect, unlockSeal }: {
   };
 
   if (!authGate) return null;
+  const name = askedName(authGate.kind, new URL(hostBase() ?? location.href).hostname);
+  const distrust = <SetNote as="p">The desktop does not trust this name, because another device on the network could answer for it: <code>{name}</code></SetNote>;
   const shell = authGate.enabled ? shellCase(isNativeShell(), sealedMode() && !heldTokens()) : null;
   if (shell) {
     return (
@@ -61,7 +63,7 @@ export function AuthGate({ reconnect, unlockSeal }: {
           <div className="auth-title"><Lock size={20} style={{ verticalAlign: "-3px", marginRight: 6 }} />Locked</div>
           {shell === "locked"
             ? <SetNote as="p">This desktop needs this phone's sign-in, which is locked.</SetNote>
-            : <SetNote as="p">{goneLead(authGate.kind)} On the desktop run <code>{BRAND.slug} pair</code>, then tap pair with code.</SetNote>}
+            : <>{name && distrust}<SetNote as="p">{name ? "" : `${goneLead(authGate.kind)} `}On the desktop run <code>{BRAND.slug} pair</code>, then tap pair with code.</SetNote></>}
           {authErr && <SetNote className="oracle-warn" style={{ marginTop: 8 }}>{authErr}</SetNote>}
           {shell === "locked" && (
             <Button variant="primary" style={{ marginTop: 12, width: "100%" }} onClick={() => void doUnseal()}>
@@ -81,7 +83,12 @@ export function AuthGate({ reconnect, unlockSeal }: {
         <div className="auth-title"><Lock size={20} style={{ verticalAlign: "-3px", marginRight: 6 }} />Locked</div>
         {authGate.enabled ? (
           <>
-            <SetNote as="p">This device is on the {authGate.kind === "lan" ? "local network" : "network"}, which is password-protected. Enter the password to continue.</SetNote>
+            {name
+              ? <>
+                {distrust}
+                <SetNote as="p">Better: open the desktop by its Tailscale address, or as localhost on the desktop itself.</SetNote>
+              </>
+              : <SetNote as="p">This device is on the {authGate.kind === "lan" ? "local network" : "network"}, which is password-protected. Enter the password to continue.</SetNote>}
             {/* The button stays pressable with nothing typed and SAYS why it did not
                 unlock, rather than greying out (`Unavailable.tsx`). */}
             <form onSubmit={(e) => { e.preventDefault(); if (!authPw) setAuthErr("type the password first"); else if (!authBusy) doLogin(); }}>
@@ -93,12 +100,20 @@ export function AuthGate({ reconnect, unlockSeal }: {
               <Button variant="primary" type="submit" style={{ marginTop: 12, width: "100%" }}>
                 {authBusy ? "checking…" : "unlock"}
               </Button>
+              {name && <SetNote style={{ marginTop: 12 }}>A sign-in here ends after {NAME_SIGNIN_HOURS} hours. Until then, whoever answers for this name could use it.</SetNote>}
             </form>
           </>
         ) : (
           <>
-            <SetNote as="p">This device is on the local network, and LAN access is protected — but no password has been set yet. Set one from the desktop itself, or from a phone connected over Tailscale (Settings → LAN access), then retry.</SetNote>
-            <Button style={{ marginTop: 12 }} onClick={() => reconnect()}><RotateCw size={ICON} /> retry</Button>
+            {name
+              ? <>
+                {distrust}
+                <SetNote as="p">Open the desktop by its Tailscale address, or as localhost on the desktop itself. To use this name, set a password there first (Settings › Connection › LAN password), then retry.</SetNote>
+              </>
+              : <SetNote as="p">This device is on the local network, and LAN access is protected — but no password has been set yet. Set one from the desktop itself, or from a phone connected over Tailscale (Settings › Connection › LAN password), then retry.</SetNote>}
+            <Button style={{ marginTop: 12, width: "100%" }} onClick={() => reconnect()}><RotateCw size={ICON} /> retry</Button>
+            {/* In the shell the address is the app's own, and this card covers Settings. */}
+            {isNativeShell() && <Button style={{ marginTop: 12, width: "100%" }} onClick={requestHostSetup}><KeyRound size={ICON} /> pair with code</Button>}
           </>
         )}
       </div>

@@ -34,13 +34,12 @@ export async function loadRoot(): Promise<RootInfo | null> {
   }
 }
 
-/** The one door: Settings' row and the first-start ask both open the sheet here. */
+/** Settings' row and the first-start ask open the sheet here; the sheet reads the folder itself. */
 export function openCodeFolder(): void {
   const c = core();
   c.say.track("overlay:codefolder");
   if (rootUi.get().phase === "idle") rootUi.set({ phase: "idle", readError: null });
   c.nav.open("codefolder");
-  void loadRoot();
 }
 
 /** The sheet stopped being on top (× , Back, Later, a finished save): this guess is not asked again unprompted. */

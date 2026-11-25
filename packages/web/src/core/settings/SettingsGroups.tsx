@@ -54,6 +54,7 @@ export function AppearanceRows() {
   const icScale = usePref("icScale");
   const tZoom = usePref("tZoom");
   const tabsOn = usePref("tabsOn");
+  const logoCount = usePref("logoCount");
   const tabsN = usePref("tabsN");
   const tabsSort = usePref("tabsSort");
   const tabsMax = usePref("tabsMax");
@@ -160,6 +161,13 @@ export function AppearanceRows() {
         }}
         note="A row of the sessions you have open, above every screen, each one coloured by its repo. Off by default at phone width — the open-tabs button then sits at the right end of the desktop strip; on by default on a wide screen. Each width remembers its own choice."
         more={<p>It answers the question the launcher makes you work for: what else is open, and can I get back to it without leaving this screen. Each tab is named in four words or fewer by the desktop, once, off the summary it already writes — until then it wears the repo and branch it has everywhere else. The × closes that session and asks first; the conversation is kept either way.</p>}
+      />
+
+      <SetSwitch
+        id="logo-count" label="number on the logo" icon={Layers}
+        on={logoCount}
+        onChange={() => setPref("logoCount", !logoCount)}
+        note="How many tabs are open, on the main screen's logo at phone width. Off, tapping the logo still opens the list, and the number stays in the lines at the top."
       />
 
       {/* How many FIT — never how many exist. Everything past this
@@ -549,7 +557,7 @@ export function WritingRows({ voice }: { voice: VoiceFacts }) {
         note={hintCfg.mode === "first"
           ? "The handful of actions whose icon can't be guessed explain themselves the first time you tap them, then never again."
           : hintCfg.mode === "press"
-            ? "Nothing interrupts a tap. Long-press any button to read what it does."
+            ? "Long-press any button to read what it does. Only the logo explains itself on a tap, until you tell it not to."
             : "No hints at all — not even on long-press."}
         more={<p>Hold, re-aim, fork, fan out and keep-newest are the ones that cannot be guessed from an icon. A long press never fires the button it explains.</p>}
       />

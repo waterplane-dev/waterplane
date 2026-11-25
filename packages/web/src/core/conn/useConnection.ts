@@ -54,6 +54,7 @@ export function useConnection() {
   const noteWelcome = (msg: Welcome) => setInfo({
     tailscaleIp: msg.tailscaleIp, tailscaleBin: msg.tailscaleBin, root: msg.root,
     httpsUrl: msg.httpsUrl ?? null, lanIps: msg.lanIps, hostPort: msg.port, auth: msg.auth,
+    tlsName: msg.tlsName, tlsNameUntil: msg.tlsNameUntil,
   });
   // Set when the socket came back with offline-queued entries still parked and
   // the confirmation is pending. While it holds, unforced flushes are refused,

@@ -54,6 +54,9 @@ page: three questions, a list of what it will create, one Go.
 The page it builds lands in `.claude/outbox/` and opens on the phone; the session then opens with a
 suggested first prompt in the box. It needs a connected desktop, so there is no demo for it.
 
+A project you create or clone from the phone opens its session with a set-up page on top: tick what
+this repo should have, or skip it. It stays in the repo's ⋯ menu › *set up this repo*.
+
 ## What Claude made, on your phone
 
 <a href="https://waterplane-dev.github.io/media/gallery-and-files-a79ed45db1.mp4"><img src="media/gallery-and-files.gif" width="270" alt="The gallery lists what Claude left in the outbox: a markdown file, a live HTML page and a screenshot open on the phone"></a>

@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { forgetKept, keepCovered, restoreKept, routeStack, setSheetKeeper } from "./backStep.ts";
-import { routeKey } from "./routing.ts";
+import { routeKey, stepKey } from "./routing.ts";
 
 function setup() {
   let cut = "the 10 waiting";
@@ -261,6 +261,11 @@ test("routeLanding: every branch of the routing effect and what it files", async
   assert.deepEqual(routeLanding([L, sc, p], 2, live, false, -1, { from: "pending:a1", to: "demo-7" }), { kind: "rename", how: "stay" });
   assert.deepEqual(routeLanding([L, sc, p], 2, live, false, -1), { kind: "push", how: "push" }, "a tap onto another session is a push");
   assert.deepEqual(routeLanding([L, sc, p], 2, S("demo-8", null), false, -1, { from: "pending:a1", to: "demo-7" }), { kind: "push", how: "push" });
+  // with a dialog's step over it, a finished screen cannot be replaced or renamed from above: it goes vacant (R-navigation-025)
+  const over = (k) => stepKey(k, 7);
+  assert.deepEqual(routeLanding([L, sc, sheetSend, over(sheetSend)], 3, p, false, -1), { kind: "push", how: "push", vacate: 2 }, "Start through a hint card");
+  assert.deepEqual(routeLanding([L, p, over(p)], 2, live, false, -1, { from: "pending:a1", to: "demo-7" }), { kind: "rename", how: "stay", under: 1 }, "a picker open while the session starts stays open over the session");
+  assert.deepEqual(routeLanding([L, sc, over(sc)], 2, live, false, -1), { kind: "push", how: "push" }, "a sheet that stays is kept");
 });
 
 test("wiring: the routing effect files through routeLanding, once", async () => {
@@ -484,4 +489,284 @@ test("wiring: the sheet table is the route layer's leave dispatcher; App holds n
   assert.match(f, /\?\.onLeave\?\.\(reason\)/);
   const app = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(app, /runSheetLeave|onLeave|leaveReason/, "a leave is the route's, never an App effect's");
+});
+
+// ── A dialog's retire is an async history.go: a push made while it is in flight must survive ──
+// The retire (50 ms after the answer) pops the dead entry with `history.go(-1)`. A route push landing
+// between its start and its pop was done from the dead entry, and the traversal then ran from the NEW
+// entry and landed back on the dead one: the session just opened disappeared. `landRoute` now waits
+// for the retire's pop (`whenRetired`), and that pop is housekeeping that never re-derives the route.
+
+async function asyncHistory(latencyMs) {
+  const { landPop } = await import("./core/route/landRoute.ts");
+  const h = {
+    entries: [{ state: null }], at: 0, route: null,
+    get state() { return h.entries[h.at].state; },
+    pushState(s) { h.entries.length = h.at + 1; h.entries.push({ state: s }); h.at++; },
+    replaceState(s) { h.entries[h.at] = { state: s }; },
+    go(n) { setTimeout(() => { h.at += n; const r = landPop(); if (r) h.route = r.activeId; }, latencyMs); },
+    back() { h.go(-1); },
+  };
+  globalThis.history = h;
+  globalThis.location = { pathname: "/", search: "", hash: "" };
+  return h;
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+for (const [latency, pushAt] of [[2, 55], [15, 55], [15, 60], [2, 70]]) {
+  test(`a push ${pushAt} ms after a dialog answer survives the retire (traversal ${latency} ms)`, async () => {
+    const b = await import("./backStep.ts");
+    const { landRoute } = await import("./core/route/landRoute.ts");
+    const h = await asyncHistory(latency);
+    b.routeStack.keys = []; b.routeStack.depth = 0;
+    landRoute(null, null, null, true);
+    landRoute("s1", null, null, false);
+    h.route = "s1";
+    const retire = b.armStep(() => {}); // a Confirm over s1
+    retire(50);                          // answered: the entry is dead, popped in 50 ms
+    await sleep(pushAt);
+    h.route = "s2";                      // the continuation, after its await, opens another session
+    landRoute("s2", null, null, false);
+    await sleep(120);
+    assert.equal(h.route, "s2", "the popstate of the retire did not send the app back to s1");
+    assert.equal(h.state.navRoute, S("s2", null), "history stands on the new session's entry");
+    assert.equal(b.routeStack.keys[b.routeStack.depth], S("s2", null));
+    assert.equal(h.at, b.routeStack.depth, "entries and the stack are aligned");
+    assert.equal(b.isRetiring(), false);
+    delete globalThis.history; delete globalThis.location;
+  });
+}
+
+// ── Back among dead entries (R-navigation-025): a history whose traversals land later and whose entries carry URLs ──
+
+/** `latency(n)`: how long the n-th traversal takes. `app`: the route a pop set, landed as React's effect would. */
+async function urlHistory(latency = () => 2) {
+  const { landPop, landRoute } = await import("./core/route/landRoute.ts");
+  const b = await import("./backStep.ts");
+  let n = 0;
+  const h = {
+    entries: [{ state: null, hash: "" }], at: 0, inFlight: 0, most: 0, pops: 0,
+    get state() { return h.entries[h.at].state; },
+    put(s, url) { return { state: structuredClone(s), hash: url ? (url.includes("#") ? url.slice(url.indexOf("#")) : "") : h.entries[h.at].hash }; },
+    pushState(s, _t, url) { const e = h.put(s, url); h.entries.length = h.at + 1; h.entries.push(e); h.at++; globalThis.location.hash = e.hash; },
+    replaceState(s, _t, url) { h.entries[h.at] = h.put(s, url); globalThis.location.hash = h.entries[h.at].hash; },
+    go(d) {
+      h.inFlight++; h.most = Math.max(h.most, h.inFlight);
+      setTimeout(() => {
+        h.inFlight--;
+        if (h.at + d < 0) return;
+        const was = h.entries[h.at].hash;
+        h.at += d;
+        globalThis.location.hash = h.entries[h.at].hash;
+        h.pops++;
+        h.pop();
+        if (was !== h.entries[h.at].hash) h.pop(); // hashchange, read by the same handler
+      }, latency(n++));
+    },
+    back() { h.go(-1); },
+    pop() { const r = landPop(); if (r) { h.app = [r.activeId, r.overlay, null]; landRoute(...h.app, false); } },
+    to(...r) { h.app = r; landRoute(...r, false); },
+    boot(...r) { b.routeStack.keys = []; b.routeStack.depth = 0; h.app = r; landRoute(...r, true); },
+  };
+  globalThis.history = h;
+  globalThis.location = { pathname: "/", search: "", hash: "" };
+  return { h, b };
+}
+const dropGlobals = () => { delete globalThis.history; delete globalThis.location; };
+
+for (const n of [1, 2, 3]) {
+  test(`a Back within 50 ms of answering ${n} dialog${n > 1 ? "s" : ""} leaves the screen under them, and only that one`, async () => {
+    const { h, b } = await urlHistory();
+    h.boot(null, null, null); h.to("s1", null, null); h.to("s2", null, null);
+    const retires = Array.from({ length: n }, () => b.armStep(() => {}));
+    for (const r of retires.reverse()) r(50);
+    h.back();
+    await sleep(140);
+    assert.deepEqual(h.app, ["s1", null, null]);
+    assert.equal(h.at, 1); assert.equal(b.routeStack.depth, 1);
+    h.back(); await sleep(30);
+    assert.deepEqual(h.app, [null, null, null], "the next Back is one step too");
+    dropGlobals();
+  });
+}
+
+test("a Back that closes a dialog over an answered one closes that alone", async () => {
+  const { h, b } = await urlHistory();
+  h.boot(null, null, null); h.to("s1", null, null);
+  let closed = 0;
+  const first = b.armStep(() => {}); b.armStep(() => { closed++; });
+  first(50);
+  h.back();
+  await sleep(140);
+  assert.equal(closed, 1);
+  assert.deepEqual(h.app, ["s1", null, null]);
+  assert.equal(h.at, 1);
+  dropGlobals();
+});
+
+test("a Back on the dead entry of a Back still passing it is not lost when the retire fires meanwhile", async () => {
+  const { h, b } = await urlHistory(() => 20);
+  h.boot(null, null, null); h.to("s1", null, null); h.to("s2", null, null);
+  const r1 = b.armStep(() => {}), r2 = b.armStep(() => {});
+  r2(10); r1(10); // the retire is due while the Back passes the two
+  await sleep(1);
+  h.back();
+  await sleep(200);
+  assert.deepEqual(h.app, ["s1", null, null]);
+  assert.equal(h.at, b.routeStack.depth);
+  dropGlobals();
+});
+
+test("two answered dialogs retire one traversal at a time, and a route parked behind them survives", async () => {
+  const { h, b } = await urlHistory(() => 60); // slower than the 50 ms a dialog waits
+  h.boot(null, null, null); h.to("s1", null, null);
+  const r1 = b.armStep(() => {}), r2 = b.armStep(() => {});
+  r2(5);               // its pop starts at 5 ms and lands at 65
+  await sleep(15);
+  r1(5);               // due at 20: in flight, so it waits
+  await sleep(15);
+  h.to("s2", null, null); // the second answer opens a session, parked
+  await sleep(300);
+  assert.equal(h.most, 1, "never two traversals at once");
+  assert.deepEqual(h.app, ["s2", null, null]);
+  assert.equal(h.state.navRoute, S("s2", null));
+  assert.equal(h.at, b.routeStack.depth);
+  h.back(); await sleep(300);
+  assert.deepEqual(h.app, ["s1", null, null], "one Back from it, past the dead entry");
+  dropGlobals();
+});
+
+test("two answered dialogs with nothing parked leave no dead entry", async () => {
+  const { h, b } = await urlHistory(() => 60);
+  h.boot(null, null, null); h.to("s1", null, null);
+  const r1 = b.armStep(() => {}), r2 = b.armStep(() => {});
+  r2(5); await sleep(15); r1(5);
+  await sleep(300);
+  assert.equal(h.most, 1);
+  assert.equal(h.at, 1); assert.equal(b.routeStack.depth, 1); assert.equal(b.isRetiring(), false);
+  dropGlobals();
+});
+
+test("a dialog opened while a retire is in flight gets an entry of its own, after it", async () => {
+  const { h, b } = await urlHistory(() => 20);
+  h.boot(null, null, null); h.to("s1", null, null);
+  b.armStep(() => {})();     // answered: its pop is on the way
+  await sleep(2);
+  let closed = 0;
+  const open = b.armStep(() => { closed++; });
+  const never = b.armStep(() => {}); never(); // opened and closed before the pop landed: no entry
+  await sleep(60);
+  assert.equal(h.at, 2); assert.equal(b.routeStack.depth, 2);
+  assert.equal(h.entries.length, 3, "nothing left forward of it");
+  assert.equal(h.state.navRoute, b.routeStack.keys[2]);
+  h.back(); await sleep(60);
+  assert.equal(closed, 1); assert.deepEqual(h.app, ["s1", null, null]);
+  open();
+  dropGlobals();
+});
+
+test("after a reload, a dead step and a sheet the URL cannot bring back under a session cost no Back", async () => {
+  for (const build of [
+    (h, b) => { b.armStep(() => {})(50); h.to("s1", null, null); },       // a dialog whose answer opened a session
+    (h, b) => { b.armStep(() => {})(50); b.armStep(() => {})(50); h.to("s1", null, null); },
+    (h, b) => { h.to(null, "send", null); b.armStep(() => {}); h.to("s1", null, null); }, // a spent sheet under a hint card
+  ]) {
+    const { h, b } = await urlHistory();
+    h.boot(null, null, null);
+    build(h, b);
+    await sleep(80);
+    assert.equal(h.state.navRoute, S("s1", null));
+    assert.ok(h.at > 1, "there is an entry between the session and the list");
+    h.boot("s1", null, null); // the reload: history keeps its entries, memory starts over
+    h.back(); await sleep(40);
+    assert.deepEqual(h.app, [null, null, null]);
+    assert.equal(h.at, 0, "one press, all the way to the list");
+    dropGlobals();
+  }
+});
+
+test("after a reload, a sheet the URL does bring back is still a Back of its own", async () => {
+  const { h } = await urlHistory();
+  h.boot(null, null, null); h.to(null, "backlog", null); h.to("s1", null, null);
+  h.boot("s1", null, null);
+  h.back(); await sleep(20);
+  assert.deepEqual(h.app, [null, "backlog", null]);
+  dropGlobals();
+});
+
+test("a picker open while its pending session starts: Back closes the picker, the next one leaves the session", async () => {
+  for (const how of ["back", "pick", "pick then dead"]) {
+    const { h, b } = await urlHistory();
+    h.boot(null, null, null); h.to("pending:a1", null, null);
+    let open = true;
+    const retire = b.armStep(() => { open = false; });
+    if (how === "pick then dead") { retire(50); open = false; } // answered just before the session came
+    b.noteAdoption("pending:a1", "s9");
+    h.to("s9", null, null);
+    assert.equal(open, how !== "pick then dead", "the picker stays as it was");
+    assert.match(h.entries[h.at].hash, /s9/, "a reload now comes back on the session");
+    if (how === "back") h.back(); else if (how === "pick") retire();
+    await sleep(90);
+    if (how !== "pick") assert.equal(open, false);
+    assert.deepEqual(h.app, ["s9", null, null]);
+    assert.equal(h.at, 1); assert.equal(b.routeStack.depth, 1);
+    assert.equal(h.state.navRoute, S("s9", null), "the entry says the session now, not the pending screen");
+    assert.match(h.entries[1].hash, /s9/);
+    h.back(); await sleep(20);
+    assert.deepEqual(h.app, [null, null, null]);
+    dropGlobals();
+  }
+});
+
+test("a git view over a pending session keeps what it was opened on when a step is over it", async () => {
+  const { h, b } = await urlHistory();
+  h.boot(null, null, null); h.to("pending:a1", null, null);
+  b.openOn("git", { repoId: "X", failureId: null });
+  h.to("pending:a1", "git", null);
+  b.armStep(() => {});
+  b.noteAdoption("pending:a1", "s9");
+  h.to("s9", "git", null);
+  assert.deepEqual(b.screenParams("git"), { repoId: "X", failureId: null });
+  h.back(); await sleep(20);
+  assert.deepEqual(h.app, ["s9", "git", null]);
+  assert.deepEqual(b.screenParams("git"), { repoId: "X", failureId: null });
+  dropGlobals();
+});
+
+test("a dialog opened while a Back passes dead entries gets its entry afterwards, and retires", async () => {
+  const { h, b } = await urlHistory(() => 20);
+  h.boot(null, null, null); h.to("s1", null, null); h.to("s2", null, null);
+  const r1 = b.armStep(() => {}), r2 = b.armStep(() => {});
+  r2(80); r1(80);
+  h.back();            // lands on the first dead entry at 20, passes it until 40, leaves s2 until 60
+  await sleep(30);
+  let closed = 0;
+  const retire = b.armStep(() => { closed++; });
+  await sleep(120);
+  assert.deepEqual(h.app, ["s1", null, null]);
+  assert.equal(closed, 0);
+  assert.equal(b.pass.depth, null);
+  assert.equal(h.at, 2); assert.equal(b.routeStack.depth, 2);
+  retire();
+  await sleep(60);
+  assert.equal(h.at, 1); assert.equal(b.routeStack.depth, 1);
+  dropGlobals();
+});
+
+test("a pass that never lands does not hold up later clean-ups for good", async () => {
+  const { h, b } = await urlHistory();
+  h.boot(null, null, null); h.to("s1", null, null);
+  const r1 = b.armStep(() => {}), r2 = b.armStep(() => {});
+  r2(3000); r1(3000);
+  h.back();
+  await sleep(1);
+  const back = h.back; h.back = () => {}; // the traversal is swallowed
+  await sleep(20);
+  assert.notEqual(b.pass.depth, null);
+  h.back = back;
+  await sleep(1550);
+  assert.equal(b.pass.depth, null);
+  assert.equal(h.at, 1, "and the dead entry it stood on was taken away");
+  assert.equal(b.routeStack.depth, 1);
+  dropGlobals();
 });

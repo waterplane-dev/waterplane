@@ -10,12 +10,12 @@ import { logTag, type SessionInfo } from "@waterplane/shared";
 import { cachedBranchRules } from "../branchrules.js";
 import { gitBranches, gitCheckout, gitCommit, gitCreateBranch, gitDeleteBranch, gitBlob, gitDiff, gitPull, gitStage, gitStatus, isSecretFile, pushState, readTextFile, startPush, type GitRepoRef } from "../git.js";
 import { gitFetch, gitLog, gitShow, gitShowFile } from "../gitlog.js";
-import { FIX_SCOPE, confirmGate, fixBind, fixGateRefusal, gateRefusal, withFixConfirms } from "../confirmgate.js";
+import { FIX_SCOPE, confirmGate, fixBind, fixGateRefusal, gateRefusal, withFixConfirms, withOptInConfirms } from "../confirmgate.js";
 import { efficiencyState, isEfficiencyTarget, writeEfficiencyRules } from "../efficiencywrite.js";
 import { invalidateSetupCheck } from "../setupcheck/store.js";
 import { fixRepoCompliance, setCheckAccepted, setCheckIgnored, setCheckTriaged, setRepoContextLimits } from "../compliance.js";
-import { inspectOptIns, optInSightings, standingPromptsOf } from "../optins.js";
-import { setOptInChoice } from "../setupprefs.js";
+import { inspectOptIns, optInSightings, readOptInPicks, standingPromptsOf } from "../optins.js";
+import { markSetupSeen, setOptInChoice } from "../setupprefs.js";
 import type { ComplianceReport, OptInChoice, OptInReport, RepoTarget } from "@waterplane/shared";
 import { removeLeftover, worktreeLeftover, WorktreeGone, type LeftoverInput } from "../worktreeleftover.js";
 import { worktreeOwners } from "../worktreeowner.js";
@@ -108,6 +108,13 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
     const body = await readJson(req);
     const r = setOptInChoice(target.worktreePath, String(body?.id ?? ""), (body?.choice ?? null) as OptInChoice | null);
     json(res, r.ok ? { ok: true, report: await optInReport(target, ctx) } : { ok: false, error: r.error }, r.ok ? 200 : 400);
+    return true;
+  }),
+
+  // Somebody left this repo's set-up page (Back, skip or done): the launcher stops offering it.
+  route<RepoReq>("POST", "optins/seen", async ({ res, target }) => {
+    const r = markSetupSeen(target.worktreePath);
+    json(res, r, r.ok ? 200 : 500);
     return true;
   }),
 
@@ -305,8 +312,11 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
 
 async function optInReport(target: RepoTarget, ctx: ApiCtx): Promise<OptInReport> {
   const rows = await inspectOptIns(target.worktreePath, {
+    pullRule: ctx.pullRule, installAllow: ctx.installAllow,
     standingPrompts: (wt) => { try { return standingPromptsOf(ctx.intents.list(), wt); } catch { return null; } },
     sightings: (wt) => optInSightings(wt, ctx.intents.list(), ctx.sessions.list().map((s) => ({ cwd: s.cwd, history: ctx.sessions.getHistory(s.id) }))),
   });
-  return { repoId: target.id, repoName: target.repoName, rows, checkedAt: Date.now() };
+  const picks = readOptInPicks(target.worktreePath);
+  // No checklist row carries an offer's gated fix, so its confirm token is minted here, by the read that draws its button.
+  return withOptInConfirms(target.worktreePath, { repoId: target.id, repoName: target.repoName, rows, checkedAt: Date.now(), ...(picks.length ? { picks } : {}) });
 }

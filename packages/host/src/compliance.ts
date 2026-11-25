@@ -649,6 +649,22 @@ function ensureGitignore(worktree: string, entries: string[], exact = false): st
   return missing;
 }
 
+/** The `auto-compact` fix: this desktop's window into the repo's own settings file. */
+export function writeAutoCompact(wt: string): { applied: boolean; note: string } {
+  // A fixed relative path joined onto the trusted worktree (`contained`),
+  // then realpath-checked (`inRoot`) so a `.claude` symlinked out of the
+  // repo is refused rather than written through.
+  const lexical = contained(wt, PROJECT_SETTINGS_REL);
+  const path = lexical && inRoot(wt, lexical) ? lexical : null;
+  if (!path) return { applied: false, note: `${PROJECT_SETTINGS_REL} resolves outside this repo — left as it is` };
+  const value = autoCompactDefault();
+  const r = withAutoCompactWindow(readOrNull(path), value);
+  if (!r.ok) return { applied: false, note: `${PROJECT_SETTINGS_REL}: ${r.error}` };
+  mkdirSync(dirname(path), { recursive: true });
+  writeTextAtomicKeepMode(path, r.text, wt);
+  return { applied: true, note: `set "autoCompactWindow": "${value}" in ${PROJECT_SETTINGS_REL}` };
+}
+
 export function fixRepoCompliance(target: RepoTarget, fixes: string[]): ComplianceFixResult {
   const wt = target.worktreePath;
   const applied: string[] = [];
@@ -715,25 +731,9 @@ export function fixRepoCompliance(target: RepoTarget, fixes: string[]): Complian
     }
 
     if (fixes.includes("auto-compact")) {
-      // A fixed relative path joined onto the trusted worktree (`contained`),
-      // then realpath-checked (`inRoot`) so a `.claude` symlinked out of the
-      // repo is refused rather than written through.
-      const lexical = contained(wt, PROJECT_SETTINGS_REL);
-      const path = lexical && inRoot(wt, lexical) ? lexical : null;
-      if (!path) {
-        notes.push(`${PROJECT_SETTINGS_REL} resolves outside this repo — left as it is`);
-      } else {
-        const value = autoCompactDefault();
-        const r = withAutoCompactWindow(readOrNull(path), value);
-        if (!r.ok) {
-          notes.push(`${PROJECT_SETTINGS_REL}: ${r.error}`);
-        } else {
-          mkdirSync(dirname(path), { recursive: true });
-          writeTextAtomicKeepMode(path, r.text, wt);
-          applied.push("auto-compact");
-          notes.push(`set "autoCompactWindow": "${value}" in ${PROJECT_SETTINGS_REL}`);
-        }
-      }
+      const r = writeAutoCompact(wt);
+      if (r.applied) applied.push("auto-compact");
+      notes.push(r.note);
     }
 
     if (fixes.includes(ANDROID_TOOLCHAIN_FIX)) {

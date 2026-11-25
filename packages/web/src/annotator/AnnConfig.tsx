@@ -12,6 +12,7 @@
 import { ChevronDown, ChevronUp, X } from "lucide-react";
 import { ANN_CONTROLS, DEFAULT_LAYOUT, isDefaultLayout, moveControl, toggleHidden, type AnnPlace } from "../annLayout";
 import type { AnnModel } from "./useAnnotator";
+import { useDialogStep } from "../backStep";
 import { Button } from "../kit/Button";
 
 const PLACES: { v: AnnPlace; label: string }[] = [
@@ -22,6 +23,7 @@ const PLACES: { v: AnnPlace; label: string }[] = [
 
 export function AnnConfig({ m }: { m: AnnModel }) {
   const { layout, setLayout, setConfigOpen } = m;
+  useDialogStep(true, () => setConfigOpen(false));
   const labelOf = (id: string) => ANN_CONTROLS.find((c) => c.id === id)?.label ?? id;
   const last = layout.order.length - 1;
   return (

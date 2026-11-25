@@ -82,6 +82,16 @@ export function armPromptCheck(core: SessionCore, s: Session, delayMs: number): 
   s.promptTimer = setTimeout(() => { s.promptTimer = null; checkPrompt(core, s); }, delayMs);
 }
 
+/** A check that came due while this render was in flight is OWED, not dropped: the render
+ *  answers for the bytes it began with, and a box painted since may be the last thing the CLI
+ *  prints, so nothing else would ask again (`boxreadrender.test.mjs`). */
+function renderDone(core: SessionCore, s: Session): void {
+  s.promptRendering = false;
+  if (!s.promptOwed) return;
+  s.promptOwed = false;
+  armPromptCheck(core, s, PROMPT_SETTLE_MS);
+}
+
 /**
  * Prompt detection runs in two stages. The cheap stage scans an ANSI-stripped
  * byte window — fast enough for a per-quiet-period check, but a repaint-based
@@ -168,7 +178,7 @@ function checkPrompt(core: SessionCore, s: Session): void {
     setAwaiting(core, s, false);
     return;
   }
-  if (s.promptRendering) return;
+  if (s.promptRendering) { s.promptOwed = true; return; }
   s.promptRendering = true;
   const gen = s.promptGen;
   void core.screenText(s.info.id, 60)
@@ -261,7 +271,7 @@ function checkPrompt(core: SessionCore, s: Session): void {
       setAwaiting(core, s, dialog, screen);
     })
     .catch(() => { /* render is best-effort; leave the last state alone */ })
-    .finally(() => { s.promptRendering = false; });
+    .finally(() => renderDone(core, s));
 }
 
 /**
@@ -325,7 +335,7 @@ function checkNavBox(core: SessionCore, s: Session, reader: PluginScreenReader):
     setAwaiting(core, s, false);
     return;
   }
-  if (s.promptRendering) return;
+  if (s.promptRendering) { s.promptOwed = true; return; }
   s.promptRendering = true;
   const gen = s.promptGen;
   void core.screenCells(s.info.id, PROMPT_CELL_ROWS)
@@ -361,7 +371,7 @@ function checkNavBox(core: SessionCore, s: Session, reader: PluginScreenReader):
       setAwaiting(core, s, dialog);
     })
     .catch(() => { /* render is best-effort; leave the last state alone */ })
-    .finally(() => { s.promptRendering = false; });
+    .finally(() => renderDone(core, s));
 }
 
 

@@ -186,3 +186,68 @@ test("MagicDNS name unreadable: the *.ts.net suffix applies only to a proxied re
     configureOrigins({ port: 8770, tailscaleIp: "100.64.0.1", tailscaleDns: "mac.example-tailnet.ts.net" });
   }
 });
+
+test("ALLOWED_HOSTS takes bare names: a name:port entry never matches; a front-door port needs the full origin in ALLOWED_ORIGINS", () => {
+  const cfg = { port: 8770, tailscaleIp: "100.64.0.1", tailscaleDns: "mac.example-tailnet.ts.net" };
+  const keep = { h: process.env.WATERPLANE_ALLOWED_HOSTS, o: process.env.WATERPLANE_ALLOWED_ORIGINS };
+  const set = (h, o) => {
+    for (const [k, v] of [["WATERPLANE_ALLOWED_HOSTS", h], ["WATERPLANE_ALLOWED_ORIGINS", o]]) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+    configureOrigins(cfg);
+  };
+  try {
+    // 1. a bare name admits the Host header (with or without a port)
+    set("door.example", undefined);
+    assert.equal(hostHeaderAllowed("door.example"), true);
+    assert.equal(hostHeaderAllowed("door.example:9443"), true);
+    // 2. the same name WITH a port in ALLOWED_HOSTS never matches
+    set("door.example:9443", undefined);
+    assert.equal(hostHeaderAllowed("door.example:9443"), false);
+    assert.equal(hostHeaderAllowed("door.example"), false);
+    // 3. a bare name alone does not admit an Origin on a port the host does not listen on
+    set("door.example", undefined);
+    assert.equal(originHeaderAllowed("https://door.example:9443"), false);
+    // 4. the full origin, with port, in ALLOWED_ORIGINS does
+    set("door.example", "https://door.example:9443");
+    assert.equal(originHeaderAllowed("https://door.example:9443"), true);
+  } finally {
+    set(keep.h, keep.o);
+  }
+});
+
+test("the browser certificate's name is in no list: only the matching handshake, Host and Origin count", () => {
+  const NAME = "desk.home.arpa";
+  const base = { port: 8770, tailscaleIp: "100.64.0.1", lanIps: ["192.168.1.20"] };
+  const ask = (headers, req) => checkRequestOrigin(headers, req).ok;
+  const at = { host: `${NAME}:8771` };
+  const own = { ...at, origin: `https://${NAME}:8771` };
+  try {
+    configureOrigins({ ...base, tlsPort: 8771, tlsName: NAME });
+    assert.equal(ask(own, { tlsName: NAME }), true);
+    assert.equal(ask(at, { tlsName: NAME }), true);
+    assert.equal(hostHeaderAllowed(at.host), false, "no host of ours");
+    assert.equal(originHeaderAllowed(own.origin), false, "no origin of ours");
+    assert.deepEqual(corsHeaders({ origin: own.origin }), {}, "and never reflected");
+    for (const req of [undefined, {}, { tlsName: null }, { tlsName: "" }, { tlsName: "mac.local" }, { tlsName: `x.${NAME}` }, { tlsName: NAME.toUpperCase() }, { tlsName: NAME, proxied: true }]) {
+      assert.equal(ask(own, req), false, JSON.stringify(req));
+      assert.equal(ask(at, req), false, JSON.stringify(req));
+    }
+    for (const n of [`x.${NAME}`, "evil.home.arpa", "desk.local"]) assert.equal(ask({ host: `${n}:8771`, origin: `https://${n}:8771` }, { tlsName: n }), false, n);
+    assert.equal(ask({ ...at, origin: "" }, { tlsName: NAME }), false, "an empty Origin is not an absent one");
+    assert.equal(ask({ ...own, origin: [own.origin, "https://evil.example.com"] }, { tlsName: NAME }), true, "the first, as everywhere");
+    assert.equal(ask({ ...at, "sec-fetch-site": "cross-site" }, { tlsName: NAME, path: "/api/repos/a/artifact", method: "GET" }), false, "no opaque-read exemption");
+    assert.equal(ask({ host: "192.168.1.20:8771", "sec-fetch-site": "cross-site" }, { path: "/api/repos/a/artifact", method: "GET" }), true, "which holds for the APK, by address");
+
+    configureOrigins({ ...base, tlsPort: 443, tlsName: NAME });
+    assert.equal(ask({ host: NAME, origin: `https://${NAME}` }, { tlsName: NAME }), true, "443 is spelled without a port");
+    assert.equal(ask({ host: `${NAME}:443`, origin: `https://${NAME}` }, { tlsName: NAME }), false);
+    configureOrigins({ ...base, tlsName: NAME });
+    assert.equal(ask(own, { tlsName: NAME }), false, "no TLS port, no name");
+    configureOrigins({ ...base, tlsPort: 8771 });
+    assert.equal(ask(own, { tlsName: NAME }), false, "no certificate, no name");
+    assert.equal(ask(at, { tlsName: undefined }), false);
+  } finally {
+    configureOrigins({ port: 8770, tailscaleIp: "100.64.0.1", tailscaleDns: "mac.example-tailnet.ts.net" });
+  }
+});

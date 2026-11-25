@@ -450,6 +450,10 @@ button.onb-card-head { width: 100%; background: none; border: 0; padding: 0; tex
 .onb-card-x { background: none; border: 0; color: var(--muted); padding: var(--sp-4); }
 .onb-card-body { margin-top: var(--sp-6); font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--muted); line-height: var(--lh-15); }
 .onb-card-acts { display: flex; flex-direction: column; gap: var(--sp-8); margin-top: var(--sp-10); }
+.onb-card-pair { display: flex; gap: var(--sp-8); }
+.onb-card-pair > * { flex: 1 1 0; }
+/* A label that cannot share the line with its icon drops under it, both centred: icon and label stay one group (at a large font the icon used to sit left of a centred, wrapped label). */
+.onb-card-pair > .key { flex-wrap: wrap; text-align: center; row-gap: var(--sp-4); }
 .onb-card-acts .key, .onb-card-acts .send { display: flex; align-items: center; justify-content: center; gap: var(--sp-8); min-width: 0; white-space: normal; }
 .onb-q { font-size: calc(var(--fs-14) * var(--ui-font, 1)); font-weight: var(--fw-semibold); }
 .onb-q.warn { color: var(--warn); }
@@ -601,3 +605,43 @@ button.onb-card-head { width: 100%; background: none; border: 0; padding: 0; tex
 .agent-warn .agent-warn-row { display: flex; flex-direction: column; gap: var(--sp-6); padding: var(--sp-4) 0 0; }
 .agent-warn-chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-6); }
 .agent-warn-chips > .key { min-width: 0; padding-left: 0; padding-right: 0; }
+
+/* One repo's set-up page (features/repoSetup): a row is a tick target (44 px) and a text button that opens pitch and cost; the two never share a tap. */
+.repo-setup .rs-row { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-2) var(--gutter); border-bottom: 1px solid var(--line); }
+.repo-setup .rs-line { display: flex; align-items: stretch; gap: var(--sp-2); }
+.repo-setup .rs-box { flex: none; width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: flex-start; }
+.repo-setup .rs-box > input { width: 20px; height: 20px; margin: 0; }
+.repo-setup .rs-text { flex: 1; min-width: 0; min-height: 44px; display: flex; align-items: center; gap: var(--sp-6); padding: var(--sp-4) 0; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.repo-setup .rs-chev { flex: none; color: var(--muted); }
+.repo-setup .rs-text > .rs-words { flex: 1; }
+.repo-setup .rs-more { display: flex; flex-direction: column; gap: var(--sp-4); padding: 0 0 var(--sp-6) 44px; }
+.repo-setup .rs-under { padding-left: 44px; }
+.repo-setup .rs-mark { flex: none; color: var(--muted); }
+.repo-setup .rs-mark.rs-ok { color: var(--ok); }
+.repo-setup .rs-mark.rs-bad { color: var(--dead); }
+.repo-setup .rs-words { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; overflow-wrap: anywhere; }
+.repo-setup .rs-title { color: var(--fg); font-weight: var(--fw-semibold); font-size: calc(var(--fs-15) * var(--ui-font, 1)); }
+.repo-setup .rs-paid { color: var(--warn); font-weight: normal; }
+.repo-setup .rs-short, .repo-setup .rs-pitch, .repo-setup .rs-cost, .repo-setup .rs-detail, .repo-setup .rs-pick, .repo-setup .rs-on, .repo-setup .rs-foot, .repo-setup .rs-outcome {
+  font-size: calc(var(--fs-13) * var(--ui-font, 1)); line-height: var(--lh-14);
+}
+.repo-setup .rs-short, .repo-setup .rs-pitch { color: var(--muted); }
+.repo-setup .rs-cost { color: var(--dim); }
+.repo-setup .rs-detail, .repo-setup .rs-pick { color: var(--fg); }
+.repo-setup .rs-outcome { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); color: var(--muted); }
+/* After Go the outcome is the line directly under the title, no gap. */
+.repo-setup .rs-words:has(> .rs-outcome) { gap: 0; padding: var(--sp-4) 0; }
+.repo-setup .rs-line > .rs-words { flex: 1; align-self: center; }
+/* A door has no tick: its text starts on the gutter and its compact button sits on the title row at the right when it fits, else under. */
+.repo-setup .rs-door .rs-line { flex-wrap: wrap; align-items: center; column-gap: var(--sp-8); }
+.repo-setup .rs-door .rs-text { flex: 1 1 14ch; }
+.repo-setup .rs-door-act { flex: none; max-width: 100%; }
+.repo-setup .rs-door-act .key { padding-inline: var(--sp-8); }
+.repo-setup .rs-door .rs-more, .repo-setup .rs-door .rs-under { padding-left: 0; }
+.repo-setup .rs-outcome.rs-failed > span { color: var(--dead); }
+.repo-setup .rs-outcome .key { white-space: normal; }
+.repo-setup .rs-on { padding: var(--sp-6) var(--gutter); color: var(--muted); }
+.repo-setup .rs-look { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6); padding: 0 var(--gutter) var(--sp-6); }
+.repo-setup .rs-look > .key { white-space: normal; text-align: left; min-width: 0; max-width: 100%; height: auto; align-items: flex-start; }
+.repo-setup .rs-look > .key > svg { flex: none; margin-top: 0.25em; }
+.repo-setup .rs-foot { flex: 1 0 100%; color: var(--muted); }

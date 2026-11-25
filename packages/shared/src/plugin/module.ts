@@ -55,6 +55,30 @@ export interface SetupFixOutcome {
   note: string;
 }
 
+/** How a setup fix is offered as a checkbox when a person creates a project (since 2.10). */
+export interface NewProjectOffer {
+  /** The checkbox's words, 60 characters at most. */
+  label: string;
+  /** One sentence: what is written into the new project. Said before the tap. */
+  hint: string;
+  /** Ticked the first time this phone sees it; after that the phone's own last choice stands. */
+  on: boolean;
+}
+
+/** A setup fix's third argument: where else it is offered. */
+export interface SetupFixOptions {
+  /** Asked each time the new-project sheet opens, so keep it cheap; null = not offered now. */
+  newProject?: () => NewProjectOffer | null;
+}
+
+/** `api.optIn`'s answer for one repo (since 2.11): is the offer already on there, and what was read. */
+export interface OptInAnswer {
+  /** `unknown` = this plugin cannot tell; never a guess. */
+  state: "on" | "off" | "unknown";
+  /** One sentence naming what was read, drawn on the offer's card. */
+  detail: string;
+}
+
 /** `api.handToAgent`'s answer: the intent id the prompt now waits under, or why not. */
 export type HandToAgentResult =
   /** `existing`: the `key` named a row the store already held (nothing new was written); `state`: that row's state then (absent when new). */

@@ -8,12 +8,13 @@
  * built, a third view while two are still opening, a helper that cannot be started. A third view
  * while two are OPEN is not refused: the oldest one ends with cause `replaced`.
  */
-import type { PluginStreamHandlers, PluginStreamSub, StreamEndCause } from "@waterplane/shared";
+import type { PluginScreenStill, PluginStreamHandlers, PluginStreamSub, StreamEndCause } from "@waterplane/shared";
 import type { DesktopParams } from "../shared/wire.mjs";
 import { HelperBin, type Runner } from "./helperbin.mjs";
 import { BUILDING, MAX_STREAMS, NOT_MAC, REPLACED, TOO_MANY, osOf, type DesktopOs } from "./knobs.mjs";
 import { Prober } from "./probe.mjs";
 import { HelperSession } from "./session.mjs";
+import { takeStill } from "./still.mjs";
 
 export interface DesktopDeps {
   platform: NodeJS.Platform;
@@ -41,6 +42,8 @@ export interface Desktop {
   bin: HelperBin;
   prober: Prober;
   handlers: PluginStreamHandlers;
+  /** One JPEG of the whole main display, or why not (`still.mts`). */
+  still(): Promise<PluginScreenStill>;
   /** The control setting moved: every open view hears it, and the log says it once. */
   controlChanged(on: boolean): void;
   /** Every helper stopped (the plugin is switched off or the daemon stops). */
@@ -131,6 +134,7 @@ export function createDesktop(d: DesktopDeps): Desktop {
 
   return {
     bin, prober, handlers,
+    still: async () => (os === null ? { note: NOT_MAC } : takeStill({ bin, args })),
     controlChanged(on) {
       d.log(on ? "control enabled: clicks and keys from the phone now reach this desktop" : "control disabled: the phone can only watch this desktop");
       for (const s of sessions.values()) s.controlChanged();

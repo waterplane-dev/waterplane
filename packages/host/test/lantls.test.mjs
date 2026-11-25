@@ -9,16 +9,21 @@ import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, X509Certificate } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { createServer as netServer } from "node:net";
+import { createServer as createHttpServer } from "node:http";
+import { connect as netConnect, createServer as netServer } from "node:net";
 import { connect } from "node:tls";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { envName } from "@waterplane/shared";
 import { WebSocketServer } from "ws";
 import { bitString, integer, oid, seq, time } from "../dist/der.js";
-import { checkLanTls } from "../dist/doctor.js";
-import { ensureSelfSigned, issueLeaf, lanTlsFacts, lanTlsFile, lanTlsNames, lanTlsPlan, lanTlsSelfSigned, lanTlsWelcome, listenOrCarryOn, ownLeaf, pinShort, prepareLanTls, spkiPin, startLanTls } from "../dist/lantls.js";
-import { isEncryptedSocket, requestPeerKind } from "../dist/net.js";
+import { authCookie } from "../dist/auth.js";
+import { browserOriginRefusal } from "../dist/confirmgate.js";
+import { checkLanBrowser, checkLanTls } from "../dist/doctor.js";
+import { browserCertFile, issueBrowserCert } from "../dist/lanca.js";
+import { browserLeafFor, ensureSelfSigned, issueLeaf, lanTlsFacts, lanTlsFile, lanTlsNames, lanTlsPlan, lanTlsExpiry, lanTlsSelfSigned, lanTlsWelcome, listenOrCarryOn, ownLeaf, pinShort, prepareLanTls, selfSignedNoticeFor, spkiPin, startLanTls } from "../dist/lantls.js";
+import { isEncryptedSocket, isProxied, noteTlsServerName, requestPeerKind, tlsServerName } from "../dist/net.js";
+import { checkRequestOrigin, configureOrigins, corsHeaders, isBrowserName, originHint } from "../dist/origin.js";
 
 const scratch = mkdtempSync(join(tmpdir(), "lantls-"));
 after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -372,4 +377,348 @@ test("the live listener: TLS 1.2 floor, facts after the bind, the encrypted help
   assert.ok(old.error, "TLS 1.1 is refused");
   assert.equal(isEncryptedSocket({}), false);
   assert.equal(isEncryptedSocket({ encrypted: false }), false);
+});
+
+// ---- the browser certificate: one name on the TLS port, and only there (R-security-023's port) ----
+
+const NAME = "desk.home.arpa";
+const freePort = async () => { const s = await busyPort(); const { port } = s.address(); await new Promise((r) => s.close(r)); return port; };
+
+/** A key, a browser certificate on it, and the file the host reads. `over` replaces the file's text. */
+function issued(root, { now, key, over } = {}) {
+  const m = ensureSelfSigned(root, ["127.0.0.1"], ["mac.local"]);
+  const cert = issueBrowserCert(key ?? createPrivateKey(m.keyPem), NAME, now);
+  writeFileSync(browserCertFile(root), over ?? JSON.stringify(cert));
+  return { m, cert };
+}
+
+/** What a boot does, on loopback: prepare, arm the guard, listen. The handler makes the calls `server/http.ts` makes. */
+async function serveNamed(t, root, knobs = {}) {
+  const port = await freePort();
+  const warned = [];
+  t.mock.method(console, "warn", (l) => warned.push(l));
+  const ready = withEnv({ TLS_PORT: String(port), ...knobs }, () => prepareLanTls({ root, allowPublic: true, plainPort: 1, boundLan: ["127.0.0.1"], binds: ["127.0.0.1"] }));
+  t.mock.restoreAll();
+  configureOrigins({ port: 8770, tlsPort: port, tlsName: ready.browser?.name, lanIps: ["192.168.1.20"], tailscaleIp: "100.64.0.1" });
+  t.after(() => configureOrigins({ port: 8770 }));
+  const handler = (req, res) => {
+    if (req.url.startsWith("/api/")) {
+      const v = checkRequestOrigin(req.headers, { path: req.url, method: req.method, proxied: isProxied(req.headers), tlsName: tlsServerName(req.socket) });
+      res.writeHead(v.ok ? 200 : 403, corsHeaders(req.headers));
+      res.end(v.ok ? "API" : `${v.reason} ${originHint(v)}`);
+    } else if (req.url === "/expiry") res.end(JSON.stringify(lanTlsExpiry(req.socket)));
+    else if (req.url === "/gate") res.end(browserOriginRefusal(req) ?? "CONSENT");
+    else res.end(selfSignedNoticeFor(req.socket) ? "NOTICE" : "APP");
+  };
+  const [server] = startLanTls({ ...ready, addrs: ["127.0.0.1"] }, handler, wsOn);
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  const plain = createHttpServer(handler);
+  await new Promise((r) => plain.listen(0, "127.0.0.1", r));
+  t.after(() => { plain.closeAllConnections(); plain.close(); });
+  while (!server.listening) await new Promise((r) => setTimeout(r, 5));
+  return { port, plainPort: plain.address().port, ready, warned, server };
+}
+
+/** Requests down ONE connection, each `[path, headers, method]`; TLS when `tls` holds its options. The leaf shown comes back too. */
+function talk(port, tls, ...reqs) {
+  return new Promise((resolve, reject) => {
+    const answers = [];
+    let buf = "";
+    let leaf = null;
+    const next = () => {
+      const r = reqs[answers.length];
+      if (!r) { s.destroy(); resolve({ answers, leaf, session }); return; }
+      s.write(`${r[2] ?? "GET"} ${r[0]} HTTP/1.1\r\n${Object.entries(r[1]).map(([k, v]) => `${k}: ${v}\r\n`).join("")}\r\n`);
+    };
+    let session = null;
+    const s = tls ? connect({ host: "127.0.0.1", port, rejectUnauthorized: false, ...tls }, () => { leaf = s.getPeerX509Certificate(); next(); }) : netConnect({ host: "127.0.0.1", port }, next);
+    s.on("session", (x) => { session = x; });
+    s.setEncoding("utf8");
+    s.once("error", reject);
+    s.on("data", (d) => {
+      buf += d;
+      const m = /^HTTP\/1\.1 (\d+)[^]*?\r\n\r\n/.exec(buf);
+      if (!m) return;
+      const head = m[0];
+      const body = buf.slice(head.length);
+      const len = /content-length: (\d+)/i.exec(head);
+      const done = len ? body.length >= Number(len[1]) : body.endsWith("0\r\n\r\n");
+      if (!done) return;
+      buf = "";
+      answers.push({ status: Number(m[1]), head, body: len ? body : body.split("\r\n")[1] ?? "" });
+      next();
+    });
+  });
+}
+
+test("welcome expiry fields ride only a socket that arrived by the certificate's name", async (t) => {
+  const root = freshRoot();
+  const { cert } = issued(root);
+  const { port, plainPort } = await serveNamed(t, root);
+  const get = async (tls, p, headers = { host: `127.0.0.1:${p}` }) => JSON.parse((await talk(p, tls, ["/expiry", headers])).answers[0].body);
+  const named = await get({ servername: NAME }, port, { host: `${NAME}:${port}` });
+  assert.equal(named.tlsName, NAME);
+  assert.equal(named.tlsNameUntil, new Date(cert.notAfter).getTime());
+  assert.deepEqual(await get({}, port), {}, "TLS without the name");
+  assert.deepEqual(await get({ servername: "mac.local" }, port), {}, "another name");
+  assert.deepEqual(await get(null, plainPort, { host: `${NAME}:${plainPort}` }), {}, "the plain socket, even with the name in Host");
+  assert.deepEqual(lanTlsExpiry(undefined), {});
+});
+
+test("browser certificate: its name counts on its own TLS handshake, under exactly its Host and Origin, and nowhere else", async (t) => {
+  const root = freshRoot();
+  const { cert } = issued(root);
+  const { port, plainPort, ready } = await serveNamed(t, root);
+  const host = `${NAME}:${port}`;
+  const origin = `https://${host}`;
+  const api = async (tls, headers, path = "/api/x") => (await talk(port, tls, [path, headers])).answers[0];
+  const sni = { servername: NAME };
+
+  const good = await talk(port, sni, ["/api/x", { host }], ["/api/x", { host, origin }], ["/", { host }]);
+  assert.deepEqual(good.answers.map((a) => a.body), ["API", "API", "APP"]);
+  assert.equal(new X509Certificate(cert.cert).fingerprint256, good.leaf.fingerprint256, "the CA's leaf");
+  assert.doesNotMatch(good.answers[1].head, /access-control/i, "same-origin: nothing to reflect");
+  const verified = await new Promise((resolve) => { const s = connect({ host: "127.0.0.1", port, servername: NAME, ca: cert.caCert }, () => { resolve(s.authorized); s.destroy(); }); s.once("error", resolve); });
+  assert.equal(verified, true, "a verifier that trusts the CA accepts it under the name");
+
+  // The name in the headers without the handshake: no SNI, another SNI, another spelling, and the plain port.
+  for (const other of [{}, { servername: "mac.local" }, { servername: "x.desk.home.arpa" }, { servername: "DESK.home.arpa" }, { servername: `${NAME}.` }]) {
+    for (const h of [{ host }, { host, origin }]) assert.equal((await api(other, h)).status, 403, `SNI ${other.servername} ${h.origin ?? "no origin"}`);
+    assert.equal((await api(other, { host }, "/api/repos/a/artifact")).status, 403, "nor on an opaque read route");
+    const page = await talk(port, other, ["/", { host }]);
+    assert.equal(page.answers[0].body, "NOTICE");
+    assert.equal(page.leaf.fingerprint256, new X509Certificate(ready.material.certPem).fingerprint256, "and the leaf it always was");
+  }
+  for (const h of [{ host }, { host, origin }, { host: `${NAME}:${plainPort}` }, { host: `${NAME}:${plainPort}`, origin: `http://${NAME}:${plainPort}` }, { host: "localhost", origin }]) {
+    for (const path of ["/api/x", "/api/repos/a/artifact"]) assert.equal((await talk(plainPort, null, [path, h])).answers[0].status, 403, `plain ${JSON.stringify(h)} ${path}`);
+  }
+  const advice = (await talk(plainPort, null, ["/api/x", { host: NAME }])).answers[0].body;
+  assert.match(advice, new RegExp(`Open it as ${origin}`));
+  assert.doesNotMatch(advice, /set \S*ALLOWED_HOSTS/, "never told to trust the name on the plain port");
+
+  // The right handshake, a Host that is not exactly it.
+  for (const h of [NAME, `${NAME}:${port + 1}`, `${NAME}.:${port}`, `DESK.home.arpa:${port}`, `${NAME}:0${port}`, `x.${host}`, "evil.example.com"]) {
+    assert.equal((await api(sni, { host: h })).status, 403, `Host ${h}`);
+    assert.equal((await api(sni, { host: h, origin })).status, 403, `Host ${h} with the origin`);
+  }
+  // The right handshake and Host, an Origin that is not exactly it. One that passes elsewhere is refused here too.
+  for (const o of [`http://${host}`, `https://${NAME}`, `https://${NAME}:${port + 1}`, `https://${NAME}.:${port}`, `https://x.${host}`, "null", "http://localhost", "capacitor://localhost", `https://192.168.1.20:${port}`]) {
+    assert.equal((await api(sni, { host, origin: o })).status, 403, `Origin ${o}`);
+  }
+  assert.equal((await api(sni, { host: `192.168.1.20:${port}`, origin })).status, 403, "its origin, at another of our hosts");
+  // Through a proxy, and cross-site without an Origin: refused, the opaque read routes included.
+  for (const h of ["x-forwarded-for", "tailscale-user-login", "via"]) assert.equal((await api(sni, { host, origin, [h]: "1" })).status, 403, h);
+  for (const site of ["cross-site", "same-site"]) {
+    assert.equal((await api(sni, { host, "sec-fetch-site": site })).status, 403, site);
+    assert.equal((await api(sni, { host, "sec-fetch-site": site }, "/api/repos/a/artifact")).status, 403, `${site}, opaque read`);
+  }
+  assert.equal((await api(sni, { host, "sec-fetch-site": "same-origin" })).status, 200);
+  // One connection, another Host on the next request.
+  const turn = await talk(port, sni, ["/api/x", { host, origin }], ["/api/x", { host: `evil.example.com:${port}`, origin }], ["/api/x", { host, origin: "https://evil.example.com" }], ["/api/x", { host, origin }]);
+  assert.deepEqual(turn.answers.map((a) => a.status), [200, 403, 403, 200]);
+
+  // Every other socket as before: an address is an address, with or without the app's origin.
+  assert.equal((await api({}, { host: `192.168.1.20:${port}` })).status, 200);
+  const app = await api({}, { host: `192.168.1.20:${port}`, origin: "http://localhost" });
+  assert.equal(app.status, 200);
+  assert.match(app.head, /access-control-allow-origin: http:\/\/localhost/i);
+});
+
+test("browser certificate: a resumed session carries no name into another handshake", async (t) => {
+  const root = freshRoot();
+  issued(root);
+  const { port } = await serveNamed(t, root);
+  const h = { host: `${NAME}:${port}` };
+  for (const v of ["TLSv1.2", "TLSv1.3"]) {
+    const o = { minVersion: v, maxVersion: v };
+    const ask = async (servername, session) => {
+      const r = await talk(port, { ...o, servername, session }, ["/api/x", h], ["/api/x", h]);
+      return { status: r.answers[1].status, session: r.session };
+    };
+    const named = await ask(NAME);
+    const bare = await ask(undefined);
+    assert.equal(named.status, 200, v);
+    assert.equal(bare.status, 403, v);
+    assert.ok(named.session && bare.session, `${v}: both gave a session to resume`);
+    assert.equal((await ask(undefined, named.session)).status, 403, `${v}: the name's session, no SNI`);
+    assert.equal((await ask("mac.local", named.session)).status, 403, `${v}: the name's session, another SNI`);
+    // The name resumed as itself: TLS 1.3, which every browser speaks, says so again; 1.2 does not and is nameless.
+    assert.equal((await ask(NAME, named.session)).status, v === "TLSv1.3" ? 200 : 403, `${v}: the name's own session`);
+  }
+});
+
+test("browser certificate: a TLS 1.2 resumption is nameless whatever the library reports, and a plain socket always is", () => {
+  const sock = (o) => ({ encrypted: true, servername: NAME, getProtocol: () => "TLSv1.3", isSessionReused: () => false, ...o });
+  const named = (s) => { noteTlsServerName(s); return tlsServerName(s); };
+  assert.equal(named(sock({})), NAME);
+  assert.equal(named(sock({ isSessionReused: () => true })), NAME);
+  assert.equal(named(sock({ getProtocol: () => "TLSv1.2" })), NAME);
+  assert.equal(named(sock({ getProtocol: () => "TLSv1.2", isSessionReused: () => true })), null);
+  assert.equal(named(sock({ servername: false })), null);
+  assert.equal(named(sock({ encrypted: false })), null);
+  assert.equal(tlsServerName(sock({})), null, "a socket no listener of ours noted");
+  assert.equal(tlsServerName(undefined), null);
+  const s = sock({});
+  assert.equal(named(s), NAME);
+  s.servername = "other.lan";
+  assert.equal(named(s), NAME, "a renegotiation does not rename it");
+});
+
+test("browser certificate: the confirm gate takes its page's POST, and the name from anywhere else is no consent", async (t) => {
+  const root = freshRoot();
+  issued(root);
+  const { port, plainPort } = await serveNamed(t, root);
+  const host = `${NAME}:${port}`;
+  const origin = `https://${host}`;
+  const gate = async (tls, headers) => (await talk(tls ? port : plainPort, tls, ["/gate", { ...headers, "content-length": "0" }, "POST"])).answers[0].body;
+  const sni = { servername: NAME };
+  assert.equal(await gate(sni, { host, origin }), "CONSENT");
+  assert.match(await gate(sni, { host }), /no Origin cannot give consent/);
+  for (const o of [`http://${host}`, `https://${NAME}`, "http://localhost", "null"]) assert.equal(await gate(sni, { host, origin: o }), "origin not allowed", o);
+  assert.equal(await gate(sni, { host, origin, "x-forwarded-for": "1.2.3.4" }), "origin not allowed", "proxied");
+  assert.equal(await gate(sni, { host: `192.168.1.20:${port}`, origin }), "origin not allowed");
+  assert.equal(await gate({}, { host, origin }), "origin not allowed", "no SNI");
+  assert.equal(await gate(null, { host, origin }), "origin not allowed", "the plain port");
+  assert.equal(await gate(null, { host: "localhost", origin: "http://localhost" }), "CONSENT", "the app, as before");
+  assert.equal(browserOriginRefusal({ headers: { host, origin } }), "origin not allowed", "no socket, no name");
+});
+
+test("browser certificate: the pin, the notice and lan-tls.json are what they were, and a request opens no file", async (t) => {
+  const root = freshRoot();
+  const before = ensureSelfSigned(root, ["127.0.0.1"], ["mac.local"]);
+  issued(root);
+  const { port, ready } = await serveNamed(t, root);
+  const stored = readFileSync(lanTlsFile(root), "utf8");
+  assert.deepEqual(lanTlsFacts(), { port, spki: before.spki });
+  assert.deepEqual(lanTlsWelcome(), { tlsPort: port, tlsSpki: before.spki });
+  const byIp = await talk(port, {}, ["/", { host: "127.0.0.1" }]);
+  const byName = await talk(port, { servername: NAME }, ["/", { host: `${NAME}:${port}` }]);
+  assert.equal(byIp.answers[0].body, "NOTICE");
+  assert.equal(byIp.leaf.fingerprint256, new X509Certificate(ready.material.certPem).fingerprint256, "by address: the self-signed leaf");
+  assert.equal(spkiPin(byIp.leaf.publicKey), before.spki);
+  assert.equal(spkiPin(byName.leaf.publicKey), before.spki, "one key on both leaves");
+  rmSync(browserCertFile(root));
+  assert.equal((await talk(port, { servername: NAME }, ["/", { host: `${NAME}:${port}` }])).answers[0].body, "APP", "read at boot: a removal counts from the next start");
+  assert.equal(readFileSync(lanTlsFile(root), "utf8"), stored);
+});
+
+test("browser certificate: a bad file, or a person's own leaf, is one line and never the listener", async (t) => {
+  const year = 400 * 86_400_000;
+  const cases = [
+    ["expired", (root) => issued(root, { now: new Date(Date.now() - year) }), /expired on .*lan-cert issue --name desk\.home\.arpa/],
+    ["foreign key", (root) => issued(root, { key: p256() }), /another key/],
+    ["corrupt", (root) => issued(root, { over: "{" }), /not JSON/],
+    ["not certificates", (root) => issued(root, { over: JSON.stringify({ v: 1, name: NAME, cert: "x", caCert: "y" }) }), /does not parse/],
+    ["a folder", (root) => { ensureSelfSigned(root, ["127.0.0.1"], []); mkdirSync(browserCertFile(root)); }, /could not be read \(EISDIR\)/],
+    ["none issued", (root) => ensureSelfSigned(root, ["127.0.0.1"], []), null],
+  ];
+  for (const [label, make, line] of cases) {
+    await t.test(label, async (tt) => {
+      const root = freshRoot();
+      make(root);
+      const key = JSON.parse(readFileSync(lanTlsFile(root), "utf8")).key;
+      const files = readdirSync(dirname(lanTlsFile(root)));
+      const { port, ready, warned } = await serveNamed(tt, root);
+      assert.equal(ready.browser, null);
+      assert.equal(warned.length, line ? 1 : 0, warned.join("\n"));
+      if (line) assert.match(warned[0], line);
+      const r = await talk(port, { servername: NAME }, ["/", { host: `${NAME}:${port}` }], ["/api/x", { host: `${NAME}:${port}` }], ["/api/x", { host: `192.168.1.20:${port}` }]);
+      assert.deepEqual(r.answers.map((a) => a.body === "API" || a.body === "NOTICE" ? a.body : a.status), ["NOTICE", 403, "API"]);
+      assert.equal(spkiPin(r.leaf.publicKey), ready.material.spki);
+      assert.equal(JSON.parse(readFileSync(lanTlsFile(root), "utf8")).key, key, "the key is the phones' key");
+      assert.deepEqual(readdirSync(dirname(lanTlsFile(root))), files, "nothing moved aside, nothing made");
+    });
+  }
+  await t.test("a person's own leaf", async (tt) => {
+    const root = freshRoot();
+    issued(root);
+    const own = ensureSelfSigned(freshRoot(), ["127.0.0.1"], ["own.lan"]);
+    const [c, k] = ["own.pem", "own.key"].map((f) => join(root, f));
+    writeFileSync(c, own.certPem);
+    writeFileSync(k, own.keyPem);
+    const { port, ready, warned } = await serveNamed(tt, root, { TLS_CERT: c, TLS_KEY: k });
+    assert.equal(ready.browser, null);
+    assert.equal(warned.length, 1);
+    assert.match(warned[0], /not served: \S*TLS_CERT and \S*TLS_KEY take the port/);
+    const r = await talk(port, { servername: NAME }, ["/api/x", { host: `${NAME}:${port}` }]);
+    assert.equal(r.answers[0].status, 403);
+    assert.equal(spkiPin(r.leaf.publicKey), own.spki);
+  });
+});
+
+test("doctor: the browser certificate's row, when there is one to speak of", () => {
+  const root = freshRoot();
+  const row = (now, allowPublic = true) => checkLanBrowser({ root, port: 8770, allowPublic }, IPS, now);
+  const DAY = 86_400_000;
+  assert.equal(row(), null, "none issued: no row");
+  const { m, cert } = issued(root);
+  const end = new Date(cert.notAfter).getTime();
+  assert.deepEqual(row(), { id: "lan-browser", status: "ok", detail: `browser certificate for ${NAME}, 396 days left, https://${NAME}:8771` });
+  assert.equal(row(new Date(end - 31 * DAY)).status, "ok");
+  const soon = row(new Date(end - 30 * DAY));
+  assert.equal(soon.status, "warn");
+  assert.match(soon.detail, /30 days left/);
+  assert.match(soon.fix, /lan-cert issue --name desk\.home\.arpa/);
+  const over = row(new Date(end + DAY));
+  assert.equal(over.status, "warn");
+  assert.match(over.detail, /not served: it expired on/);
+  assert.match(over.fix, /lan-cert issue --name desk\.home\.arpa/);
+  withEnv({ TLS_CERT: "/x.pem", TLS_KEY: "/x.key" }, () => {
+    assert.equal(row().status, "warn");
+    assert.match(row().detail, /desk\.home\.arpa is not served: \S*TLS_CERT and \S*TLS_KEY take the port/);
+  });
+  withEnv({ ALLOWED_HOSTS: NAME }, () => {
+    const dialed = row();
+    assert.equal(dialed.status, "warn");
+    assert.match(dialed.detail, /is not served: .*already opens this desktop/);
+    assert.match(dialed.fix, /^Take desk\.home\.arpa out of \S*ALLOWED_HOSTS and restart the host/);
+    assert.match(dialed.fix, /lan-cert remove`, then `\S+ lan-cert issue --name <another name>`/);
+    assert.doesNotMatch(dialed.fix, /issue --name desk\.home\.arpa/);
+    // an expired certificate for a dialed name gets the dialed fix too, never the refused "issue --name"
+    const gone = row(new Date(end + DAY));
+    assert.match(gone.detail, /already opens this desktop/);
+    assert.match(gone.fix, /^Take desk\.home\.arpa out of/);
+    assert.doesNotMatch(gone.fix, /issue --name desk\.home\.arpa/);
+  });
+  assert.match(row(undefined, false).detail, /not served: LAN TLS off/);
+  assert.equal(row(undefined, false).status, "ok", "switched off is not a problem");
+  writeFileSync(browserCertFile(root), "{");
+  assert.match(row().detail, /^browser certificate is not served: not JSON$/);
+  assert.equal(row().status, "warn");
+  writeFileSync(browserCertFile(root), JSON.stringify(issueBrowserCert(p256(), NAME)));
+  assert.match(row().detail, /another key/);
+  issued(root);
+  rmSync(lanTlsFile(root));
+  assert.match(row().detail, /cannot be checked: .*does not exist/);
+  assert.equal(existsSync(lanTlsFile(root)), false, "and no key is minted to find out");
+  assert.ok(m);
+});
+
+test("a browser certificate for a name the phones already dial is not served, and the app's leaf still is", () => {
+  const root = freshRoot();
+  const { m } = issued(root);
+  const warned = [];
+  const warn = console.warn;
+  console.warn = (s) => { warned.push(String(s)); };
+  try {
+    withEnv({ ALLOWED_HOSTS: "desk.fritz.box" }, () => {
+      writeFileSync(browserCertFile(root), JSON.stringify(issueBrowserCert(createPrivateKey(m.keyPem), "desk.fritz.box")));
+      assert.equal(browserLeafFor(root, m), null);
+      writeFileSync(browserCertFile(root), JSON.stringify(issueBrowserCert(createPrivateKey(m.keyPem), NAME)));
+      assert.equal(browserLeafFor(root, m)?.name, NAME, "another name is served");
+    });
+  } finally { console.warn = warn; }
+  assert.equal(warned.length, 1);
+  assert.match(warned[0], /already opens this desktop/);
+});
+
+test("the login cookie is Secure at the browser certificate's name and nowhere else", () => {
+  configureOrigins({ port: 8770, tlsPort: 8771, tlsName: NAME });
+  try {
+    assert.equal(isBrowserName(NAME), true);
+    for (const n of [null, "", "mac.local", `${NAME}.`]) assert.equal(isBrowserName(n), false);
+    assert.match(authCookie("t", true), /; HttpOnly; Secure; SameSite=Lax;/);
+    assert.match(authCookie("t"), /^[^=]+=t; Path=\/; HttpOnly; SameSite=Lax; Max-Age=\d+$/);
+  } finally { configureOrigins({ port: 8770 }); }
+  assert.equal(isBrowserName(null), false);
 });

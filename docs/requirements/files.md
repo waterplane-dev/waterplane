@@ -49,3 +49,7 @@ A folder added to the repo root folder appears in the main list of all repos; re
 ### R-files-011 · shipped
 The file browser reopens in the folder last browsed in that repo, on this phone, including after the app restarts. A file opened by name from another screen does not change that folder.
 - asked: 2026-11-07
+
+### R-files-012 · requested
+"Images & documents" of one repo has a link to that repo's full file browser; closing the browser returns to the tab and time cut it was opened from.
+- asked: 2026-11-23

@@ -13,26 +13,34 @@
  * The key is P-256 in `<state dir>/lan-tls.json` (0600), minted once. A phone pins the leaf's SPKI,
  * so the key is the identity and the certificate is paperwork: when the addresses change the
  * certificate is re-issued on the SAME key and no phone is unpinned. Addresses are read at boot,
- * like every other bind, so a re-issue happens at boot. The certificate is built here (`der.ts`,
+ * like every other bind, so a re-issue happens at boot. The certificate is built here (`x509.ts`,
  * signed with `node:crypto`): no dependency, no `openssl` at run time.
  *
  * `<PREFIX>_TLS_CERT` + `<PREFIX>_TLS_KEY` use a person's own leaf (from a local CA) instead and
  * leave `lan-tls.json` alone. A broken one refuses the TLS listener and says why; the plain host
  * still runs, because a typo in an optional knob must not take the desktop off the network.
+ *
+ * A browser certificate (`lanca.ts`) is a second leaf on the generated key, presented to a handshake
+ * that asks for its one name and to no other. Read once, at boot: a renewal or a removal counts from
+ * the next start, and a request never opens the file. One that cannot be served is one log line.
  */
-import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, randomBytes, sign, X509Certificate, type KeyObject } from "node:crypto";
+import { createPrivateKey, createPublicKey, generateKeyPairSync, X509Certificate, type KeyObject } from "node:crypto";
 import type { EventEmitter } from "node:events";
 import { chmodSync, readFileSync } from "node:fs";
 import { createServer, type Server } from "node:https";
+import { createSecureContext, type SecureContext, type TLSSocket } from "node:tls";
 import type { RequestListener } from "node:http";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { BRAND, envName, logTag } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
-import { bitString, boolTrue, integer, octetString, oid, seq, set, time, tlv, utf8String } from "./der.js";
 import { env } from "./env.js";
-import { isEncryptedSocket } from "./net.js";
+import { browserCertFile, dialedFix, dialedNameRefusal, isBrowserCertProblem, issueLine, readBrowserCert, type BrowserLeaf } from "./lanca.js";
+import { isEncryptedSocket, noteTlsServerName, tlsServerName } from "./net.js";
 import { readJsonGuardedDetail, writeJsonAtomic } from "./jsonstore.js";
+import { BACKDATE_MS, certPem, DAY_MS, dnsName, ext, ipAddress, ipv4, keyIdOf, randomSerial, signCertificate, spkiDer, spkiPin } from "./x509.js";
+
+export { spkiPin };
 
 export type LanTlsServer = Server;
 
@@ -80,77 +88,34 @@ export function lanTlsNames(host: string = hostname()): string[] {
   return /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(label) ? [`${label}.local`] : [];
 }
 
-const spkiDer = (k: KeyObject): Buffer => k.export({ type: "spki", format: "der" });
-
-/** The pin (8a): lowercase hex SHA-256 of the SPKI DER. */
-export function spkiPin(publicKey: KeyObject): string {
-  return createHash("sha256").update(spkiDer(publicKey)).digest("hex");
-}
-
 /** How a person reads a pin in a log line or the doctor. */
 export const pinShort = (spki: string): string => spki.slice(0, 16);
-
-const OID = {
-  commonName: "2.5.4.3",
-  ecdsaSha256: "1.2.840.10045.4.3.2",
-  subjectKeyId: "2.5.29.14",
-  keyUsage: "2.5.29.15",
-  subjectAltName: "2.5.29.17",
-  basicConstraints: "2.5.29.19",
-  authorityKeyId: "2.5.29.35",
-  extKeyUsage: "2.5.29.37",
-  serverAuth: "1.3.6.1.5.5.7.3.1",
-};
 
 /** Long enough that a re-issue is rare, and the 825 days a platform verifier still accepts. */
 const VALID_DAYS = 825;
 /** Re-issued at boot once this close to the end, so a phone that does check the date never meets an expired one. */
 const RENEW_DAYS = 30;
-const DAY_MS = 86_400_000;
-/** The desktop's clock and the phone's are never equal. */
-const BACKDATE_MS = 3_600_000;
-
-const extension = (id: string, critical: boolean, value: Uint8Array): Buffer =>
-  seq(oid(id), ...(critical ? [boolTrue()] : []), octetString(value));
-
-function ipv4(ip: string): Buffer | null {
-  const p = ip.split(".").map(Number);
-  return p.length === 4 && p.every((n) => Number.isInteger(n) && n >= 0 && n <= 255) ? Buffer.from(p) : null;
-}
 
 /** A self-signed leaf for `ips` + `names` on `key`, as PEM. Signed, not trusted: its worth is the pin. */
 export function issueLeaf(key: KeyObject, ips: string[], names: string[], now: Date = new Date()): string {
   const spki = spkiDer(createPublicKey(key));
-  // RFC 7093 §2 method 1: the leftmost 160 bits of the SHA-256 of the subjectPublicKey bits,
-  // which for P-256 are the 65-byte uncompressed point that ends the SPKI.
-  const keyId = createHash("sha256").update(spki.subarray(spki.length - 65)).digest().subarray(0, 20);
-  const signatureAlgorithm = seq(oid(OID.ecdsaSha256));
-  const name = seq(set(seq(oid(OID.commonName), utf8String(`${BRAND.name} LAN`))));
-  const serial = randomBytes(16);
-  serial[0] = (serial[0] & 0x7f) | 0x40; // positive, full length
-  const sans = [
-    ...names.map((n) => tlv(0x82, Buffer.from(n, "ascii"))),
-    ...ips.flatMap((ip) => { const b = ipv4(ip); return b ? [tlv(0x87, b)] : []; }),
-  ];
-  const tbs = seq(
-    tlv(0xa0, integer(Buffer.from([2]))), // v3
-    integer(serial),
-    signatureAlgorithm,
-    name,
-    seq(time(new Date(now.getTime() - BACKDATE_MS)), time(new Date(now.getTime() + VALID_DAYS * DAY_MS))),
-    name,
+  const keyId = keyIdOf(spki);
+  return certPem(signCertificate({
+    serial: randomSerial(),
+    issuer: `${BRAND.name} LAN`,
+    subject: `${BRAND.name} LAN`,
+    notBefore: new Date(now.getTime() - BACKDATE_MS),
+    notAfter: new Date(now.getTime() + VALID_DAYS * DAY_MS),
     spki,
-    tlv(0xa3, seq(
-      extension(OID.basicConstraints, true, seq()), // cA defaults to FALSE
-      extension(OID.keyUsage, true, bitString(Buffer.from([0x80]), 7)), // digitalSignature
-      extension(OID.extKeyUsage, false, seq(oid(OID.serverAuth))),
-      extension(OID.subjectKeyId, false, octetString(keyId)),
-      extension(OID.authorityKeyId, false, seq(tlv(0x80, keyId))),
-      extension(OID.subjectAltName, false, seq(...sans)),
-    )),
-  );
-  const der = seq(tbs, signatureAlgorithm, bitString(sign("sha256", tbs, key)));
-  return `-----BEGIN CERTIFICATE-----\n${der.toString("base64").replace(/(.{64})/g, "$1\n").trimEnd()}\n-----END CERTIFICATE-----\n`;
+    extensions: [
+      ext.notCa(),
+      ext.digitalSignature(),
+      ext.serverAuth(),
+      ext.subjectKeyId(keyId),
+      ext.authorityKeyId(keyId),
+      ext.subjectAltName([...names.map(dnsName), ...ips.flatMap((ip) => { const b = ipv4(ip); return b ? [ipAddress(b)] : []; })]),
+    ],
+  }, key));
 }
 
 interface Stored { v: 1; key: string; cert: string; sans: string[] }
@@ -230,7 +195,32 @@ export function ownLeaf(certPath: string | undefined = env("TLS_CERT"), keyPath:
   return { keyPem, certPem, spki: spkiPin(x.publicKey), selfSigned: x.issuer === x.subject && x.verify(x.publicKey) };
 }
 
-export interface LanTlsReady { port: number; addrs: string[]; material: LanTlsMaterial }
+/** `browser`: the certificate for the one name a browser may open this port by, when there is one to serve. */
+export interface LanTlsReady { port: number; addrs: string[]; material: LanTlsMaterial; browser?: BrowserLeaf | null }
+
+/** The two knobs that put a person's own leaf on the port. Either one set is enough to shadow the browser certificate. */
+const ownLeafKnobs = (): boolean => Boolean(env("TLS_CERT") || env("TLS_KEY"));
+
+/**
+ * The browser certificate this boot serves beside the generated leaf, or null with one line saying
+ * why (silent when none was ever issued). It only reads, and nothing about it can throw past here:
+ * the app's listener does not depend on it.
+ */
+export function browserLeafFor(root: string, material: LanTlsMaterial, now: Date = new Date()): BrowserLeaf | null {
+  const off = (why: string): null => { console.warn(`${logTag} LAN TLS: the browser certificate is not served: ${why}`); return null; };
+  try {
+    const c = readBrowserCert(root, createPrivateKey(material.keyPem), now);
+    if (isBrowserCertProblem(c) && c.problem === "missing") return null;
+    if (ownLeafKnobs()) return off(`${envName("TLS_CERT")} and ${envName("TLS_KEY")} take the port.`);
+    if (isBrowserCertProblem(c)) return off(`${c.why}. ${c.fix}`);
+    const dialed = dialedNameRefusal(c.name);
+    if (dialed) return off(`${dialed} Remove it with \`lan-cert remove\` or issue one for another name.`);
+    createSecureContext({ key: material.keyPem, cert: c.certPem }); // the TLS library has the last word
+    return c;
+  } catch (e) {
+    return off(`${browserCertFile(root)} cannot be used (${(e as NodeJS.ErrnoException).code ?? "unknown error"}).`);
+  }
+}
 
 /**
  * Everything short of listening, so the origin guard can be armed with the port first. Null when
@@ -248,10 +238,10 @@ export function prepareLanTls(i: Parameters<typeof lanTlsPlan>[0] & { root: stri
     console.warn(`${logTag} LAN TLS off: ${material.refused}. The plain host still runs.`);
     return null;
   }
-  return { port: plan.port, addrs: plan.addrs, material };
+  return { port: plan.port, addrs: plan.addrs, material, browser: browserLeafFor(i.root, material) };
 }
 
-let live: (LanTlsFacts & { selfSigned: boolean }) | null = null;
+let live: (LanTlsFacts & { selfSigned: boolean; browserName: string | null; browserUntil: number | null }) | null = null;
 
 /** The live listener's port and pin, or null: nothing is advertised until a socket is really bound. */
 export function lanTlsFacts(): LanTlsFacts | null {
@@ -266,11 +256,13 @@ export function lanTlsSelfSigned(): boolean {
 /**
  * A self-signed port does not serve the web app: a browser click-through would read as protected and
  * is not (the phone pins the key instead). True for a request on a TLS socket while the live leaf is
- * self-signed; false on the plain port and with a person's own leaf. `server/http.ts` asks it for
+ * self-signed; false on the plain port, with a person's own leaf, and where the handshake asked for the
+ * browser certificate's name, the one name a browser can check. `server/http.ts` asks it for
  * every static path; `/api/*`, `/ws` and `/pair/*` never reach it.
  */
 export function selfSignedNoticeFor(socket: object): boolean {
-  return isEncryptedSocket(socket) && lanTlsSelfSigned();
+  if (!isEncryptedSocket(socket) || !lanTlsSelfSigned()) return false;
+  return !live?.browserName || tlsServerName(socket) !== live.browserName;
 }
 
 /** The page that stands in for the app there. It names no desktop, user, path or version. */
@@ -289,6 +281,16 @@ export const SELF_SIGNED_NOTICE_HEADERS: Record<string, string> = {
 /** `welcome`'s two optional fields (8a), absent with no listener. */
 export function lanTlsWelcome(): { tlsPort?: number; tlsSpki?: string } {
   return live ? { tlsPort: live.port, tlsSpki: live.spki } : {};
+}
+
+/**
+ * `welcome`'s `tlsName` + `tlsNameUntil` (ms epoch of the certificate's end): only for a socket whose own
+ * handshake asked for the browser certificate's name, so a phone, a tailnet browser or a plain socket is
+ * told nothing. Absent with no listener or no browser certificate.
+ */
+export function lanTlsExpiry(socket: object | undefined): { tlsName?: string; tlsNameUntil?: number } {
+  if (!socket || !live?.browserName || live.browserUntil === null || !isEncryptedSocket(socket)) return {};
+  return tlsServerName(socket) === live.browserName ? { tlsName: live.browserName, tlsNameUntil: live.browserUntil } : {};
 }
 
 /**
@@ -331,23 +333,46 @@ export function startLanTls(
   o?: { attempts?: number; delayMs?: number },
 ): Server[] {
   const { keyPem: key, certPem: cert, spki, selfSigned } = ready.material;
+  const browser = ready.browser ?? null;
+  const named = browser && createSecureContext({ key, cert: browser.certPem, minVersion: "TLSv1.2" });
+  // Exactly the name, spelled as a browser spells it. Anything else (an address, another name, no
+  // SNI) is left on the default context: the leaf the phones pin, as with no browser certificate.
+  const SNICallback = (asked: string, cb: (err: Error | null, ctx?: SecureContext) => void): void =>
+    cb(null, named && asked === browser!.name ? named : undefined);
   return ready.addrs.map((host) => {
-    const server = createServer({ key, cert, minVersion: "TLSv1.2" }, handler);
+    const server = createServer({ key, cert, minVersion: "TLSv1.2", ...(named ? { SNICallback } : {}) }, handler);
+    // Before `https`'s own listener hands the socket to the parser: no request is read unnamed.
+    if (named) server.prependListener("secureConnection", (s: TLSSocket) => noteTlsServerName(s));
     attachWs(server).on("error", () => { /* the server's own listener says it */ });
     listenOrCarryOn(server, host, ready.port, () => {
-      live = { port: ready.port, spki, selfSigned };
-      console.log(`${logTag} listening https://${host}:${ready.port}  (LAN TLS, pin ${pinShort(spki)})`);
+      live = { port: ready.port, spki, selfSigned, browserName: browser?.name ?? null, browserUntil: browser?.notAfter.getTime() ?? null };
+      console.log(`${logTag} listening https://${host}:${ready.port}  (LAN TLS, pin ${pinShort(spki)})${browser ? `, for browsers https://${browser.name}:${ready.port} until ${browser.notAfter.toISOString().slice(0, 10)}` : ""}`);
     }, o);
     return server;
   });
 }
 
-/** The pin in `lan-tls.json` without touching it, for the doctor; null when there is none yet. */
-function storedPin(root: string): string | null {
+/**
+ * The key in `lan-tls.json`, read and never minted, moved aside or rewritten: for the doctor and for
+ * `lan-cert`, which puts a second certificate on it (`lanca.ts`). `missing` is a host that has not
+ * served TLS yet, as against a file that is there and does not read.
+ */
+export function readLanTlsKey(root: string): KeyObject | (LanTlsRefusal & { missing: boolean }) {
+  const file = lanTlsFile(root);
   try {
     const key = p256((JSON.parse(readFileSync(lanTlsFile(root), "utf8")) as Stored).key);
-    return key && spkiPin(createPublicKey(key));
-  } catch { return null; }
+    return key ?? { refused: `${file} holds no usable key`, missing: false };
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    // A parse error's message quotes the file, which holds a private key: only a file-system code is said.
+    return { refused: code === "ENOENT" ? `${file} does not exist` : `${file} could not be read (${code ?? "not JSON"})`, missing: code === "ENOENT" };
+  }
+}
+
+/** The pin in `lan-tls.json` without touching it; null when there is none yet. */
+function storedPin(root: string): string | null {
+  const key = readLanTlsKey(root);
+  return isRefusal(key) ? null : spkiPin(createPublicKey(key));
 }
 
 /** The doctor's row. It reads and never writes: no key minted, no port bound. */
@@ -364,4 +389,29 @@ export function lanTlsDoctor(i: Parameters<typeof lanTlsPlan>[0] & { root: strin
   }
   const pin = own ? own.spki : storedPin(i.root);
   return { status: "ok", detail: `LAN TLS on, port ${plan.port}, ${own ? "own leaf, " : ""}${pin ? `pin ${pinShort(pin)}` : "pin minted when the host starts"}` };
+}
+
+/** A browser certificate this close to its end is worth a line: each renewal is a visit to every laptop. */
+const BROWSER_WARN_DAYS = 30;
+
+/** The doctor's row for the browser certificate, or null when none was issued. It only reads. */
+export function lanBrowserDoctor(i: Parameters<typeof lanTlsPlan>[0] & { root: string }, now: Date = new Date()): { status: "ok" | "warn"; detail: string; fix?: string } | null {
+  const key = readLanTlsKey(i.root);
+  const c = readBrowserCert(i.root, isRefusal(key) ? null : key, now);
+  if (isBrowserCertProblem(c) && c.problem === "missing") return null;
+  const name = (isBrowserCertProblem(c) ? c.was : c)?.name;
+  const what = `browser certificate${name ? ` for ${name}` : ""}`;
+  if (ownLeafKnobs()) {
+    return { status: "warn", detail: `${what} is not served: ${envName("TLS_CERT")} and ${envName("TLS_KEY")} take the port`, fix: `Unset both and restart the host to serve it, or delete it with \`${BRAND.slug} lan-cert remove\`.` };
+  }
+  // The dialed-name check comes first: for such a name `issue --name <it>` is refused, so a problem's own fix would send a person in a circle.
+  const dialed = name ? dialedNameRefusal(name) : null;
+  if (dialed && name) return { status: "warn", detail: `${what} is not served: ${dialed}`, fix: dialedFix(name, BRAND.slug) };
+  if (isBrowserCertProblem(c)) return { status: "warn", detail: `${what} is not served: ${c.why}`, fix: c.fix };
+  if (isRefusal(key)) return { status: "warn", detail: `${what} cannot be checked: ${key.refused}`, fix: "Restore that file. A new key needs a new browser certificate, and every phone paired again." };
+  const left = `${c.daysLeft} ${c.daysLeft === 1 ? "day" : "days"} left`;
+  if (c.daysLeft <= BROWSER_WARN_DAYS) return { status: "warn", detail: `${what}, ${left}`, fix: `${issueLine(c.name)} Restart the host in between.` };
+  const plan = lanTlsPlan(i);
+  if ("why" in plan) return { status: plan.problem ? "warn" : "ok", detail: `${what}, ${left}, not served: LAN TLS off: ${plan.why}` };
+  return { status: "ok", detail: `${what}, ${left}, https://${c.name}:${plan.port}` };
 }

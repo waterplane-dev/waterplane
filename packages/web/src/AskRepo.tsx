@@ -12,6 +12,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type { RepoTarget } from "@waterplane/shared";
+import { useDialogStep } from "./backStep";
 import { createStore, useStore } from "./sdk/store.ts";
 import { repoBranchLine, repoTitle } from "./RepoPicker";
 import { askRepoRows } from "./askRepoRows";
@@ -58,6 +59,7 @@ export function AskRepoHost() {
   const [at, setAt] = useState(0);
   const listRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => { setQuery(""); setAt(0); }, [ask]);
+  useDialogStep(ask !== null, () => answerRepo(null));
   const rows = useMemo(() => (ask ? askRepoRows(ask.repos, query) : []), [ask, query]);
   useEffect(() => { setAt(0); }, [query]);
   useEffect(() => {

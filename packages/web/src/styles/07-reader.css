@@ -96,10 +96,12 @@
 .tr-agent { color: var(--muted); padding-top: var(--sp-4); padding-bottom: var(--sp-4); }
 .tr-agent .tr-live-what { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tr-agent svg { flex: 0 0 auto; opacity: .8; }
-/* The rows as a frame the grip under it shortens (`useDragCap.ts`). A shortened
-   list scrolls rather than clips: every agent stays reachable. */
-.tr-agent-list { flex: 0 0 auto; min-height: 0; }
-.tr-agent-list.capped { overflow-y: auto; overscroll-behavior: contain; }
+/* The agent rows and the outline's count line, as a frame the grip under it
+   shortens (`TvTop.tsx`). A shortened frame scrolls rather than clips: every
+   agent stays reachable. */
+.tr-top { flex: 0 0 auto; min-height: 0; }
+.tr-top.capped { overflow-y: auto; overscroll-behavior: contain; }
+.tr-top > .form-hint { margin: 0; padding: var(--sp-6) var(--sp-12); background: var(--panel); border-bottom: 1px solid var(--line); }
 /* Same signal repeated at the tail, where a reader following the conversation is
    already looking. */
 .tr-inflight { display: flex; align-items: center; gap: var(--sp-8); min-width: 0; color: var(--accent); font-size: calc(var(--fs-12) * var(--ui-font, 1)); padding: var(--sp-10) 0; }
@@ -116,19 +118,22 @@
    rows, the drawer's last row and the body's first turn were the same two lines
    of text on the same surface a hairline apart -- nothing said where the list
    stopped and the conversation started, and the rows themselves read as one
-   wall rather than N entries. The terminator is deliberately heavier than any
-   divider inside the drawer, so the strongest edge on screen is the one that
-   separates the two regions. */
+   wall rather than N entries. The terminator is the grip under the drawer, and
+   deliberately heavier than any divider inside it, so the strongest edge on
+   screen is the one that separates the two regions. */
 .tr-outline {
   max-height: 45%; overflow-y: auto; -webkit-overflow-scrolling: touch;
   background: var(--bg);
   padding: 0 var(--sp-8) var(--sp-10);
-  border-bottom: 2px solid var(--line);
-  box-shadow: 0 6px 12px -6px var(--shadow);
-  position: relative; z-index: 1;
 }
-/* The hint is also the drawer's label -- scrolled away, a half-scrolled list of
-   cards is indistinguishable from the transcript's own turns. */
+.tr-outline-grip { border-bottom-width: 2px; box-shadow: 0 6px 12px -6px var(--shadow); }
+/* Less reach downwards than the other grips: the first turn's buttons are there. */
+.tr-outline-grip::before { inset: -6px 0 -4px; }
+/* However tall the drawer was dragged (or the keyboard made the reader short),
+   the conversation keeps a line or two and the grip stays on screen. */
+.tr-outline ~ .tr-body { min-height: 64px; }
+/* The hint is also the label of the list -- scrolled away, a half-scrolled list
+   of cards is indistinguishable from the transcript's own turns. */
 .tr-outline > .form-hint {
   position: sticky; top: 0; z-index: 1;
   margin: 0 -8px var(--sp-8); padding: var(--sp-6) var(--sp-12);
@@ -139,7 +144,6 @@
    height cap and its separating edge would both be wrong here. */
 .tr-outline.tr-outline-full {
   max-height: none; flex: 1; min-height: 0;
-  border-bottom: none; box-shadow: none;
 }
 .tr-ol-row {
   display: block; width: 100%; text-align: left; cursor: pointer;

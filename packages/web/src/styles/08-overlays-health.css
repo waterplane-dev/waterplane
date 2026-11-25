@@ -496,6 +496,8 @@
 .hint-card.danger .hint-card-head { color: var(--dead); }
 .hint-card-what { margin: var(--sp-10) 0 0; font-size: calc(var(--fs-14) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--fg); }
 .hint-card-when { margin: var(--sp-8) 0 0; font-size: calc(var(--fs-13) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--muted); }
+.hint-card-opt { display: flex; align-items: center; gap: var(--sp-8); margin-top: var(--sp-12); font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--muted); }
+.hint-card-opt > span + button { flex: 0 0 auto; margin-left: auto; }
 .hint-card-acts { display: flex; align-items: center; gap: var(--sp-8); margin-top: var(--sp-14); }
 .hint-card-acts .spacer { flex: 1; }
 .hint-card-acts .send.danger { background: var(--dead); border-color: var(--dead); }

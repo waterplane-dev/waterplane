@@ -11,6 +11,7 @@
 import { demoAllRepos, demoSetupCheck } from "./setupcheck.ts";
 import { ASK_RULE_BACKENDS, PRICES_AS_OF, cleanRepoDisplayName, isSlowJobKind, SUGGESTED_ASK_RULES, filterGalleryRows, summarizeWaiting, zeroCost, zeroTotals, type GalleryQuery, type RepoTarget, type GalleryRow, type TokenStatsDoc } from "@waterplane/shared";
 import { demoCostWindow, demoTokenStats, demoTokenWindows, demoUsageLog, parseWindowSpecs } from "./ledger.ts";
+import { demoOptIns } from "./optins.ts";
 import { demoRepoHealth } from "./repohealth.ts";
 import { demoCompliance, demoSkills, demoSlowJob } from "./skills.ts";
 import { demoHealthIndex } from "./healthindex.ts";
@@ -78,6 +79,7 @@ export function demoHttp(m: DemoModel, now: number, req: DemoHttpRequest): DemoH
     }
     return json({ ok: true, name: c.value });
   }
+  if (path === "/api/repo/options" && method === "GET") return json({ options: [], confirm: "" });
   // The demo root holds only its repos: the rescan finds no folder without git.
   if (path === "/api/plainfolders" && method === "GET") return json({ folders: [] });
 
@@ -214,7 +216,7 @@ export function demoHttp(m: DemoModel, now: number, req: DemoHttpRequest): DemoH
 
   // Slow jobs (the checklist and the skills reads): every run is already done — see `demoSlowJob`.
   const sj = /^\/api\/repos\/([^/]+)\/jobs\/([^/]+)$/.exec(path);
-  if (sj && (method === "GET" || method === "POST") && m.numbers?.skills) {
+  if (sj && (method === "GET" || method === "POST") && (m.numbers?.skills || sj[2] === "setup.check")) {
     const id = decodeURIComponent(sj[1]);
     const kind = decodeURIComponent(sj[2]);
     if (!isSlowJobKind(kind)) return json({ error: "unknown job kind" }, 400);
@@ -225,6 +227,20 @@ export function demoHttp(m: DemoModel, now: number, req: DemoHttpRequest): DemoH
   }
   // The reconnect catch-up: no run is ever left running in the demo.
   if (path === "/api/jobs" && method === "GET") return json({ jobs: [] });
+
+  // Opt-ins: the catalog answered once; a choice is refused in words, since the demo stores nothing.
+  const oi = /^\/api\/repos\/([^/]+)\/optins(\/choice|\/seen)?$/.exec(path);
+  if (oi && (oi[2] ? method === "POST" : method === "GET")) {
+    const id = decodeURIComponent(oi[1]);
+    const target = repoTargets(m).find((r) => r.id === id) as { repoName?: unknown } | undefined;
+    if (!target) return json({ error: "no such repo" }, 404);
+    // The seen mark is the one write that may say yes: forgetting it costs nothing.
+    if (oi[2] === "/seen") return json({ ok: true });
+    return oi[2] ? json({ ok: false, error: NOT_IN_DEMO }) : json(demoOptIns(id, String(target.repoName ?? id), now));
+  }
+
+  // A setup fix writes to a repo, so it is refused in words.
+  if (/^\/api\/repos\/[^/]+\/compliance\/fix$/.test(path) && method === "POST") return json({ ok: false, applied: [], notes: [], error: NOT_IN_DEMO });
 
   // Repo health: a fictional series for the demo repos, only where the scenario opts in.
   const health = /^\/api\/repos\/([^/]+)\/repohealth$/.exec(path);

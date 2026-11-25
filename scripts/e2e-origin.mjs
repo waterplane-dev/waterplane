@@ -103,11 +103,11 @@ bootWait(PORT, 1200, async () => {
     // search domain) — origin.ts strips that suffix before adding `<name>.local`,
     // so the test must too, or it asks for "mac.local.local" and reads a correct
     // refusal as a failure.
-    check((await raw("/api/health", { host: `${hostname().replace(/\.local$/i, "")}.local` })).status === 200, "our own mDNS name → allowed");
+    check((await raw("/api/health", { host: `${hostname().replace(/\.local$/i, "")}.local` })).status === 401, "our own mDNS name → past the origin gate, and asked for a token (R-security-034)");
     check((await raw("/api/health", { host: "someone-else.local" })).status === 403, "another .local name → 403");
     check(
-      (await raw("/api/health", { host: "my-box.example" })).status === 200,
-      `${E.ALLOWED_HOSTS} entry → allowed`,
+      (await raw("/api/health", { host: "my-box.example" })).status === 401,
+      `${E.ALLOWED_HOSTS} entry with no https origin listed → past the origin gate, and asked for a token`,
     );
 
     // ── Sec-Fetch-Site ───────────────────────────────────────────────
@@ -193,6 +193,24 @@ bootWait(PORT, 1200, async () => {
     // No serve door configured ⇒ nothing extra is trusted.
     configureOrigins({ port: 8770, tailscaleIp: "100.64.0.5", tailscaleDns: "box.tail1234.ts.net" });
     check(!originHeaderAllowed("https://box.tail1234.ts.net:8771"), "with no serve door, an odd port on our own name is refused");
+
+    // ── Framing ──────────────────────────────────────────────────────
+    // A framed page's requests carry OUR origin, so only the page's own header stops it.
+    // `/Index.html`: on a case-insensitive disk that is the app under another name.
+    const OPEN = "frame-ancestors 'self' vscode-webview: vscode-file:", SHUT = "frame-ancestors 'self'";
+    for (const p of ["/", "/any/spa/path", "/Index.html", "/index.html"]) {
+      const shell = await raw(p);
+      check(shell.headers["content-security-policy"] === OPEN, `${p} on this machine: itself and VS Code may frame it`);
+      const again = await raw(p, { "if-none-match": String(shell.headers.etag) });
+      check(again.status === 304, `${p} still revalidates`);
+      // Through `tailscale serve`, or under any name that is not this machine's loopback: only itself.
+      for (const [how, h] of [["proxied", { "x-forwarded-for": "100.64.0.9" }], ["by another name", { host: "box.tail1234.ts.net" }]]) {
+        const other = await raw(p, h);
+        check(other.headers["content-security-policy"] === SHUT, `${p} ${how}: only itself may frame it`);
+        const cross = await raw(p, { ...h, "if-none-match": String(shell.headers.etag) });
+        check(cross.status === 200, `${p} ${how}: a copy with the wider policy is not revalidated`);
+      }
+    }
 
     // ── WebSocket ────────────────────────────────────────────────────
     // The one that actually matters: WS is exempt from the same-origin policy,

@@ -4,6 +4,8 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { onThemeChange, resolvedTheme } from "./theme";
 import { termTheme } from "./termTheme";
+import { copyText } from "./api";
+import { showToast } from "./toast";
 import { onUiScale, termPx } from "./uiScale";
 import { cappedCols, drawableViewport } from "@waterplane/shared";
 
@@ -153,7 +155,8 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalV
     // without one the key is still swallowed, never turned into an interrupt.
     term.attachCustomKeyEventHandler((e) => {
       if (e.type !== "keydown" || !e.ctrlKey || e.shiftKey || e.altKey || e.key.toLowerCase() !== "c" || !term.hasSelection()) return true;
-      void navigator.clipboard?.writeText(term.getSelection()).catch(() => { /* not a secure context */ });
+      // One keydown gesture, never per selection change. copyText's fallback hands focus back to xterm's helper textarea; the selection is xterm's own, not the DOM's.
+      void copyText(term.getSelection()).then((ok) => { if (!ok) showToast("the clipboard refused it here — use Select text to copy it"); });
       return false;
     });
     term.onData(onInput);

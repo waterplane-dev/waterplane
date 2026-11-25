@@ -12,12 +12,13 @@ import { mkdtempSync, readFileSync, statSync, writeFileSync, mkdirSync } from "n
 import { createHmac } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { AuthManager, tokenFromRequest, selectWsProtocol, WS_TOKEN_PROTOCOL_PREFIX } from "../dist/auth.js";
+import { AuthManager, admitReadTicket, authCookie, tokenFromRequest, selectWsProtocol, WS_TOKEN_PROTOCOL_PREFIX } from "../dist/auth.js";
 import { DeviceLedger, hashToken } from "../dist/deviceledger.js";
+import { requestPeerKind, unprovenName } from "../dist/net.js";
 import { lanIdentity, lanIdentityPresent, lanMac, validNonce, forgetLanIdentity } from "../dist/lanid.js";
 import { RateLimiter } from "../dist/ratelimit.js";
 import { checkLan } from "../dist/doctor.js";
-import { DEVICE_SEEN_THROTTLE_MS } from "@waterplane/shared";
+import { DEVICE_SEEN_THROTTLE_MS, NAME_SIGNIN_HOURS, cleanDeviceRow, deviceEndsAt } from "@waterplane/shared";
 
 const root = () => mkdtempSync(join(tmpdir(), "waterplane-dev-"));
 
@@ -212,4 +213,60 @@ test("doctor lan: quiet unbound, warn without a password, and warn with one (pla
   assert.equal(ok.status, "warn");
   assert.match(ok.detail, /LAN ready at http:\/\/192\.168\.1\.5:8770 \(password set/);
   assert.match(ok.detail, /not encrypted/);
+});
+
+// ── a sign-in under a name only the local network vouches for (R-security-035) ──
+
+test("name sign-in: ends by itself, also across a restart, and the next write drops its row", () => {
+  const r = root();
+  const l = new DeviceLedger(r);
+  const t0 = Date.now(), end = t0 + NAME_SIGNIN_HOURS * 3_600_000;
+  const named = l.mint("browser", "unknown", t0, undefined, "mac.local");
+  const plain = l.mint("phone", "tailscale", t0);
+  assert.equal(deviceEndsAt(named.row), end);
+  assert.equal(deviceEndsAt(plain.row), null);
+  const again = new DeviceLedger(r);
+  for (const x of [l, again]) {
+    assert.equal(x.lookup(named.token, end - 1)?.under, "mac.local");
+    assert.equal(x.lookup(named.token, end), null);
+    assert.equal(x.get(named.row.id, end), null);
+    assert.deepEqual(x.list(null, end).map((d) => d.id), [plain.row.id]);
+    assert.ok(x.lookup(plain.token, end + 400 * 86_400_000), "an ordinary device stays until revoked");
+  }
+  l.mint("later", "lan", end);
+  assert.ok(!readFileSync(l.file, "utf8").includes("mac.local"));
+});
+
+test("name sign-in: a row whose name is unreadable still ends", () => {
+  for (const under of [null, 3, "", {}]) assert.equal(typeof cleanDeviceRow({ id: "abcdefgh", name: "x", createdAt: 1, under }).under, "string", JSON.stringify(under));
+  assert.equal("under" in cleanDeviceRow({ id: "abcdefgh", name: "x", createdAt: 1 }), false);
+});
+
+test("name sign-in: its token counts under such a name only, and stands behind no read ticket", () => {
+  const auth = new AuthManager(root());
+  auth.setPassword("correct horse");
+  const { token, deviceId } = auth.issueToken("browser", "unknown", undefined, "mac.local");
+  // `unknown` alone is not a name: a Wi-Fi peer that resets its connection has no address (peerKind -> unknown).
+  assert.equal(auth.checkToken(token, "unknown"), false, "unknown without a name (a reset connection)");
+  assert.equal(auth.checkToken(token, "unknown", true), true);
+  assert.equal(auth.checkToken(token, "lan", true), false);
+  for (const kind of ["lan", "public", "tailscale", "loopback"]) assert.equal(auth.checkToken(token, kind), false, kind);
+  const plain = auth.issueToken("phone", "tailscale").token;
+  for (const kind of ["unknown", "lan", "public", "tailscale"]) assert.equal(auth.checkToken(plain, kind), true, `an ordinary token: ${kind}`);
+  const at = (row) => admitReadTicket(auth, { url: `/api/repos/x/artifact?path=a.png&wt=${auth.mintReadTicket(row).ticket}`, method: "GET", path: "/api/repos/x/artifact", socket: { encrypted: true } }, () => false);
+  assert.equal(at(auth.devices.get(deviceId)), null);
+  assert.ok(at(auth.deviceFor(plain)), "an ordinary device's ticket is admitted");
+});
+
+test("name sign-in: a socket that closed before the daemon read its address is not a name", () => {
+  const h = { host: "192.168.1.5:8770" };
+  assert.equal(requestPeerKind(undefined, h), "unknown");
+  assert.equal(unprovenName(undefined, h), null);
+  assert.equal(unprovenName("127.0.0.1", { host: "desk.local:8770" }), "desk.local");
+});
+
+test("name sign-in: the cookie ends with the token; others keep 30 days; none names a Domain", () => {
+  assert.match(authCookie("T", false, true), new RegExp(`Max-Age=${NAME_SIGNIN_HOURS * 3600}$`));
+  assert.match(authCookie("T"), /Max-Age=2592000$/);
+  for (const c of [authCookie("T"), authCookie("T", false, true)]) { assert.match(c, /HttpOnly; SameSite=Lax/); assert.doesNotMatch(c, /Domain|Secure/); }
 });

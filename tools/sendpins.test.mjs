@@ -36,7 +36,7 @@ const SURFACE = [
   "launchWords:value", "leadChoices:value", "leadLabel:value",
   "leadOk:value", "leadWords:value", "offlineLabel:value", "onceIn:value",
   "pastBudgetConfirm:value", "pastBudgetLabel:value", "pastBudgetNote:value", "pastBudgetToast:value",
-  "pctChoices:value", "pctOk:value", "pctWords:value", "previewOf:value", "quickTimes:value", "resumeWhen:value",
+  "pctChoices:value", "pctOk:value", "pctWords:value", "previewOf:value", "quickTimes:value", "repoItemOpts:value", "resumeWhen:value", "scheduleEntryOf:value",
   "retimeBlocker:value", "retimeHeldWords:value", "retimeWhenLabel:value", "seedAfterRescue:value",
   "sendBlocker:value", "sendLabel:value", "sequentialMeans:value", "skipQueueNote:value", "targetWords:value",
   "toLocalInput:value", "whenPatchToast:value", "whenRoute:value", "weeklyIfNoSession:value", "whenWords:value", "windowIn:value",

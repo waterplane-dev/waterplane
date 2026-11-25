@@ -115,9 +115,11 @@ bootWait(PORT, 900, async () => {
     ws.send(JSON.stringify({ t: "session.input", id: sid, data: "echo ANSWERONE\r", ackId: "ans1", expectPrompt: fp1 }));
     await until(() => acks.has("ans1"));
     check(acks.get("ans1")?.ok === true, "an answer whose question is still on screen is accepted");
-    await until(() => screen.includes("ANSWERONE"));
+    // The shell shows it twice, the typed echo and then the output line: wait for BOTH, or the
+    // second lands after the count below is taken and reads as a second delivery.
+    await until(() => count(screen, "ANSWERONE") >= 2);
     const afterFirst = count(screen, "ANSWERONE");
-    check(afterFirst > 0, "…and the keystrokes actually reached the PTY");
+    check(afterFirst >= 2, "…and the keystrokes actually reached the PTY");
 
     // 2. The retry that the tunnel ate the receipt for. Same ackId ⇒ re-ACKed
     //    from the ledger, NOT typed again — the guard must not have opened a
@@ -165,6 +167,7 @@ bootWait(PORT, 900, async () => {
     check(!screen.includes("WRONGBOX"), "…and the new dialog was not answered on the old question's behalf");
 
     // 6. …while the answer minted against the box that IS up goes through.
+    if (!info?.prompt) throw new Error("no box is published, so step 6 has nothing to answer");
     const fp2 = promptFingerprint(info.prompt);
     ws.send(JSON.stringify({ t: "session.input", id: sid, data: "echo RIGHTBOX\r", ackId: "ans4", expectPrompt: fp2 }));
     await until(() => acks.has("ans4"));

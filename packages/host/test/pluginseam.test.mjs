@@ -13,7 +13,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const { PluginRegistry } = await import("../dist/plugins/pluginregistry.js");
-const { contributedChecks, contributedFixes, hostChecks, hostFixes } = await import("../dist/plugins/setupcontrib.js");
+const { contributedChecks, contributedFixes, contributedOptIn, hostChecks, hostFixes } = await import("../dist/plugins/setupcontrib.js");
+const { applyNewProjectOptions, newProjectOptions } = await import("../dist/newproject.js");
 const { targetId } = await import("../dist/repos.js");
 const { inspectRepo } = await import("../dist/compliance.js");
 const { BRAND, PLUGIN_API_VERSION } = await import("@waterplane/shared");
@@ -74,6 +75,48 @@ test("setup rows and fixes: contributed, run in order, gone when the plugin is o
   assert.equal(await reg.setEnabled("rowmaker", false), null);
   assert.deepEqual(contributedChecks(wt), [], "switched off takes the rows with it");
   assert.deepEqual(contributedFixes(["rowmaker-fix"], wt), []);
+});
+
+test("a fix offered for a new project is a box there; only an offered id runs, and a throw costs one sentence", async () => {
+  const { reg, pd } = boot();
+  plugin(pd, "boxes", `
+    export function activate(api) {
+      api.setupFix("box-ok", ({ worktree }) => ({ applied: true, note: "wrote in " + worktree.length }), { newProject: () => ({ label: "L".repeat(80), hint: "h", on: true }) });
+      api.setupFix("box-bad", () => { throw new Error("kaput"); }, { newProject: () => ({ label: "bad", hint: "h", on: false }) });
+      api.setupFix("box-null", () => ({ applied: true, note: "" }), { newProject: () => null });
+      api.setupFix("box-none", () => ({ applied: true, note: "never" }));
+    }`);
+  await reg.loadAll();
+  const offered = newProjectOptions();
+  const mine = offered.filter((o) => o.from === "BOXES");
+  assert.deepEqual(mine.map((o) => [o.id, o.label.length, o.on]), [["box-ok", 60, true], ["box-bad", 3, false]]);
+  assert.equal(offered[0].id, "auto-compact");
+  assert.equal(offered[0].on, false, "a window nobody chose is not pre-ticked");
+  const wt = mkdtempSync(join(tmpdir(), "waterplane-seamnew-"));
+  const r = applyNewProjectOptions(wt, ["box-ok", "box-bad", "box-none", "auto-compact"]);
+  assert.ok(r.notes.includes(`wrote in ${wt.length}`));
+  assert.ok(r.notes.some((n) => /autoCompactWindow/.test(n)));
+  assert.match(readFileSync(join(wt, ".claude/settings.json"), "utf8"), /autoCompactWindow/);
+  assert.deepEqual(r.problems, ['"box-none" is no longer offered on this desktop', "bad: kaput"]);
+  assert.equal(await reg.setEnabled("boxes", false), null);
+  assert.ok(!newProjectOptions().some((o) => o.from === "BOXES"), "switched off takes its boxes with it");
+});
+
+test("an opt-in answered by a plugin: cleaned, a throw is unknown, gone when the plugin is off", async () => {
+  const { reg, pd } = boot();
+  plugin(pd, "opts", `
+    export function activate(api) {
+      api.optIn("o-ok", async ({ worktree }) => ({ state: "on", detail: "saw " + worktree }));
+      api.optIn("o-odd", () => ({ state: "maybe", detail: "" }));
+      api.optIn("o-bad", () => { throw new Error("kaput"); });
+    }`);
+  await reg.loadAll();
+  assert.deepEqual(await contributedOptIn("o-ok", "/w"), { state: "on", detail: "saw /w" });
+  assert.equal((await contributedOptIn("o-odd", "/w")).state, "unknown");
+  assert.equal((await contributedOptIn("o-bad", "/w")).state, "unknown");
+  assert.equal(await contributedOptIn("o-none", "/w"), null);
+  assert.equal(await reg.setEnabled("opts", false), null);
+  assert.equal(await contributedOptIn("o-ok", "/w"), null);
 });
 
 test("a desktop row is on the desktop's checklist, never a repo's, and only its own fixes run there", async () => {

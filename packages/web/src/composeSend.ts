@@ -463,12 +463,18 @@ export function busySendRememberedToast(m: SendMode): string {
  * already, which go with the transcript; *only what's typed* is the old Send —
  * not offered with the phone's recogniser, which rewrites the box from what it
  * held at the tap on every word, so the sent words would come straight back.
+ *
+ * `picture`: this Send is the annotator's *Send & run* (or its when-it's-free
+ * twin). It used to go without asking, so the picture ran and the words said
+ * about it landed in an empty box afterwards.
  */
-export function dictationSendAsk(o: { typed: boolean; phone: boolean; why?: string | null }): {
+export function dictationSendAsk(o: { typed: boolean; phone: boolean; why?: string | null; picture?: boolean }): {
   title: string; lines: string[]; confirmLabel: string; cancelLabel: string; altLabel?: string; tone: "warn" | "info";
 } {
   const lines = [
-    o.typed
+    o.picture
+      ? "Send unread: the picture and the transcript go together the moment it is back, without you seeing the words."
+      : o.typed
       ? "Send unread: the transcript goes the moment it is back, after what is typed, without you seeing it."
       : "Send unread: the transcript goes the moment it is back, without you seeing it.",
   ];
@@ -478,14 +484,19 @@ export function dictationSendAsk(o: { typed: boolean; phone: boolean; why?: stri
     lines.push(`It comes from the phone's own recogniser${why ? ` (${why})` : ""}, not the desktop's whisper — it gets far more words wrong, names and code worst of all. Reading it first is safer.`);
   }
   const onlyTyped = o.typed && !o.phone;
-  if (onlyTyped) lines.push("Only what's typed: those words go now; the transcript lands in the empty box afterwards.");
-  lines.push("Read it first: nothing is sent — the words land in the box and wait for you.");
+  const only = o.picture ? "Without the words" : "Only what's typed";
+  if (onlyTyped) lines.push(o.picture
+    ? `${only}: the picture and what is typed go now; the transcript lands in the empty box afterwards.`
+    : `${only}: those words go now; the transcript lands in the empty box afterwards.`);
+  lines.push(o.picture
+    ? "Read it first: nothing is sent — the picture is in the box, the words land beside it and wait for you."
+    : "Read it first: nothing is sent — the words land in the box and wait for you.");
   return {
     title: "Your words are not back yet",
     lines,
     confirmLabel: "Send unread",
     cancelLabel: "Read it first",
-    ...(onlyTyped ? { altLabel: "Only what's typed" } : {}),
+    ...(onlyTyped ? { altLabel: only } : {}),
     tone: o.phone ? "warn" : "info",
   };
 }
@@ -505,5 +516,7 @@ export const DICTATION_SEND_TOAST = {
   off: "called off — the words land in the box and wait for you",
   lost: "not sent — the recording did not come back into this box; what is there stays",
   empty: "not sent — nothing came back from the recording",
+  joined: "the picture goes with the send that is waiting for your words",
+  landed: "not sent — your words came back first; they are in the box to read",
   left: "not sent — you left that session before your words came back",
 } as const;

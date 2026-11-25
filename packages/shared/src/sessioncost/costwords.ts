@@ -1,7 +1,7 @@
 // Cut from sessioncost.ts (move only): the sentences and chips
 // The one door stays `./sessioncost.js`; this slice imports its siblings directly, never the barrel.
 
-import { fmtUsd, fmtUsdShort } from "../pricing.js";
+import { fmtUsd } from "../pricing.js";
 import type { SessionCostReading } from "./costtypes.js";
 
 /** `n×`, at the precision the number deserves: 2.5 below ten, 12 above it. */
@@ -46,10 +46,10 @@ export function usageChip(usageTok: number | null | undefined): string | null {
 }
 
 /**
- * What the session WOULD have cost, as a chip: `$4.21`, or null.
+ * What the session WOULD have cost, as a chip: `$4.21`, `$374.00`, `<$0.01`, or null.
  *
  * The money twin of `usageChip`, and for the same reason it is a separate
- * function rather than a `fmtUsdShort` call at each site: this is the one place
+ * function rather than a `fmtUsd` call at each site: this is the one place
  * that decides what "no figure" looks like. Null — never `$0` — when nothing
  * measured it or nothing could be priced, so the caller falls back to the token
  * total rather than printing an amount that reads as "this was free".
@@ -60,7 +60,8 @@ export function usageChip(usageTok: number | null | undefined): string | null {
  * the rate. A dollar figure is the same fact with the arithmetic already done.
  */
 export function costChip(costUsd: number | null | undefined): string | null {
-  return costUsd != null && Number.isFinite(costUsd) && costUsd > 0 ? fmtUsdShort(costUsd) : null;
+  if (costUsd == null || !Number.isFinite(costUsd) || costUsd <= 0) return null;
+  return costUsd < 0.01 ? "<$0.01" : fmtUsd(costUsd);
 }
 
 /**

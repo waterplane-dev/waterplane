@@ -40,7 +40,10 @@ export type HostCoreMsg =
   // `tlsSpki` (optional, additive): the encrypted LAN listener, `tlsSpki` being
   // lowercase hex SHA-256 of the leaf's SPKI DER. A phone believes these three
   // only when the URL this socket dialled is protected, never on a plain route.
-  | { t: "welcome"; protocol: number; bootId: string; tailscaleIp: string | null; tailscaleBin: string | null; tailscaleDns: string | null; httpsUrl: string | null; lanIps: string[]; port: number; root: string; tmux: boolean; clientKind: PeerKind; auth: AuthState; hostId?: string; hostName?: string; deviceId?: string; startedAt?: number; readyAt?: number; updateKey?: string; tlsPort?: number; tlsSpki?: string;
+  // `tlsName` + `tlsNameUntil` (optional, additive, no PROTOCOL_VERSION bump): sent ONLY to a socket
+  // that arrived by the browser certificate's own name; `tlsNameUntil` is the certificate's end in ms
+  // since the epoch. The phone shows a line only on that hostname and within 30 days of the end.
+  | { t: "welcome"; protocol: number; bootId: string; tailscaleIp: string | null; tailscaleBin: string | null; tailscaleDns: string | null; httpsUrl: string | null; lanIps: string[]; port: number; root: string; tmux: boolean; clientKind: PeerKind; auth: AuthState; hostId?: string; hostName?: string; deviceId?: string; startedAt?: number; readyAt?: number; updateKey?: string; tlsPort?: number; tlsSpki?: string; tlsName?: string; tlsNameUntil?: number;
       /** The rates this host read off Anthropic's price page, so the phone's own cost hints match the
        *  host's. Absent = the host prices from its built-in table (or is older): the phone uses its own. */
       prices?: { rates: Record<string, { input: number; output: number; cacheRead?: number }>;

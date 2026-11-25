@@ -90,3 +90,8 @@ The open-tabs list is a right-hand panel on a wide layout like other sheets, not
 - asked: 2026-11-19, 2026-11-20
 - shipped: 59676d5c0, 6fc6270f4
 
+### R-tabs-020 · shipped
+At phone width the main screen's logo is the open-tabs button: it carries the number of open tabs and opens the list. Tapping it first shows a card that says so, that the same number at the top opens the list from any other screen, and that the readings at the top are buttons with details behind them; the card comes back on every tap until the person chooses "don't show again". The card also offers to hide the number on the logo, and a setting shows or hides it; with the number hidden the logo is drawn plain, without the stacked card behind it.
+- asked: 2026-11-23, 2026-11-24
+- shipped: 2026-11-23
+

@@ -156,4 +156,18 @@ test("fast mode reads the newest confirmation and refuses prose", async () => {
   assert.equal(readFastRefusal(refused), "Fast mode requires usage credits");
   assert.equal(readFastRefusal(refused + "\n❯ /fast off\n  ⎿  Fast mode OFF"), null, "a newer OFF drops the reason");
   assert.equal(readFastRefusal("  ⎿  Fast mode ON"), null);
+  // 2.1.331 with CLAUDE_CODE_DISABLE_FAST_MODE: the command's row when idle …
+  const idle = "❯ /fast on\n  ⎿  Fast mode is not available";
+  assert.equal(readFastMode(idle), false);
+  assert.equal(readFastRefusal(idle), "Fast mode is not available");
+  // … and a right-aligned notice above the composer mid-turn (captured at 80 columns).
+  const busy = ["· Cerebrating… (1m 35s · ↓ 2.4k tokens)", " ".repeat(52) + "Fast mode is not available", "─".repeat(80), "❯ ", "─".repeat(80), "  ⏵⏵ auto mode on (shift+tab to cycle)"].join("\n");
+  assert.equal(readFastMode(busy), false);
+  assert.equal(readFastRefusal(busy), "Fast mode is not available");
+  assert.equal(readFastRefusal("  ⎿  Fast mode requires usage credits · /usage-credits"), "Fast mode requires usage credits");
+  const { fastAnswerRows } = await import("../dist/permmode.js");
+  assert.equal(fastAnswerRows("❯ /fast on"), 0);
+  assert.equal(fastAnswerRows(idle + "\n" + idle), 2, "a second answer is a new row, the old one is not");
+  assert.equal(readFastMode("  Fast mode is not available"), null, "a conversation row is not the CLI's answer");
+  assert.equal(readFastMode("        Fast mode is not available on your phone yet"), null);
 });

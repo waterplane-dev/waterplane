@@ -35,6 +35,10 @@ export const pullRules = {
     // A hook: called at a component's top level, like any other.
     return useStore(cfgs).get(repoDir);
   },
+  /** Has the host answered for this repo? Until then a tap must not write its rule. */
+  known(repoDir: string): boolean {
+    return cfgs.get().has(repoDir);
+  },
   /** Ask the host for a repo's rule (an answer lands in the store); false with no connection. */
   ask(repoDir: string): boolean {
     return core().conn.trySend({ t: "pull.get", repoDir });
@@ -44,7 +48,7 @@ export const pullRules = {
 /** Turn a repo's auto-download on for its builds, keeping the rest of the rule; `done` is the receipt.
  *  A rule this phone has not read yet is asked for and the tap says to come back — never a default
  *  written over typed patterns. */
-export function enableBuilds(repoDir: string, done: string): void {
+export function enableBuilds(repoDir: string, done: string): "asked" | "saved" | "unsent" {
   const c = core();
-  enableBuildsRule(repoDir, done, c.conn, c.say.toast);
+  return enableBuildsRule(repoDir, done, c.conn, c.say.toast);
 }

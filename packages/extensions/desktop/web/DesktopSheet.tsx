@@ -20,7 +20,8 @@
  * picture. Both are a mouse's way around a zoomed view — neither sends anything to the desktop.
  *
  * Screenshot (the toolbar's camera, and behind the handle in fullscreen) saves the whole desktop at full
- * resolution into the session repo's `.claude/outbox/` (`Shot.tsx`); its receipt is a line in the
+ * resolution into the session repo's `.claude/outbox/`; the clipboard button beside it leaves the same
+ * picture in the desktop's own clipboard (`Shot.tsx`). The receipt is a line in the
  * column, above the key row.
  *
  * The header's back arrow is one Back, like the gesture: with the Quality or typing panel open it
@@ -42,7 +43,7 @@ import { KeyRow } from "./KeyRow.tsx";
 import { Handle } from "./Handle.tsx";
 import { Overview } from "./Overview.tsx";
 import { QualityPanel } from "./QualityPanel.tsx";
-import { ShotButton, ShotLine } from "./Shot.tsx";
+import { ClipShotButton, ShotButton, ShotLine } from "./Shot.tsx";
 import { Toolbar } from "./Toolbar.tsx";
 import { TypePanel } from "./TypePanel.tsx";
 import { askGrant, choice, closeDesktop, grantNote, probe, refreshProbe, setChoice, takeReopen } from "./state.ts";
@@ -61,6 +62,8 @@ const FULL_COLUMN = {
 } as const;
 // Siblings of the viewport, not children: a press inside it is a click on the desktop.
 const FLOAT = { position: "absolute", zIndex: 2, minHeight: 36, padding: "4px 10px", opacity: 0.85 } as const;
+const SHOTS = { position: "absolute", zIndex: 2, right: 8, top: 96, display: "flex", gap: 8 } as const;
+const SHOT_BTN = { minHeight: FLOAT.minHeight, padding: FLOAT.padding, opacity: FLOAT.opacity } as const;
 // The stage holds the picture's element and, beside it (never inside: a press inside is a click on the
 // desktop), the overview while zoomed.
 const STAGE = { position: "relative", flex: "1 1 auto", minHeight: 0 } as const;
@@ -262,7 +265,10 @@ export function DesktopSheet() {
           <Button style={{ ...FLOAT, right: 8, top: 52 }}
             title="close the desktop view — open it again from the session's ☰ menu" onClick={closeDesktop}><X size={15} /> close</Button>
         )}
-        {full && controls && ready && <ShotButton worded style={{ ...FLOAT, right: 8, top: 96 }} />}
+        {/* One row: a fourth float under the others met the overview in a short box. */}
+        {full && controls && ready && (
+          <div style={SHOTS}><ClipShotButton worded style={SHOT_BTN} /><ShotButton worded style={SHOT_BTN} /></div>
+        )}
         {!ready && (
           <div style={NOTE}>
             <div>{avail}</div>

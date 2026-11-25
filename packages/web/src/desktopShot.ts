@@ -14,3 +14,16 @@ export async function desktopScreenshot(repoId: string): Promise<{ file: { name:
     return { error: "the desktop could not be reached" };
   }
 }
+
+/**
+ * The same capture into the desktop's own clipboard (`POST /api/host/screenshot/clipboard`): no file,
+ * and never this device's clipboard. `null` when it is there, else the reason; never throws.
+ */
+export async function desktopScreenshotToClipboard(): Promise<{ error: string } | null> {
+  try {
+    const r = await api.screenshotToClipboard();
+    return r.ok ? null : { error: r.error || "the desktop gave no reason" };
+  } catch {
+    return { error: "the desktop could not be reached" };
+  }
+}

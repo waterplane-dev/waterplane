@@ -30,7 +30,7 @@ import { usePref } from "../prefs";
 import { ComposeBar } from "../compose/ComposeBar";
 import { NextPromptStrip } from "../compose/NextPromptStrip";
 import { QueueBars, type QueueBarsProps } from "../queue/QueueBars";
-import { CliRestartBanner, CliUpdateBanner, InsecureBanner } from "../Banners";
+import { CertExpiryBanner, CliRestartBanner, CliUpdateBanner, InsecureBanner } from "../Banners";
 import { useHeaderCmds, useHeaderSplit, useToolbarCfg } from "../../features/toolbarCfg";
 import { usePullRecords } from "../../features/pull";
 import { pickFileFor, pickImageFor } from "../../features/images";
@@ -129,6 +129,7 @@ export function SessionScreen(p: SessionScreenProps): ReactNode {
         refreshTerminal={term.refreshTerminal} toolbar={toolbar} />
       <ReturnChip activeId={active.id} />
       <InsecureBanner httpsUrl={conn.info.httpsUrl} />
+      <CertExpiryBanner tlsName={conn.info.tlsName} tlsNameUntil={conn.info.tlsNameUntil} />
       <CliUpdateBanner update={update} liveAsk={liveAsk} liveSend={liveSend} />
       {!pending && <CliRestartBanner active={active} update={update} relaunch={launch.relaunch} />}
 

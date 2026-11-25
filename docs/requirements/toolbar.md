@@ -52,3 +52,8 @@ The More button, the Build button and the top-bar menu button show only their ic
 - asked: 2026-11-19, 2026-11-19
 - shipped: c666291a9
 
+
+### R-toolbar-012 · shipped
+The floating buttons over the terminal and the reader can be dragged by their grip to any place on the session screen, including over the header and the message box, and stay there; parked low they ride up with the keyboard, and a double-tap on the grip puts them back.
+- asked: 2026-11-24
+- shipped: f730dad33

@@ -26,7 +26,7 @@ import type { IncomingHttpHeaders } from "node:http";
 import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { readJsonGuardedDetail, writeJsonAtomic } from "./jsonstore.js";
-import type { DeviceRow, DeviceScope } from "@waterplane/shared";
+import { NAME_SIGNIN_HOURS, type DeviceRow, type DeviceScope } from "@waterplane/shared";
 import { peerKind, type PeerKind } from "./net.js";
 import { DeviceLedger } from "./deviceledger.js";
 import { PassiveGate, passiveAllows } from "./passive.js";
@@ -160,10 +160,10 @@ export class AuthManager {
 
   /** Mint a token for a new device row. Callers decide WHO may (a correct
    *  password, or an already-trusted caller); this only refuses while no
-   *  password is set, because such a token could never pass the gate. */
-  issueToken(deviceName: unknown, kind: PeerKind | null, scope?: DeviceScope): { token: string; deviceId: string } {
+   *  password is set, because such a token could never pass the gate. `under`: see `DeviceRow.under`. */
+  issueToken(deviceName: unknown, kind: PeerKind | null, scope?: DeviceScope, under?: string): { token: string; deviceId: string } {
     if (!this.isEnabled()) throw new Error("no password set on host");
-    const { token, row } = this.devices.mint(deviceName, kind, Date.now(), scope);
+    const { token, row } = this.devices.mint(deviceName, kind, Date.now(), scope, under);
     // A passive device switches the Tailscale gate on for good (R-connection-012):
     // stored, so it stays on after the passive row is revoked until a person
     // switches it off.
@@ -172,10 +172,17 @@ export class AuthManager {
   }
 
   /** The device a token belongs to, or null. Null for every token while no
-   *  password is set. With `kind`, also notes the device as seen (throttled). */
-  deviceFor(tok: string | undefined | null, kind?: PeerKind): DeviceRow | null {
+   *  password is set. With `kind`, also notes the device as seen (throttled), and a
+   *  name sign-in (`under`) counts only where its browser can be: a loopback or Tailscale
+   *  request under such a name, which is kind `unknown` BECAUSE of that name (`named`, from
+   *  `unprovenName(...) !== null`). `unknown` alone is not enough: a peer that resets its
+   *  connection has no address and is `unknown` too, and could replay the cookie over the
+   *  Wi-Fi door. Whoever was sent the cookie by answering for the name cannot replay it
+   *  over the Wi-Fi door or Funnel. */
+  deviceFor(tok: string | undefined | null, kind?: PeerKind, named = false): DeviceRow | null {
     if (!tok || !this.isEnabled()) return null;
     const row = this.devices.lookup(tok);
+    if (row?.under !== undefined && kind && !(kind === "unknown" && named)) return null;
     if (row && kind) this.devices.touch(row.id, kind);
     return row;
   }
@@ -185,8 +192,8 @@ export class AuthManager {
     return this.passive.restricted(this.deviceFor(tok));
   }
 
-  checkToken(tok: string | undefined | null, kind?: PeerKind): boolean {
-    return this.deviceFor(tok, kind) !== null;
+  checkToken(tok: string | undefined | null, kind?: PeerKind, named = false): boolean {
+    return this.deviceFor(tok, kind, named) !== null;
   }
 
   /** Key for read tickets: memory only, so a restart voids every ticket (the phone renews quietly). */
@@ -299,11 +306,16 @@ export function cookieToken(cookieHeader: string | undefined): string | null {
   return null;
 }
 
-/** Build the Set-Cookie header value for a freshly issued token. Not `Secure` —
- *  LAN access is plain HTTP; `HttpOnly` keeps it out of page JS, `SameSite=Lax`
- *  is enough for same-origin fetch + WS upgrade. */
-export function authCookie(tok: string): string {
-  return `${AUTH_COOKIE}=${tok}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(TOKEN_TTL_MS / 1000)}`;
+/** Build the Set-Cookie header value for a freshly issued token. Not `Secure` in general —
+ *  LAN access is plain HTTP — but `secure` for a login at the browser certificate's name: a cookie
+ *  belongs to a name on every port, and whoever answers for that name on plain HTTP would be sent it.
+ *  `HttpOnly` keeps it out of page JS, `SameSite=Lax`
+ *  is enough for same-origin fetch + WS upgrade. `nameOnly` is a sign-in that ends by itself
+ *  (`DeviceRow.under`). No `Domain`, so it is sent to this exact name only; no cookie can be held to
+ *  a port, nor (`__Host-`, `Secure`) to a name on plain HTTP. */
+export function authCookie(tok: string, secure = false, nameOnly = false): string {
+  const ttl = nameOnly ? NAME_SIGNIN_HOURS * 60 * 60 * 1000 : TOKEN_TTL_MS;
+  return `${AUTH_COOKIE}=${tok}; Path=/; HttpOnly;${secure ? " Secure;" : ""} SameSite=Lax; Max-Age=${Math.floor(ttl / 1000)}`;
 }
 
 export function clearAuthCookie(): string[] {
@@ -336,7 +348,7 @@ export function admitReadTicket(
   if (!isEncryptedSocket(r.socket) || !isOpaqueReadRoute(r.path, r.method)) return null;
   const u = new URL(r.url ?? "/", "http://localhost");
   const hit = auth.readTicket(u.searchParams.get("wt"), now);
-  if (!hit) return null;
+  if (!hit || hit.row.under !== undefined) return null; // a name sign-in counts under its name only
   if ((hit.scope === "passive" || hit.row.scope === "passive") && !passiveAllows(r.method, r.path, u.searchParams, queuedApk)) return null;
   return hit.row;
 }

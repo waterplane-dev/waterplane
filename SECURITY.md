@@ -53,6 +53,10 @@ authorized caller can do once inside.**
 - On Windows the host runs inside WSL2 with mirrored networking. Its loopback is shared with Windows, so
   "loopback" there means any process on the Windows machine, the same local-machine boundary as on a
   Mac. The `Origin`/`Host` checks still apply to browsers on it.
+- **Loopback is trusted for the whole machine, not for one account.** A loopback caller is asked for
+  no token, and TCP loopback does not know which user is calling. On a machine several people log in to
+  (a shared server, a VS Code Remote SSH box), any of them can connect and run commands as the account
+  the host runs under. Run the host only on a machine whose every account you trust.
 - Never bind a public interface. `WATERPLANE_ALLOW_PUBLIC=1` adds LAN interfaces behind a password gate
   (below) and is an explicit opt-in. A browser on the LAN speaks plain HTTP, which has no defence against
   a man in the middle: if that network is not trusted, do not enable it. The Android app instead
@@ -151,7 +155,8 @@ constant time. Tokens survive a host restart. No token is valid while no passwor
   device's sockets: close frame first, teardown after one second whatever the peer does, and a frame
   arriving meanwhile is dropped (`socketAuthorized`, asked for every frame). Setting, changing or
   clearing the password drops every row.
-- A browser gets a token from `POST /api/auth/login` as an httpOnly cookie. The Android shell, whose
+- A browser gets a token from `POST /api/auth/login` as an httpOnly, `SameSite=Lax` cookie with no
+  `Domain`, so it goes to that exact name or address only (on every port of it). The Android shell, whose
   cross-site cookie is withheld, mints one with `POST /api/auth/token`, **only from a caller that is
   already trusted**: loopback, or a Tailscale peer holding a valid token when that path is gated;
   never LAN or Funnel, even with a token, and never while no password is set. It sends the token as
@@ -282,6 +287,8 @@ started, and a pairing code minted from one of them is a permanent full token. T
 interface; it is not a sandbox. Gating session ops for a passive row would end the unlock's purpose
 (the owner using full waterplane on that phone), so the PIN, and who knows it, is the boundary.
 
+The vault's approving devices are Android phones (a Keystore key opened by a fingerprint) and, on Windows, browser passkeys (Windows Hello or a security key); a vault holds up to four. A browser on the desktop's own computer is weaker than a phone, and a passkey that can sync is refused. What each can and cannot stop is in the [vault README](packages/extensions/vault/README.md#more-than-one-phone). Browser passkeys and second phones have not been tried on real hardware.
+
 ### Browser origins
 
 Network identity does not cover browsers: a WebSocket ignores the same-origin policy
@@ -297,6 +304,46 @@ Network identity does not cover browsers: a WebSocket ignores the same-origin po
   for requests arriving through `tailscale serve`, and only when the Origin names the same host the
   request was sent to. The name is re-read until known. `*.local` is never a wildcard (only the
   machine's own mDNS name).
+- **A name the local network answers for gets in without the trust of its address** (`unverifiedName`).
+  Whoever controls DNS or mDNS there can serve a page under such a name, then either point the name at
+  the desktop (rebinding, which shows only in `Host`) or call `127.0.0.1` from it (which shows only in
+  `Origin`). So a loopback or Tailscale request whose `Host`, or whose `Origin` if it has one, is this
+  machine's `.local` or short name or an `ALLOWED_HOSTS`/`ALLOWED_ORIGINS` name is peer kind `unknown`:
+  it needs the LAN password or a device token, can never manage auth, pair or call a local-process
+  route, and has login rate limits of its own. With no password set it is refused. Proxy headers never
+  lift this, since a rebound page can send any of them. What keeps its trust:
+  - IP addresses and `localhost` in `Host`, and the apps' own origins. As an `Origin` on a request sent
+    elsewhere, a LAN address has no trust, and a Tailscale address or name has it only over Tailscale.
+  - The machine's exact `*.ts.net` name over Tailscale, where the tailnet's own resolver answers. On
+    loopback it counts only through a front door (`tailscale serve`), which shows as a port in `Host`
+    that is not the daemon's: none, 80 or 443, a port `tailscale serve` hands to the daemon on (its config is
+    read at start and again when an unknown port asks, at most every 10 seconds), or one listed for the
+    name in `WATERPLANE_ALLOWED_ORIGINS`. Where the config cannot be read, any port counts. A front door on the daemon's own port number (`serve --https=8770` for a
+    daemon on 8770) reads as a plain dial, so it is not advertised and the doctor says to move it.
+  - A name whose `https` origin is listed in `WATERPLANE_ALLOWED_ORIGINS`, reached through the proxy that
+    holds its certificate and never on the daemon's own plain port; a proxy that sends `Host` without its
+    port is matched on any listed https port of the name. The listing is your word that nothing serves
+    the name over plain http; the https listing never vouches for a plain-http `Origin` of the name.
+- **A sign-in under such a name is short and counts on that route only** (`DeviceRow.under`). It ends 12
+  hours after the password, on the host as in the browser, and closes its open sockets within a minute of
+  that. Its token counts for a loopback or Tailscale request under such a name and nowhere else: not over
+  the Wi-Fi door, not over Funnel, and it stands behind no read ticket. It is not bound to the one name.
+- The residuals of that rule. The cookie of such a sign-in goes to whoever answers for the name, in that
+  browser, until it ends: cookies know no port, and plain http can carry neither `Secure` nor a
+  `__Host-` name. Password sign-ins over the Wi-Fi door keep 30 days, under a name too, as that door has
+  no other way in; whoever answers for that name or address on another network is sent the cookie. A
+  tailnet device that does not use MagicDNS takes `*.ts.net` from the network it is on. A browser whose
+  plain http goes through a hostile proxy can be shown a page at any plain-http address. A client that
+  clicks through a certificate warning has vouched for the name itself. A hand-made forward to the daemon
+  on 80, 443 or a port `tailscale serve` also uses for it reads as that front door for a `*.ts.net` name, as
+  does any other port while the serve config was never read, so on a machine with Tailscale off a hostile
+  network could read through it; forward the daemon's own port number.
+- The app's page names who may frame it: only itself (`frame-ancestors 'self'`,
+  `SHELL_FRAME_POLICY` in `server/http.ts`). A framed page's requests carry the host's own origin, so
+  the checks above cannot see a foreign page around it. Asked for on this machine under a loopback
+  name, unproxied, it also admits VS Code's webviews (`vscode-webview: vscode-file:`), for the
+  extension's app tab. Those two schemes are every extension's webview, not only ours; no website has
+  them, and an installed extension already runs as you.
 - Side-effecting endpoints must not be GET (`/api/host/screenshot` is POST for this). Exactly two
   read-only routes are exempt (`OPAQUE_READ_ROUTES`: artifact and inbox file, GET/HEAD only), because
   the APK loads them as `<img src>` or `<a download>`.
@@ -444,6 +491,7 @@ and the pull service; a desktop with a pin is then never reached over plain HTTP
 self-signed port does not serve the web app (it answers a notice page), because a browser click-through
 would look protected and is not. With `WATERPLANE_TLS_CERT` + `WATERPLANE_TLS_KEY` (a person's own leaf
 from a CA; a self-signed one is read as self-signed) it serves the app, and the pin follows that leaf.
+A browser on a laptop is a separate route, below (the browser name).
 
 **What the pin does not defend:**
 
@@ -466,6 +514,54 @@ warnings. The way out of a pinned desktop whose TLS port is off is a confirmed "
 desktop" on its row; nothing does it by itself. The measurements behind this, taken on two emulator
 WebViews only, are in `docs/notes/protocol-and-security.md`. **None of this has been tried on a real
 phone.**
+
+**The browser name (`lanca.ts`, `lantls.ts`, `origin.ts`).** `waterplane lan-cert issue --name N` makes
+a CA and a leaf for one name, on the key already in `lan-tls.json` (so the phones' pin does not move),
+and keeps the leaf and the public CA in `<state dir>/lan-browser.json` (0600). **The CA's private key
+exists only in the memory of that one command: it is never written, logged or printed**, so no second
+certificate can be signed and a renewal is a new CA that each laptop trusts again. The CA is limited
+to the one DNS name (name constraints, with every IP address excluded), to server use, and to 397 days.
+A laptop that trusts it is bounded by that, and by the key staying private. Names the phone app dials,
+IP addresses, wildcards, `localhost`, `*.ts.net` and names outside the private zones (without
+`--any-name`) are refused.
+
+The origin guard trusts the name **only on the TLS listener, only when the handshake itself asked for
+exactly that name (SNI), and only when the request's `Host` is `<name>:<tls port>` and its `Origin`,
+if any, is exactly `https://<name>:<tls port>`**. It is not an `ALLOWED_HOSTS` entry, which would also
+admit the name on plain :8770 where whoever answers LAN DNS could rebind it to the desktop's
+loopback or tailnet address. Every other handshake (by IP, another name, no SNI) gets the
+self-signed leaf and the notice page, as before. The check runs per request, so a second request on
+the same connection under another `Host` is judged as a stranger's. A proxied request never counts.
+
+- A login at that name sets the cookie `Secure`; elsewhere on LAN it stays plain, because LAN HTTP
+  cannot carry `Secure`.
+- The two opaque read routes (`OPAQUE_READ_ROUTES`, which exist for the APK) get no exemption at the
+  browser name: a request there needs its own origin or none, as a same-origin browser sends.
+- Nothing else changes: `ALLOW_PUBLIC=1`, the addresses, the port, the handler, peer kind `lan`, the
+  LAN password and device-token gate, the rule that a LAN caller can never set the password, the
+  passive allowlist and the phones' pin.
+- `WATERPLANE_TLS_CERT`/`_KEY` set: the browser certificate is ignored (doctor says so). A missing,
+  corrupt, foreign-key or expired file is not served and never stops the host or the self-signed port.
+
+**Residuals.**
+
+- A laptop that never trusted the CA can click through the warning at the right name and gets the app;
+  a relay on the network can then read the password typed there. The host cannot tell the difference.
+  No HSTS is sent, because it would cover plain :8770 on that name too.
+- A client that is not a browser can ask for the name and skip validation; it still needs the password
+  or a token.
+- A browser that speaks only TLS 1.2 and resumes a session: the host cannot tell which name that
+  resumed hello asked for, so it counts the connection as nameless and the browser gets the notice
+  page until it connects afresh. Every current browser speaks 1.3, where this does not arise.
+- A certificate that expires while the host runs is still served until the next restart; the browser
+  shows its own date error. The doctor warns 30 days ahead.
+- The browser keeps a device token and a cached app for that name. Whoever uses that browser has them.
+- Plain :8770 is unchanged and still reachable, so a person who types `http://` is as unprotected as
+  before. The encryption does not make LAN mode recommended: one password still guards code execution.
+- The laptop trusts a root that is limited as above. Browser enforcement of name constraints on a
+  user-added root has not been tried.
+- **None of this has been tried in a real Windows browser.** It is tested against Node's TLS and
+  `openssl verify`.
 
 ### Signed updates
 

@@ -7,9 +7,9 @@ import { randomUUID } from "node:crypto";
 import { WebSocketServer, type WebSocket } from "ws";
 import { 
   type ClientMessage, logTag, envName, notifyEnabled } from "@waterplane/shared";
-import { tailscaleIp, tailscaleBin, tailscaleDnsName, serveHttpsUrl, lanIps } from "./net.js";
+import { tailscaleIp, tailscaleBin, tailscaleDnsName, serveHttpsUrl, readDoorPorts, learnFrontDoors, lanIps } from "./net.js";
 import { prepareLanTls, startLanTls, type LanTlsServer } from "./lantls.js";
-import { configureOrigins } from "./origin.js";
+import { configureOrigins, knownFrontDoors } from "./origin.js";
 import { printBootSummary, printReport, reportJson, runChecks } from "./doctor.js";
 import { AuthManager, authLostNotice, selectWsProtocol } from "./auth.js";
 import { SessionManager } from "./sessions.js";
@@ -591,7 +591,8 @@ async function main(): Promise<void> {
   // machine), and a guard that refuses it turns the advertised HTTPS address
   // into a 403 — which is how someone ends up stuck on plain http://100.x with
   // no service worker.
-  configureOrigins({ port: PORT, tlsPort: lanTls?.port, tailscaleIp: ip, tailscaleDns: tsDns, lanIps: boundLan, serveUrl: httpsUrl });
+  const ours = { port: PORT, tlsPort: lanTls?.port, tlsName: lanTls?.browser?.name, tailscaleIp: ip, lanIps: boundLan };
+  configureOrigins({ ...ours, tailscaleDns: tsDns, serveUrl: httpsUrl, doorPorts: await readDoorPorts(PORT) });
   // On a tailnet whose MagicDNS name could not be read (tailscaled still
   // starting, CLI hiccup) the guard has no exact name to trust; keep asking
   // once a minute, up to 30 times, and re-arm it with the name when it comes.
@@ -603,7 +604,7 @@ async function main(): Promise<void> {
         const dns = await tailscaleDnsName();
         if (dns) {
           clearInterval(timer);
-          configureOrigins({ port: PORT, tlsPort: lanTls?.port, tailscaleIp: ip, tailscaleDns: dns, lanIps: boundLan, serveUrl: await serveHttpsUrl(PORT) });
+          configureOrigins({ ...ours, tailscaleDns: dns, serveUrl: await serveHttpsUrl(PORT), doorPorts: (await readDoorPorts(PORT)) ?? knownFrontDoors() });
         } else if (tries >= 30) clearInterval(timer);
       })();
     }, 60_000);
@@ -633,7 +634,8 @@ async function main(): Promise<void> {
     // WATERPLANE_WS_COMPRESS=0 turns it off.
     const wss = new WebSocketServer({
       server, maxPayload: WS_MAX_PAYLOAD, // 16 MiB, not ws's 100 MiB default — why in wsops.ts
-      path: "/ws", handleProtocols: selectWsProtocol, // token rides as `waterplane-tok.<tok>`; only the base protocol is echoed
+      path: "/ws", verifyClient: ({ req }, ok) => void (learnFrontDoors(req.socket.remoteAddress, req.headers, PORT) ?? Promise.resolve()).then(() => ok(true)), // waits only for a front door newer than the last reading; the verdict is wsops'
+      handleProtocols: selectWsProtocol, // token rides as `waterplane-tok.<tok>`; only the base protocol is echoed
       perMessageDeflate: env("WS_COMPRESS") === "0" ? false : {
         threshold: 256,
         zlibDeflateOptions: { level: 6, memLevel: 8 },

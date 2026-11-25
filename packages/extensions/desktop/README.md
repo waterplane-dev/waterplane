@@ -7,7 +7,7 @@ It works on a Mac, or on Windows with waterplane running inside WSL. It is exper
 ## Where to find it
 - **Home menu, "Remote desktop"** — opens the live view.
 - **Session menu, "Remote desktop"** — opens the live view as a tab in the session's header, next to Claude and Shell.
-- **Live view** — pick Touch, Trackpad or View only, go fullscreen, and see how much data the video uses.
+- **Live view** — pick Touch, Trackpad or View only, go fullscreen, take a screenshot (into the repo's gallery, or into the desktop's own clipboard), and see how much data the video uses.
 
 ## Settings
 - **Let the phone control this desktop** — off by default. Off means the phone can only watch. On means clicks and keys from the phone reach every app on the desktop, with the same trust as typing into a session. Find it in Settings, Tools and diagnostics, plugins, Live desktop.

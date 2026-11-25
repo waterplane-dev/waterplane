@@ -54,6 +54,19 @@ export function repoOf(path: string, repos: readonly RepoDir[]): string | null {
   return best?.name ?? null;
 }
 
+const SCRATCH_RE = /\/claude-\d+\/([^/]+)\/[0-9a-f-]{36}\/scratchpad(?:\/|$)/;
+
+/**
+ * The repo whose agent session a scratch folder belongs to: the CLI names the folder after the repo's
+ * path with everything but letters and digits as `-`. Two repos spelling the same name ⇒ null.
+ */
+export function scratchRepoOf(path: string, repos: readonly RepoDir[]): string | null {
+  const slug = SCRATCH_RE.exec(path)?.[1];
+  if (!slug) return null;
+  const hits = repos.filter((r) => r.path.replace(/[^A-Za-z0-9]/g, "-") === slug);
+  return hits.length === 1 ? hits[0]!.name : null;
+}
+
 /** `tailscale serve status --json` → local port → the https front door that proxies to it. */
 export function parseServeStatus(json: string): Map<number, string> {
   const m = new Map<number, string>();
@@ -115,24 +128,27 @@ export interface LocalInputs {
 }
 
 /**
- * Listening ports whose process works inside a repo under the code root, one row per port.
+ * Listening ports whose process works inside a repo under the code root (or, behind a front door, in
+ * the scratch folder of a session in that repo), one row per port.
  * The phone URL is the serve front door if there is one, else the tailnet address when the port is
  * bound to it (or to every interface), else none — with the serve command that would make one.
  */
 export function localFound(i: LocalInputs): FoundLink[] {
-  const byPort = new Map<number, { l: Listener; addrs: Set<string>; repo: string }>();
+  const byPort = new Map<number, { l: Listener; addrs: Set<string>; repo: string; scratch: boolean }>();
   for (const l of i.listeners) {
     if (l.pid === i.selfPid) continue;
     const dir = i.cwd.get(l.pid);
-    const repo = dir ? repoOf(dir, i.repos) : null;
+    const inRepo = dir ? repoOf(dir, i.repos) : null;
+    // A session's scratch folder counts only behind a front door: somebody meant that one to be opened.
+    const repo = inRepo ?? (dir && i.serve.has(l.port) ? scratchRepoOf(dir, i.repos) : null);
     if (!repo) continue;
     const cur = byPort.get(l.port);
     if (cur) cur.addrs.add(l.addr);
-    else byPort.set(l.port, { l, addrs: new Set([l.addr]), repo });
+    else byPort.set(l.port, { l, addrs: new Set([l.addr]), repo, scratch: !inRepo });
   }
   const used = new Set(i.servePorts);
   const rows: FoundLink[] = [];
-  for (const [port, { l, addrs, repo }] of [...byPort].sort((a, b) => a[0] - b[0])) {
+  for (const [port, { l, addrs, repo, scratch }] of [...byPort].sort((a, b) => a[0] - b[0])) {
     const served = i.serve.get(port);
     const reach = [...addrs].some((a) => isAny(a) || isTailnet(a));
     const url = served ?? (reach && i.tailnetIp ? `http://${i.tailnetIp}:${port}` : null);
@@ -141,6 +157,7 @@ export function localFound(i: LocalInputs): FoundLink[] {
     const row: FoundLink = { key: `local:${port}`, kind: "local", repo, label: `${l.proc} :${port}`, url, port, proc: l.proc, env: "dev", hidden };
     if (notWeb) row.note = "an emulator, VM helper or database — not a page";
     else if (hidden) row.note = "an OS-picked port — usually a helper socket, not a page";
+    else if (scratch) row.note = "runs from an agent session's scratch folder — it can stop when that session ends";
     if (!url && !hidden && [...addrs].every(isLoopback)) {
       const front = suggestServePort(used);
       used.add(front);

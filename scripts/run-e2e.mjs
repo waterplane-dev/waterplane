@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 import { E, SLUG } from "./lib-brand.mjs";
 import { killTmuxIn, makeTmuxDir, tmuxIsoEnv } from "./lib-tmuxiso.mjs";
 import { portLocks } from "./lib-portlock.mjs";
+import { foreignHolder, heldLine } from "./lib-portholder.mjs";
 
 // Re-run under `with-tmp.mjs` so the whole run's temp files live in one dir that
 // is removed at the end (and anything left in it is named). Not re-entered.
@@ -319,6 +320,8 @@ const envFor = (file) => isolate
       [E.CONFIG_DIR]: join(SANDBOX, "config", file),
       XDG_DATA_HOME: join(SANDBOX, "data", file),
       XDG_STATE_HOME: join(SANDBOX, "state", file),
+      // The boot sweep would run the health engine over every fixture repo beside the script's own steps.
+      [E.HEALTH_WEEKLY]: process.env[E.HEALTH_WEEKLY] ?? "0",
     }
   : process.env;
 process.on("exit", () => { if (SANDBOX) try { rmSync(SANDBOX, { recursive: true, force: true }); } catch { /* best effort */ } });
@@ -352,7 +355,19 @@ async function runOne(file, say) {
   try {
     try { await acquirePorts(ports, file, held, say); } catch (e) { say(`[run-e2e] ${e.message}\n`); return 1; }
     for (const port of ports) freePort(port);
-    return await runChild(file, say);
+    // Whatever still listens is not ours to kill. Its script could only wait 20 s for a host that
+    // cannot bind and blame the feature (2026-11-25: 10 scripts, one stray server on 8799), so it
+    // is not started, and not re-run alone either: the port is as taken then.
+    for (const port of ports) {
+      const by = await foreignHolder(port);
+      if (by) { portBlocked.add(file); say(heldLine(file, port, by) + "\n"); return 1; }
+    }
+    const out = [];
+    const code = await runChild(file, (d) => { out.push(Buffer.isBuffer(d) ? d : Buffer.from(String(d))); say(d); });
+    // A script whose last await never settles runs out of events and exits 0 with its FAIL printed
+    // (e2e-lan, 2026-11-25: its host died by a signal, its `stop()` waited for an exit already past).
+    if (code === 0 && /^FAIL: /m.test(Buffer.concat(out).toString("utf8"))) { say(`[run-e2e] ${file}: exited 0 after printing FAIL, which is a failure\n`); return 1; }
+    return code;
   } finally {
     releasePorts(held);
     allHeld.delete(held);
@@ -442,6 +457,8 @@ function nextRunnable(queue) {
 }
 
 const failures = [];
+/** Scripts not started because a process that is not ours holds their port (`foreignHolder`). */
+const portBlocked = new Set();
 /** A failed script's whole output, for the recap at the very end. */
 const failedOutput = new Map();
 const wallStart = Date.now();
@@ -557,9 +574,10 @@ if (TIMES_FILE && Object.keys(thisTimes).length) {
 const RETRY_MAX = 10;
 const FLAKES_FILE = join(dirname(TIMES_FILE ?? join(homedir(), ".cache", SLUG, "x")), "e2e-flakes.jsonl");
 const aloneVerdict = new Map(); // file → true passed alone / false failed alone too
-const retrying = JOBS > 1 && failures.length > 0 && failures.length <= RETRY_MAX && process.env.E2E_RETRY_ALONE !== "0";
+const retryable = failures.filter((f) => !portBlocked.has(f));
+const retrying = JOBS > 1 && retryable.length > 0 && retryable.length <= RETRY_MAX && process.env.E2E_RETRY_ALONE !== "0";
 if (retrying) {
-  for (const file of failures) {
+  for (const file of retryable) {
     console.log(`\n[run-e2e] ${file} failed beside other scripts — running it once more alone, to tell a load flake from a break`);
     const out = [];
     const started = Date.now();
@@ -590,21 +608,21 @@ function whyLines(text) {
   const lines = text.split("\n");
   const out = [];
   for (let i = 0; i < lines.length && out.length < RECAP_LINES; i++) {
-    if (!/^\s*FAIL\b|exceeded \d+s — killing|failed to start|^\[run-e2e\] .*: derives a port/.test(lines[i])) continue;
+    if (!/^\s*FAIL\b|exceeded \d+s — killing|failed to start|^\[run-e2e\] .*: derives a port|^\[run-e2e\] .*: NOT RUN/.test(lines[i])) continue;
     out.push(lines[i]);
     for (let j = i + 1; j < lines.length && /^\s+\S/.test(lines[j]) && j <= i + 6 && out.length < RECAP_LINES; j++) out.push(lines[j]);
   }
   if (!out.length) out.push(...lines.filter((l) => l.trim()).slice(-5));
   return out.map((l) => (l.length > 200 ? l.slice(0, 199) + "…" : l));
 }
-const kindOf = (file) => !aloneVerdict.has(file) ? ""
+const kindOf = (file) => portBlocked.has(file) ? " — not run: its port is taken by another program" : !aloneVerdict.has(file) ? ""
   : aloneVerdict.get(file) ? " — passes alone: a timing window load stretched; not blocking, logged to " + FLAKES_FILE
   : " — fails alone too";
 
 const wall = Math.round((Date.now() - wallStart) / 1000);
 const nFlaky = failures.filter((f) => aloneVerdict.get(f) === true).length;
 console.log(`\n════════ ${scripts.length - failures.length}/${scripts.length} e2e scripts passed in ${wall}s (jobs ${JOBS})${nFlaky ? `, ${nFlaky} more passed alone (load flake, not blocking)` : ""} ════════`);
-if (failures.length > RETRY_MAX && JOBS > 1) console.error(`  (${failures.length} failed at once — not re-run alone; that many is a break, not load)`);
+if (retryable.length > RETRY_MAX && JOBS > 1) console.error(`  (${retryable.length} failed at once — not re-run alone; that many is a break, not load)`);
 const blocking = failures.filter((f) => aloneVerdict.get(f) !== true);
 for (const f of failures.sort()) {
   console.error(`  ${aloneVerdict.get(f) === true ? "LOAD FLAKE" : "FAILED"}  ${f}${kindOf(f)}`);
@@ -622,6 +640,6 @@ if (flakes.length) {
 // One line per finished run, beside the flakes: `tools/flakyrate.mjs` needs the denominator.
 try {
   mkdirSync(dirname(FLAKES_FILE), { recursive: true });
-  appendFileSync(join(dirname(FLAKES_FILE), "e2e-runs.jsonl"), JSON.stringify({ at: new Date().toISOString(), scripts: scripts.length, failed: failures.length, flaky: flakes.length }) + "\n");
+  appendFileSync(join(dirname(FLAKES_FILE), "e2e-runs.jsonl"), JSON.stringify({ at: new Date().toISOString(), scripts: scripts.length, failed: failures.length, flaky: flakes.length, ...(portBlocked.size ? { portBlocked: portBlocked.size } : {}) }) + "\n");
 } catch { /* a log, never a verdict */ }
 process.exit(blocking.length ? 1 : 0);

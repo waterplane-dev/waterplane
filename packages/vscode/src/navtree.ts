@@ -16,6 +16,7 @@ import type { HeadlineSummary } from "./data/summary.js";
 import { seriesValueWords } from "../../web/src/repoHealthWords.js";
 import { signedWhole, weekWhenWords } from "../../web/src/healthIndexWords.js";
 import { NOT_GIT, XCODE_LICENSE } from "./health/sourcewords.js";
+import { OPEN_APP } from "./apppanel.js";
 
 export interface NavState {
   folders: string[];
@@ -50,6 +51,7 @@ export interface NavState {
 type NavTab = Exclude<TabId, "session" | "findings">;
 
 type Node =
+  | { kind: "app" }
   | { kind: "folder" }
   | { kind: "sessions" }
   | { kind: "session"; row: SessionSummary }
@@ -157,10 +159,11 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
   getChildren(n?: Node): Node[] {
     const s = this.state();
     if (!n) {
-      // Insight first: the week's figure leads; the session list sits second while something is
+      // The app's own row is first: as a bare icon in the view's title it was not found. Below it,
+      // insight first: the week's figure leads; the session list sits second while something is
       // being worked on and drops to the bottom when nothing is.
       const view = (tab: NavTab): Node => ({ kind: "view", tab });
-      const top: Node[] = [{ kind: "findings" }, view("all")];
+      const top: Node[] = [{ kind: "app" }, { kind: "findings" }, view("all")];
       if (s.folders.length > 1) top.push({ kind: "folder" });
       if (s.live) top.push(this.sessionsNode);
       top.push(view("health"), view("always-on"));
@@ -201,6 +204,15 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
     const s = this.state();
     const now = Date.now();
     switch (n.kind) {
+      case "app": {
+        const it = new vscode.TreeItem(`Open ${BRAND.name}`, vscode.TreeItemCollapsibleState.None);
+        it.id = "app";
+        it.iconPath = new vscode.ThemeIcon("window");
+        it.description = "your repos and live sessions, in a tab";
+        it.tooltip = `The ${BRAND.name} app in an editor tab. It needs a ${BRAND.name} desktop running on this machine.`;
+        it.command = { command: OPEN_APP, title: `Open ${BRAND.name}` };
+        return it;
+      }
       case "findings": {
         const d = s.findings;
         const count = d ? findingCut(d.findings, {}).count : 0;

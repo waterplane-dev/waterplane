@@ -90,6 +90,9 @@ const ROUTES = [
   "GET /api/host/setup",
   "POST /api/host/setup/fix",
   "GET /api/host/stat",
+  // New project (`routes/apinewproject.ts`): the boxes and the create; never in passive.ts.
+  "GET /api/repo/options",
+  "POST /api/repo",
   // Skills and plugins switch, read side (`routes/apiskills.ts`); never in passive.ts.
   "GET /api/host/skills",
   "POST /api/host/skills/write",
@@ -97,6 +100,7 @@ const ROUTES = [
   "GET /api/jobs",
   "GET /api/jobs/:id",
   "POST /api/host/screenshot",
+  "POST /api/host/screenshot/clipboard",
   "POST /api/host/clipboard",
   "GET /api/host/ocr",
   "POST /api/host/ocr",
@@ -108,7 +112,6 @@ const ROUTES = [
   "POST /api/push/subscribe",
   "POST /api/push/unsubscribe",
   "POST /api/folder",
-  "POST /api/repo",
   // A repo's SHOWN name (`reponames.ts`): a label only, set on the primary checkout.
   "PUT /api/repodisplayname",
   "GET /api/plainfolders",
@@ -147,6 +150,7 @@ const ROUTES = [
   "POST /api/repos/:id/exposure/run",
   "GET /api/repos/:id/optins/*",
   "POST /api/repos/:id/optins/choice/*",
+  "POST /api/repos/:id/optins/seen",
   "GET /api/repos/:id/efficiencyrules",
   "POST /api/repos/:id/efficiencyrules",
   "GET /api/repos/:id/repohealth",

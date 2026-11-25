@@ -282,6 +282,81 @@ plain). The app learns the desktop's key over Tailscale or when it pairs, pins i
 `192.168.0.64`, not `https://`; the screen says per desktop whether that link is encrypted. [SECURITY.md](../SECURITY.md) has the
 detail.
 
+### Opening it in a laptop browser, with HTTPS
+
+A browser on plain `http://<address>:8770` is not a secure context (no service worker, push or
+clipboard). If you need the desktop in a laptop's browser on the same Wi-Fi, without Tailscale, the
+desktop can issue a certificate for one name of your choice, and the laptop trusts that certificate.
+The phone app needs none of this and its pin does not change. When the host runs in WSL, type the
+commands in the Windows terminal; `--out` then takes a folder on a drive, such as `C:\Users\you`.
+
+**Not tried yet:** no real Windows browser has been through these steps. Windows Hello and the vault's
+part in a browser come with the vault's laptop support, if at all; the steps below only get the page
+open over HTTPS.
+
+**The cheaper way: an SSH tunnel.** Run `ssh -L 8770:127.0.0.1:8770 <desktop>` on the laptop and open
+`http://localhost:8770`. `localhost` counts as a secure context, so no certificate and no name are
+needed. The catch: the host sees the laptop as loopback and therefore trusts it (no password asked,
+and it may set the LAN password). That is the same trust as the SSH login itself, fine on a laptop
+you own and wrong where the SSH key is shared. It needs `sshd` on the desktop. If the laptop already
+uses its local port 8770, pick another (`-L 8780:...`) and put `http://localhost:8780` in
+`WATERPLANE_ALLOWED_ORIGINS` on the desktop.
+
+**Steps** (the name here is `desk.home.arpa`; `.home.arpa` is a zone reserved for home networks, never
+on the internet):
+
+1. Set up LAN mode as above, with the LAN password, and let the host run once: the certificate is
+   made for the key it keeps in `lan-tls.json`, and the command refuses without it.
+2. On the desktop: `waterplane lan-cert issue --name desk.home.arpa --out <a folder>`. It writes
+   `ca.cer` (a public file) there and prints the address, the end date and a SHA-256 of `ca.cer`,
+   with these steps filled in. Choose the name once: a browser's passkeys belong to it. A name outside
+   `.home.arpa`, `.local`, `.lan`, `.internal` and `.fritz.box` needs `--any-name`, because a public
+   name belongs to a public certificate authority.
+3. Restart the host (the command prints the line; from a checkout `npm run restart`). Until then
+   nothing serves the new certificate.
+4. On the router, reserve the desktop's address (a DHCP reservation), so the name keeps pointing at it.
+5. Carry `ca.cer` to the laptop on a USB stick. Never fetch it over the network: the host does not
+   serve it, because a forged one would be a root someone else holds. On Windows run
+   `Get-FileHash ca.cer` in PowerShell and compare it with the SHA-256 on the desktop's screen. If
+   they differ, stop.
+6. Windows: `certutil -user -addstore Root ca.cer`, answer yes (no administrator needed). Edge, Chrome
+   and Firefox read this store. Then close the browser completely.
+7. Make the name resolve, one of: a line `<address> desk.home.arpa` in
+   `C:\Windows\System32\drivers\etc\hosts` (edit it in Notepad as administrator), or a DNS entry for
+   the name on the router. Without one, the name means nothing to the laptop.
+8. Open `https://desk.home.arpa:8771` (the TLS port, `WATERPLANE_TLS_PORT`) and sign in with the LAN
+   password. There should be no certificate warning.
+
+**macOS** (Safari, Chrome): `security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db ca.cer`
+and a `/etc/hosts` line (needs `sudo`). Firefox, if it still warns: Settings, Privacy and Security,
+Certificates, Import. Android and iOS browsers are not covered.
+
+**What the certificate is.** It covers that one name, for a web server only, and no address. The key
+that signed it is made in memory, used once and never written down, so nothing can sign a second
+certificate under it: a laptop that trusts it trusts exactly that name. It lasts 397 days.
+
+**Renewing.** A renewal is a new certificate, so each laptop trusts the new one again. Once a year
+run `lan-cert issue` with the same name (answer yes, or pass `--yes`), restart, carry `ca.cer`, repeat
+the trust step. `waterplane doctor` warns from 30 days before the end and again after it. An expired
+certificate is not served: the browser shows its own date error, and an installed PWA only says it
+cannot connect. `waterplane lan-cert show` prints the name, the end date and both fingerprints.
+
+**Names the phone app already dials are refused**: this desktop's own name, with or without `.local`,
+and every name in `WATERPLANE_ALLOWED_HOSTS`. A browser certificate there would give the app the
+browser's stricter rules on the TLS port and lock it out. Pick another name. A certificate already
+issued for such a name is not served, and doctor says why.
+
+**Taking it away.** On the desktop: `waterplane lan-cert remove`, then restart the host. It prints
+what to undo on each laptop: Windows `certutil -user -delstore Root <SHA-1>`, macOS
+`security delete-certificate -Z <SHA-1> ~/Library/Keychains/login.keychain-db`, then the hosts line,
+any passkey made for the name (Windows: Settings, Accounts, Passkeys), the browser's site data for the
+name, and the laptop's entry in the desktop's paired devices. A laptop that keeps trusting the removed
+certificate is harmless while `lan-tls.json` stays private.
+
+**Limits.** `WATERPLANE_TLS_CERT` and `_KEY` take the port over; the certificate is then not served.
+A visit by IP address, by another name or without a name still gets the notice page, and plain `:8770`
+stays up beside it. [SECURITY.md](../SECURITY.md) says what this defends and what it does not.
+
 ## Run it as a background service
 
 With the installer, `waterplane service install|uninstall|status` registers a launchd agent

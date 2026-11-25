@@ -286,6 +286,11 @@ test("Send while the dictation is still out asks, and the phone's recogniser car
   assert.ok(warn && warn.includes("(the desktop is not answering)") && /more words wrong/.test(warn));
   // …and never *only what's typed*: that recogniser rewrites the box from what it held at the tap.
   assert.equal(dictationSendAsk({ typed: true, phone: true }).altLabel, undefined);
+  // The annotator's Send & run asks the same question, and says the picture goes or stays with the words.
+  const pic = dictationSendAsk({ typed: true, phone: false, picture: true });
+  assert.equal(pic.altLabel, "Without the words");
+  assert.ok(pic.lines.every((l) => l.includes("picture")));
+  assert.equal(dictationSendAsk({ typed: true, phone: true, picture: true }).altLabel, undefined);
   // The way back is named in the receipt, and the re-ask offers it.
   assert.match(DICTATION_SEND_TOAST.armed, /tap Send again to call it off/);
   assert.equal(DICTATION_ARMED_ASK.cancelLabel, "Call it off");

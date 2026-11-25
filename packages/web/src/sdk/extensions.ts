@@ -88,6 +88,27 @@ export function useAppsDoor(): OpenAppsDoor | null {
   return useMemo(() => bindDoor(pickAppsDoor(features(), (id) => enabledIn(l, id))), [l]);
 }
 
+/** Pure: the first manifest opening opt-in offer `id` whose extension is on; null when none. */
+export function pickOptInDoor(fs: readonly FeatureManifest[], id: string, enabled: (id: string) => boolean): { feature: string; open: NonNullable<FeatureManifest["optInDoors"]>[string] } | null {
+  for (const f of fs) { const open = f.optInDoors?.[id]; if (open && enabled(f.id)) return { feature: f.id, open }; }
+  return null;
+}
+
+/** How core opens the screen behind an opt-in offer on one repo; null while no extension with one is on. */
+export function useOptInDoor(id: string): ((repoName: string) => void) | null {
+  const l = usePluginList();
+  return useMemo(() => {
+    const p = pickOptInDoor(features(), id, (x) => enabledIn(l, x));
+    return p && ((repoName: string) => {
+      const c = core();
+      try { p.open(c, repoName); } catch (e) {
+        console.error(`${logTag} feature ${p.feature} failed opening its door`, e);
+        c.say.toast(`${p.feature} could not open that screen`);
+      }
+    });
+  }, [l, id]);
+}
+
 /** `core/extensionPoints.ts`'s, once: the registry `imageTextReader()` picks from. Bound, not
  *  imported — the annotator reads this module, and the registry imports the annotator. */
 export function bindImageTextFeatures(source: () => readonly FeatureManifest[]): void {

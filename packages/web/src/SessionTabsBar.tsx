@@ -15,11 +15,15 @@ import {
 } from "./sessionTabs";
 import { Sheet } from "./Sheet";
 import { StripsGear } from "./StripsGear";
+import { Logo } from "./core/Logo";
 import { AttentionChip } from "./core/launcher/AttentionChip";
 import { ExtBoundary } from "./core/ExtBoundary";
 import { tabMarks } from "./core/extensionPoints";
 import type { TabMarkDef } from "./sdk/types";
+import { useWide } from "./core/layout/layout";
+import { usePref } from "./core/prefs";
 import { showToast } from "./toast";
+import { track } from "./usage";
 import { createStore, useStore } from "./sdk/store";
 
 /**
@@ -225,6 +229,28 @@ export function TabsMenuItem({ size, onOpen }: { size: number; onOpen: () => voi
   );
 }
 
+/**
+ * The launcher's logo, as the way to the same list at phone width: the mark is the first thing a
+ * person taps, and the count in the machine strip did not look like a button. The count on it is
+ * that button's own, drawn small on its bottom edge, and the card behind comes and goes with it: without
+ * a number it reads as a broken edge. With nothing open there is none, and the list says
+ * so. On a wide window the tab strip's button is right there, so the mark stays a mark.
+ */
+export function TabsLogo({ size, label }: { size: number; label?: string }) {
+  const n = useSessionTabs((s) => s.all.length);
+  const open = useStore(listOpenStore);
+  const counted = usePref("logoCount");
+  if (useWide()) return <Logo size={size} label={label} />;
+  return (
+    <button className={`logo-tabs${counted && n > 1 ? " many" : ""}`} data-hint="tabs.logo" aria-expanded={open}
+      aria-label={`open tabs, ${n}`} title="open tabs — every open session and pinned file, as a list you can filter"
+      onClick={() => { track("action:nav.logoTabs"); viaKeyStore.set(false); listOpenStore.set(true); }}>
+      <Logo size={size} label="" />
+      {counted && n > 0 && <span className="logo-tabs-n" aria-hidden="true">{n}</span>}
+    </button>
+  );
+}
+
 /** True while the machine strip must stay up to hold the list button. */
 export function useTabsButtonInBar(): boolean {
   return useSessionTabs((s) => tabsListInBar(s.enabled, s.all.length > 0));
@@ -390,7 +416,8 @@ function TabsList({ s, fileOn, viaKey, onClose }: {
           </FilterBar>
         )}
         <ul className="stab-list" id="stab-list" role="listbox" ref={listRef}>
-          {rows.length === 0 && <li className="stab-list-none">No open tab{waitOnly ? " waiting for your answer" : ""} matches “{query.trim()}”.</li>}
+          {s.all.length === 0 && <li className="stab-list-none">Nothing is open. “New session” on a repo opens one, and it is listed here.</li>}
+          {rows.length === 0 && s.all.length > 0 && <li className="stab-list-none">No open tab{waitOnly ? " waiting for your answer" : ""} matches “{query.trim()}”.</li>}
           {rows.map((x, i) => {
             const sel = i === at ? " sel" : "";
             const on = isOn(x) ? " on" : "";

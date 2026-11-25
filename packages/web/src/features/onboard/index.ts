@@ -8,7 +8,7 @@ import type { FeatureManifest } from "../../sdk";
 import { OnboardSheet } from "./OnboardSheet";
 import { refreshJob, takeJob } from "./actions";
 
-export { FirstRunCard } from "./FirstRunCard";
+export { FirstRunCard, useFirstRunWhich } from "./FirstRunCard";
 export { openOnboard } from "./actions";
 export { useOnboardJob } from "./store";
 export { neverRanSession } from "./logic";

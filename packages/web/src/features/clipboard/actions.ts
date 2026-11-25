@@ -64,8 +64,7 @@ export function openLink(url: string): void {
 export async function copyLink(url: string): Promise<void> {
   const c = core();
   c.say.track("action:link.copy");
-  try { await navigator.clipboard.writeText(url); c.say.toast("link copied"); }
-  catch { c.say.toast("clipboard unavailable (needs https) — show the url and select it"); }
+  c.say.toast(await copyText(url) ? "link copied" : "the clipboard refused it here — show the url and select it");
 }
 
 /** Copy a one-time / device code the shell printed. Resolves false when the
@@ -74,8 +73,9 @@ export async function copyLink(url: string): Promise<void> {
 export async function copyCode(code: string): Promise<boolean> {
   const c = core();
   c.say.track("action:link.code");
-  try { await navigator.clipboard.writeText(code); c.say.toast(`code ${code} copied`); return true; }
-  catch { c.say.toast(`clipboard needs https — type the code by hand: ${code}`); return false; }
+  if (await copyText(code)) { c.say.toast(`code ${code} copied`); return true; }
+  c.say.toast(`the clipboard refused it here — type the code by hand: ${code}`);
+  return false;
 }
 
 /** How much of a cached conversation the decisions sheet reads when no grid is

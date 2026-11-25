@@ -14,6 +14,12 @@ export const hostApi = {
     const r = await nfetch(`/api/host/screenshot?repo=${encodeURIComponent(repoId)}`, { method: "POST" });
     return r.json() as Promise<{ file?: FileEntry; error?: string }>;
   },
+  /** The same capture, left in the DESKTOP's clipboard; nothing comes back but the verdict. */
+  screenshotToClipboard: async (): Promise<{ ok: boolean; error?: string }> => {
+    const r = await nfetch("/api/host/screenshot/clipboard", { method: "POST" });
+    if (r.status === 404) return { ok: false, error: "this desktop is running an older host — update it to copy a screenshot there" };
+    return r.json();
+  },
   /** Whether the desktop can read a whole picture ON-DEVICE (`ocrlocal.ts`). A
    *  reason, never a bare false — the annotator says it in place of the text. */
   ocrStatus: async (): Promise<{ available: true; engine: string } | { available: false; reason: string }> => {

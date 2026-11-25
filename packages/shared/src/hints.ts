@@ -32,6 +32,13 @@ export interface HintDef {
    * which the user asks for.
    */
   confirm?: boolean;
+  /**
+   * Explain-then-act on a tap until the person says "don't show again", in
+   * every mode but `off`. Only for a control that LOOKS inert and says
+   * something about the rest of the screen (the logo). One entry; each one
+   * more is a tap interrupted for everybody.
+   */
+  askAgain?: boolean;
   /** Destructive or hard to undo — the card says so and goes red. */
   danger?: boolean;
 }
@@ -290,11 +297,11 @@ export const HINTS: Record<string, HintDef> = {
     what: "One at a time, one per repo, or all at once. The first session always goes alone whatever this says: if it comes back still blocked, nothing else spends an attempt proving the same thing.",
     when: "“One per repo” is the middle answer — two agents must not edit one checkout, but two worktrees are not each other's business. “All at once” spends the fresh window broadly.",
   },
-  "term.fullscreen": { title: "Full screen", what: "Hides the header, the status line and the toolbar and gives those rows to whatever you are reading — the same layout typing room gives you, without the keyboard taking half the screen. The Esc/Tab/arrow row stays, because with no keyboard it is the only way to answer the CLI. Tap again, or the menu button in the corner, to come back." },
+  "term.fullscreen": { title: "Full screen", what: "Hides the header, the status line and the toolbar and gives those rows to whatever you are reading — the same layout typing room gives you, without the keyboard taking half the screen. The Esc/Tab/arrow row stays, because with no keyboard it is the only way to answer the CLI. Tap again, or the menu button in the corner, to come back. With a keyboard: Alt+G (⌥G on a Mac), both ways." },
   "hdr.pair": { title: "Claude · Shell", what: "The session and its companion shell, as two tabs: the lit one is on screen, a tap on the other switches. They appear once the menu's \"companion shell\" has opened one in this session's folder — temporary, it closes when the session does. Gone in full screen and while typing, with the rest of the header." },
   "term.read": { title: "Reader / terminal", what: "Swaps the whole view: the live CLI screen, or the scrollable, searchable transcript of the conversation. It sits here rather than on the header because full screen hides the header — and this is the control you want most in the layout you read a long turn in." },
   "term.folded": { title: "Folded strips", what: "Brings back a strip you folded away above the prompt bar — downloads, a sign-in link, the next prompt and the like. The number is how many are folded; a tap lists exactly those, and a row opens its strip again. The button is only here while something is folded, and it lives in this corner so typing room and full screen keep it." },
-  "term.grip": { title: "Move these buttons", what: "Drag the grip to move the whole group of terminal buttons anywhere inside the terminal, off a line it is hiding. The terminal itself is not resized, so the CLI does not redraw. Double-tap the grip to put the group back in its corner. Where you put it is remembered on this phone only." },
+  "term.grip": { title: "Move these buttons", what: "Drag the grip to move the whole group of terminal buttons anywhere on the session screen, over the header or the message box too. The terminal itself is not resized, so the CLI does not redraw. Double-tap the grip to put the group back in its corner. Where you put it is remembered on this phone only." },
   "term.modelwheel": { title: "Model · effort wheel", what: "Picks model and effort on one wheel: a spoke per model, effort from low at the centre to max at the rim. A tap only selects — the sentence above the wheel says what Apply will do, and only a change the CLI cannot make live relaunches the session. The prompt cache belongs to one model, so a switch makes the next turn re-write the context; the line under the wheel prices it. The chips below choose which models are spokes." },
   "term.zoom": { title: "Zoom this screen", what: "How big the terminal — or, in the reader, the conversation — is drawn, on top of the app's text size. In the terminal, smaller is a BIGGER grid: the desktop resizes the session to the new columns and rows, so more of what the CLI prints fits on the phone. The two surfaces remember their own zoom. At either end of the range that button is simply not there, and the readout says which end." },
   "limit.global": {
@@ -413,7 +420,7 @@ export const HINTS: Record<string, HintDef> = {
   },
   "pull.pause": { title: "Pause", what: "Stops this download and KEEPS what has arrived. Resuming continues from that byte; it does not start over." },
   "pull.retry": { title: "Retry", what: "Tries again from the bytes already here." },
-  "pull.clearall": { title: "Clear the queue", what: "Drops every download still waiting — the desktop's own queue and the ones asked for from this phone. Files already fully downloaded stay on the phone.", danger: true },
+  "pull.deleteall": { title: "Delete all", what: "Removes every download listed under this heading from this phone, with whatever of it the app holds, and takes it off the desktop's queue. Copies already in the phone's Downloads folder stay, and so do installed apps. It asks first.", danger: true },
   "pull.auto": { title: "Auto-download", what: "Whether files matching this repo's rule start downloading by themselves as soon as the agent produces them. A file YOU tapped is fetched whatever this says — the switch governs unattended work, not a person." },
 
   // ── The permanent connection strip ────────────────────────────────
@@ -533,6 +540,13 @@ export const HINTS: Record<string, HintDef> = {
     title: "A session you have open",
     what: "One tab per live session, coloured by its repo — the same colour that repo wears on the launcher's group header and down the side of every one of its rows, so a tab is recognised before it is read. The taller tab with a cap of colour on it is the one you are in. The mark beside the name is what that session is doing, in the launcher’s own five words and five colours: a turning ring while a turn is running, a red dot waiting on an answer from you, an orange one at the usage limit, a grey one with nothing left to do, and a red one on a process that has exited.",
     when: "Tap to go straight there from wherever you are — everywhere else in the app the sessions are a column you scroll. The × closes that session and asks first; the conversation itself is kept either way. How many tabs fit, what order they sit in, and which colour each repo gets are all in Settings.",
+  },
+
+  "tabs.logo": {
+    title: "The logo opens your tabs",
+    what: "It lists every session and pinned file you have open. From any other screen, tap the number beside the stack icon at the top — upper right, or at the left end of the tab strip if you switched that on.",
+    when: "The readings in the lines at the top are buttons too: delay, traffic, processor, memory, agents. Tap one to see the detail behind it.",
+    askAgain: true,
   },
 
   // ── The repo readings ─────────────────────────────────────────────
@@ -663,7 +677,8 @@ export type HintAction =
  * `explain` (explain mode) beats everything, including `off`: it is switched on
  * deliberately, seconds before the tap, and a mode the user just enabled that
  * silently did nothing would be worse than no feature. Otherwise only the
- * curated `confirm` entries interrupt, only once each, and only in `first`.
+ * curated `confirm` entries interrupt, only once each, and only in `first` —
+ * plus the `askAgain` one, in `press` too, until the person says not again.
  */
 export function decideHint(opts: {
   mode: HintMode;
@@ -676,6 +691,7 @@ export function decideHint(opts: {
 }): HintAction {
   if (!opts.def) return "act";
   if (opts.explain) return "explain";
+  if (opts.def.askAgain && !opts.seen && opts.mode !== "off") return "explainThenAct";
   if (opts.mode !== "first") return "act";
   if (!opts.def.confirm) return "act";
   if (opts.seen) return "act";

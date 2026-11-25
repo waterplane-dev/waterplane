@@ -99,6 +99,7 @@ const ELSEWHERE = {
   "features/backlog/actions.ts": 2,
   "features/build/actions.ts": 1,
   "features/fanout/actions.ts": 1,
+  "features/repoSetup/actions.ts": 1,
   "outbox.ts": 2,
 };
 
@@ -133,7 +134,7 @@ test("nothing outside core/queue mints an ackId except the named files", () => {
  * create before it is sent. A feature passing an id it did not just mint is a
  * RE-SEND under an old ack, which the host re-acks and never runs.
  */
-const QUEUE_OP_WITH_ACK = { "core/launch/useLaunch.ts": 3, "features/build/actions.ts": 1, "features/fanout/actions.ts": 1 };
+const QUEUE_OP_WITH_ACK = { "core/launch/useLaunch.ts": 3, "features/build/actions.ts": 1, "features/fanout/actions.ts": 1, "features/repoSetup/actions.ts": 1 };
 
 /** Every `queueOp(` call's balanced argument text (not its declarations). */
 function queueOpArgs(text) {

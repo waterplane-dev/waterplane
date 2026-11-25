@@ -1,12 +1,12 @@
 import type { PluginValue, PluginStatus } from "./manifest.js";
-import type { PluginRepoScope, SetupSubject, SetupFixOutcome, HandToAgentResult, PluginHookHold } from "./module.js";
+import type { PluginRepoScope, SetupSubject, SetupFixOutcome, SetupFixOptions, OptInAnswer, HandToAgentResult, PluginHookHold } from "./module.js";
 import type { PluginBackendDef, PluginScreenReader, PluginStoreReader, PluginHttpMethod, PluginHttpRequest, PluginHttpReply } from "./backend.js";
 import type { PeerKind } from "../wire/messages.js";
 import type { PluginStreamHandlers } from "../stream.js";
 import type { ComplianceCheck } from "../wire/repo.js";
 import type { Finding } from "../findings/types.js";
 import type { AppRepoFacts } from "../wire/install.js";
-import type { PluginThermalReader, PluginUsageProbe } from "../pluginreadings.js";
+import type { PluginScreenCapture, PluginThermalReader, PluginUsageProbe } from "../pluginreadings.js";
 import type { BindLook, BindVerdict } from "../bindconv.js";
 
 /** Who a `handle` method was called by (since 1.8): the socket's trust tier, and the paired
@@ -265,9 +265,18 @@ export interface HostPluginApi {
   /**
    * Handle the fix a contributed row names in `fix`. Ids the core owns
    * (`gitignore`, `claude-md`, …) or another plugin already took are refused:
-   * the call throws, saying which. Returns an unregister.
+   * the call throws, saying which. Returns an unregister. With `newProject` (since 2.10) the fix is
+   * also a checkbox on the new-project sheet, and a ticked one runs on the new project before its
+   * first commit, so what it writes is committed with it; an older host ignores the argument.
    */
-  setupFix(id: string, fn: (repo: SetupSubject) => SetupFixOutcome): () => void;
+  setupFix(id: string, fn: (repo: SetupSubject) => SetupFixOutcome, opts?: SetupFixOptions): () => void;
+  /**
+   * (since 2.11) Answer one offer of core's opt-in catalog (`OPT_INS`) that is about THIS plugin: is it
+   * already on in that repo. Asked when a person opens the repo's Opt-ins, so read files, never the
+   * network. A throw reads as `unknown` and becomes the plugin's status line; an id core has no offer
+   * for is never asked. Returns an unregister.
+   */
+  optIn(id: string, fn: (repo: SetupSubject) => OptInAnswer | Promise<OptInAnswer>): () => void;
   /**
    * Answer `method` when the phone (or core) calls this plugin — the registry's
    * `call(pluginId, method, args)`. One handler per method; a second replaces
@@ -327,6 +336,14 @@ export interface HostPluginApi {
    * `PLUGIN_THERMAL_TIMEOUT_MS` counts as no reading. Same naming rules as `screenReader`.
    */
   thermalReader(name: string, reader: PluginThermalReader): () => void;
+  /**
+   * Contribute a SCREEN CAPTURE under `name` (since 2.12): asked for one still of the desktop only
+   * when the core's own screenshot tool failed (macOS refusing node Screen Recording), for a plugin
+   * whose helper holds the permission itself. Never asked without a person's tap on the screenshot
+   * button. A throw, or no answer within `PLUGIN_SCREEN_CAPTURE_TIMEOUT_MS`, counts as no picture.
+   * Same naming rules as `screenReader`. Returns an unregister.
+   */
+  screenCapture(name: string, capture: PluginScreenCapture): () => void;
   /**
    * Contribute a USAGE PROBE (since 1.7): one account's quota as its own segment beside claude's on
    * the usage chip. `claude` or a taken `source` throws. Null = ABSENT; a throw or timeout keeps

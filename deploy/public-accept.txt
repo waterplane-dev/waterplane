@@ -213,3 +213,6 @@ packages/shared/test/agentshare.test.mjs:fb4afe0066  # placeholder repo key fedc
 packages/web/src/agentReadingsWords.test.mjs:81074ebf95  # placeholder repo key 0123456789abcdef in a setup-share fixture
 packages/web/src/core/queue/swRelay.test.mjs:6f50a6210d  # made-up tailnet origin in the relay test (not this tailnet)
 packages/app/android/app/src/test/resources/update-signature-vector.json:9533681114  # fixture: regenerated publicKey/otherKey (public keys, gen-update-vector.mjs)
+packages/host/test/origin.test.mjs:281d872a92  # made-up tailnet name in a fixture (not this tailnet)
+packages/host/test/rebind.test.mjs:f1a0f0c942  # made-up tailnet name in a fixture (not this tailnet)
+packages/web/src/certExpiry.test.mjs:7d082ea32f  # made-up tailnet name in a fixture (not this tailnet)

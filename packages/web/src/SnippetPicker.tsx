@@ -12,6 +12,7 @@ import { Circle, Pencil, X } from "lucide-react";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
 import { Empty } from "./Empty";
+import { useDialogStep } from "./backStep";
 import { byRecent, insertLabel, noteRecent, tickedSnippets, toggleTick, type SnippetLike } from "./snippetPicks";
 import { LS, lsJson, lsSetJson } from "./storage";
 
@@ -25,6 +26,7 @@ export function SnippetPicker({ list, starter, onInsert, onClose, onManage, keep
   keepFocus?: (e: ReactPointerEvent) => void;
   emptyText: string;
 }) {
+  useDialogStep(true, onClose);
   // Read once per open: the rows must not jump under a finger while the picker is up.
   const [recent] = useState<string[]>(() => { const v = lsJson<unknown>(LS.snippetRecent, []); return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []; });
   const shown = byRecent(list, recent);

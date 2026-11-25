@@ -1,4 +1,4 @@
-import type { OnboardAnswers, OnboardConsent, OnboardJob, OnboardPlan, WorktreeLeftover } from "@waterplane/shared";
+import type { NewProjectOptions, OnboardAnswers, OnboardConsent, OnboardJob, OnboardPlan, WorktreeLeftover } from "@waterplane/shared";
 import { abs } from "../hostUrl";
 import { jget, jpost, nfetch } from "./webapiFetch";
 
@@ -6,11 +6,11 @@ import { jget, jpost, nfetch } from "./webapiFetch";
 export const reposApi = {
   newFolder: (parent: string, name: string) => jpost<{ path?: string; error?: string }>("/api/folder", { parent, name }),
   /** `setup` seeds the phone-facing scaffold (gitignore, README, CLAUDE.md, inbox/outbox). */
-  newRepo: (parent: string, name: string, opts: { setup?: boolean; description?: string } = {}) =>
-    jpost<{ path?: string; branch?: string; files?: string[]; warning?: string; error?: string }>(
-      "/api/repo",
-      { parent, name, setup: opts.setup !== false, description: opts.description },
-    ),
+  newRepo: (parent: string, name: string, opts: { setup?: boolean; description?: string; options?: string[]; confirm?: string } = {}) =>
+    jpost<{ path?: string; branch?: string; files?: string[]; notes?: string[]; warning?: string; error?: string; setupPage?: true }>("/api/repo",
+      { parent, name, setup: opts.setup !== false, description: opts.description, ...(opts.options?.length ? { options: opts.options, confirm: opts.confirm } : {}) }),
+  /** The boxes the new-project sheet offers on THIS desktop, and the one-shot token the create echoes. */
+  newProjectOptions: () => jget<NewProjectOptions>("/api/repo/options"),
   /**
    * The name to SHOW for a repo instead of its folder's (`host/reponames.ts`), set on its primary
    * checkout; `null` puts the folder's name back. A label only. The host's refusal comes back in
@@ -32,7 +32,7 @@ export const reposApi = {
   initPlainFolder: (path: string) => jpost<{ path?: string; branch?: string; error?: string }>("/api/plainfolders/init", { path }),
   /** `git clone` into a new folder under `parent`; the host refuses any URL but https/ssh, in words. */
   cloneRepo: (parent: string, url: string, name?: string) =>
-    jpost<{ path?: string; branch?: string; warning?: string; error?: string }>("/api/clone", { parent, url, name: name || undefined }),
+    jpost<{ path?: string; branch?: string; warning?: string; error?: string; setupPage?: true }>("/api/clone", { parent, url, name: name || undefined }),
   /**
    * The first-app job (`host/onboardroutes.ts`, plan WP6). The plan is a read
    * and writes nothing; a refusal comes back as `ok:false` + `error` in words

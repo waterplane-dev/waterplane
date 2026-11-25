@@ -55,6 +55,9 @@ export interface ApiCtx {
    *  most often opens one, and waiting up to a tick for it would be latency
    *  nobody asked for — so the upload route kicks the gate directly. */
   launches: { fileLanded(cwd: string): void };
+  /** A repo's download rule and the synced install list, for the `apk-*` opt-in probes. */
+  pullRule?: (repoDir: string) => import("@waterplane/shared").AutoPullConfig;
+  installAllow?: () => string[] | null;
   /** The configured budget periods (an agent's `window` trigger may name one). */
   periods?: () => readonly import("@waterplane/shared").BudgetPeriod[];
   /** Token usage across every conversation log on disk — the statistics

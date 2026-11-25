@@ -65,6 +65,16 @@ export function isLocalCommand(text: string): boolean {
 }
 
 /**
+ * True when a local command is set IN PLACE, at once, even mid-turn: `/fast on`
+ * and `/fast off` (`immediate: true` in 2.1.331's table, no view with an
+ * argument). The phone's hold is for a command that opens a view over a running
+ * turn, and this one opens none. A bare `/fast` is a picker and still waits.
+ */
+export function setsInPlace(text: string): boolean {
+  return /^\/fast\s+(?:on|off)$/i.test(text.trim());
+}
+
+/**
  * Commands that SUBMIT and still start no turn.
  *
  * **A third category, and `/btw` is the whole of it so far.** The set above is

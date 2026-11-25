@@ -35,5 +35,6 @@ export * from "./sendIntent/sendLabels.ts";
 export * from "./sendIntent/sendLaunch.ts";
 export * from "./sendIntent/sendFlag.ts";
 export * from "./sendIntent/sendChain.ts";
+export * from "./sendIntent/sendDurable.ts";
 export * from "./sendIntent/sendRule.ts";
 export * from "./sendIntent/sendRetime.ts";

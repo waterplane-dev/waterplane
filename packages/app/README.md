@@ -203,7 +203,8 @@ by a blank 404.
 
 - `MainActivity.guardNavigation()` installs a `BridgeWebViewClient` that refuses any main-frame
   navigation to our own origin that is not the app document, and says so.
-- A main-frame navigation to a different origin leaves, but asks first with a dialog naming the URL.
+- A main-frame navigation to a different origin leaves, but asks first with a dialog naming the URL:
+  open, copy the link, or stay.
 - Sub-frame requests, `blob:` and `data:` keep Capacitor's behaviour.
 - `MainActivity.catchDownloads()` hands `http(s)` downloads the WebView starts itself to
   `DownloadManager` and says where the file goes; `blob:` and `data:` live in the renderer, cannot be

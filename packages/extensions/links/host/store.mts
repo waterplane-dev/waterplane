@@ -5,7 +5,7 @@
  */
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { LINK_ENVS, PIN_ID_RE, isHttpUrl, type LinkEnv, type PinnedLink } from "../shared/wire.mjs";
+import { LINK_ENVS, PIN_ID_RE, isHttpUrl, type FoundLink, type LinkEnv, type PinnedLink } from "../shared/wire.mjs";
 
 export const REPO_RE = /^[\w.-]{1,128}$/;
 export const cleanLabel = (s: unknown): string | null => {
@@ -48,9 +48,27 @@ export async function loadPins(file: string): Promise<Loaded> {
   return { links, writable: false, problems: [`${bad} row${bad === 1 ? "" : "s"} in ${file} did not read as a link and ${bad === 1 ? "is" : "are"} not shown — pins are not changed from the phone until the file is fixed by hand.`] };
 }
 
-export async function savePins(file: string, links: readonly PinnedLink[]): Promise<void> {
+async function saveJson(file: string, value: unknown): Promise<void> {
   await mkdir(dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;
-  await writeFile(tmp, JSON.stringify({ links }, null, 2) + "\n", { mode: 0o600 });
+  await writeFile(tmp, JSON.stringify(value, null, 2) + "\n", { mode: 0o600 });
   await rename(tmp, file);
 }
+
+export const savePins = (file: string, links: readonly PinnedLink[]): Promise<void> => saveJson(file, { links });
+
+/** The last look with the sign-in command, kept so a host restart does not cost another approval. */
+export interface CloudLook { at: number; rows: FoundLink[] }
+const KINDS: readonly string[] = ["cloudrun", "function", "firebase"];
+
+/** A row that does not read is left out, a file that does not read is no look — it is only a cache. */
+export async function loadCloudLook(file: string): Promise<CloudLook | null> {
+  try {
+    const d = JSON.parse(await readFile(file, "utf8")) as Partial<CloudLook> | null;
+    if (!d || typeof d.at !== "number" || !Array.isArray(d.rows)) return null;
+    const rows = d.rows.filter((x) => x && typeof x.key === "string" && KINDS.includes(x.kind) && typeof x.label === "string" && isHttpUrl(x.url)
+      && isEnv(x.env) && typeof x.hidden === "boolean" && (x.repo === null || REPO_RE.test(String(x.repo))));
+    return { at: d.at, rows };
+  } catch { return null; }
+}
+export const saveCloudLook = (file: string, look: CloudLook): Promise<void> => saveJson(file, look);

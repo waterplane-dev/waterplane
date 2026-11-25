@@ -2,7 +2,7 @@
  * Routes about ONE session: its lifecycle, what is typed into it, what it
  * remembers, and the usage limit it may be blocked on.
  */
-import { cleanSessionBudget, isConversationId, promptStillCurrent, safeRel, slashForkTitle } from "@waterplane/shared";
+import { cleanSessionBudget, isConversationId, promptStillCurrent, safeRel, setsInPlace, slashForkTitle } from "@waterplane/shared";
 import type { SessionInfo } from "@waterplane/shared";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
@@ -452,6 +452,7 @@ const onSessionInput: Route<"session.input"> = (a) => {
       // A bare `/fork` to a claude session opens a tab here instead of being typed.
       if (forkFromInput(a, ackId)) return;
       // `view` is carried for the audit row only — see `DeliverOpts.view`.
+      const fastAnswer = setsInPlace(a.msg.data) ? a.c.sessions.watchFast(a.msg.id) : null;
       const settled = a.c.deliverInput(a.msg.id, a.msg.data, ackId, a.msg.cwd, a.msg.view);
       a.c.inputsInFlight.set(ackId, settled);
       void settled
@@ -462,6 +463,8 @@ const onSessionInput: Route<"session.input"> = (a) => {
           // attempt rather than a replayed "no".
           if (!v.retryable) a.c.acks.remember(ackId, { ok: v.ok, reason: v.reason, state: v.state });
           a.c.send(a.ws, { t: "input.ack", id: a.msg.id, ackId, ok: v.ok, reason: v.reason, state: v.state, retryable: v.retryable });
+          // The CLI's refusal of `/fast on` is a notice that goes in seconds: said to whoever sent it.
+          if (v.ok && fastAnswer) void fastAnswer().then((why) => { if (why) a.c.send(a.ws, { t: "toast", text: `fast mode not changed — the CLI says: ${why}` }); });
         })
         .finally(() => a.c.inputsInFlight.delete(ackId));
       return;

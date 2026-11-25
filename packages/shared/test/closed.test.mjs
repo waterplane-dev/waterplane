@@ -24,6 +24,7 @@ test("unknown reasons and kinds are dropped — absent, never rounded to a near 
   const r = cleanClosedRow({ ...OLD, closedBy: "crashed", kind: "manual", itemState: "running", turns: 0, exitCode: "1" });
   for (const k of ["closedBy", "kind", "itemState", "turns", "exitCode"]) assert.equal(k in r, false, k);
   const ok = cleanClosedRow({ ...OLD, closedBy: "auto-slot", kind: "backlog", itemState: "done", turns: 4, exitCode: 0 });
+  for (const by of ["reboot", "lost"]) assert.equal(cleanClosedRow({ ...OLD, closedBy: by }).closedBy, by, "R-sessions-071: the mark survives a reload");
   assert.equal(ok.closedBy, "auto-slot"); assert.equal(ok.kind, "backlog"); assert.equal(ok.turns, 4); assert.equal(ok.exitCode, 0);
 });
 

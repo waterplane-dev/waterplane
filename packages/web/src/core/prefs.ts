@@ -87,6 +87,8 @@ export interface DevicePrefs {
   typingRoom: boolean;
   /** Close the keyboard after a send. Default ON, per device. */
   closeKbOnSend: boolean;
+  /** The open-tabs count on the launcher's logo (`TabsLogo`). Default ON, per device. */
+  logoCount: boolean;
   /** Hold Ctrl/⌘/Alt alone → the shortcut card (`ShortcutCard.tsx`). Default ON, per device. */
   shortcutCard: boolean;
   /** After a `/btw` sent from the reader: ask, or the remembered answer. Per device. */
@@ -207,6 +209,7 @@ export const prefs = createPrefs<DevicePrefs>({
     same: (a, b) => a.mode === b.mode && a.seen === b.seen,
   },
   closeKbOnSend: flag(LS.closeKbOnSend, onUnlessZero),
+  logoCount: flag(LS.logoCount, onUnlessZero),
   shortcutCard: flag(LS.shortcutCard, onUnlessZero),
   btwToCli: {
     load: () => { const v = lsGet(LS.btwToCli); return v === "switch" || v === "stay" ? v : ""; },

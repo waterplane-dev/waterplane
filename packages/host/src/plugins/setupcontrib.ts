@@ -8,7 +8,7 @@
  * module. No registry ⇒ no contributed rows — which is the state a `--doctor`
  * run or a test that booted none is honestly in.
  */
-import type { Finding, BackendInfo, ComplianceCheck, SetupFixOutcome, SetupSubject } from "@waterplane/shared";
+import type { Finding, BackendInfo, ComplianceCheck, NewProjectOption, OptInAnswer, SetupFixOutcome, SetupSubject } from "@waterplane/shared";
 import { BACKENDS, backendInfos } from "../backends/index.js";
 import type { BackendDescriptor } from "../backends/index.js";
 import { onPath } from "../pathx.js";
@@ -20,6 +20,10 @@ export interface SetupSource {
   setupChecks(s: SetupSubject): ComplianceCheck[];
   setupFixIds(): string[];
   runSetupFix(id: string, s: SetupSubject): SetupFixOutcome | null;
+  /** Fixes offered on the new-project sheet; optional so an older source still fits. */
+  newProjectOffers?(): NewProjectOption[];
+  /** One opt-in offer's answer (`api.optIn`); optional so an older source still fits. */
+  optInAnswer?(id: string, s: SetupSubject): Promise<OptInAnswer | null>;
   /** Findings contributed through `api.setupFinding`; optional so an older source still fits. */
   setupFindings?(s: SetupSubject): Promise<{ findings: Finding[]; answered: string[] }>;
 }
@@ -30,6 +34,14 @@ export function setSetupSource(s: SetupSource | null): void { source = s; }
 
 /** The fix ids active plugins and extensions answer right now; none without a registry. */
 export function contributedFixIds(): string[] { return source ? source.setupFixIds() : []; }
+
+/** What plugins and extensions offer on the new-project sheet right now. */
+export function contributedNewProjectOptions(): NewProjectOption[] { return source?.newProjectOffers?.() ?? []; }
+
+/** What the plugin behind one opt-in offer says about this worktree; null when none answers it. */
+export async function contributedOptIn(id: string, worktree: string): Promise<OptInAnswer | null> {
+  return (await source?.optInAnswer?.(id, { worktree })) ?? null;
+}
 
 /**
  * Every contributed row ABOUT this worktree, in load order. A `scope: "host"` row is about the

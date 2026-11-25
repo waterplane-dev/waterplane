@@ -6,10 +6,12 @@
  */
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HealthWatch, HEALTH_REFRESH_MS } from "../dist/healthwatch.js";
+import { ensureStateDirIgnored } from "../dist/stateignore.js";
 
 const dirs = [];
 after(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
@@ -35,7 +37,7 @@ function make(over = {}) {
   const deps = {
     root, statePath: join(root, "healthindex.json"),
     repos: async () => [{ id: "r1", repoName: "demo", worktreePath: "/nonexistent/demo" }],
-    refresh: async (wt) => { log.refresh.push(wt); return over.refreshOk ?? true; },
+    refresh: async (wt, measureOnly) => { log.refresh.push(wt); (log.only ??= []).push(measureOnly); over.onRefresh?.(text); return over.refreshOk ?? true; },
     warnChars: () => 16_000,
     notify: (k, p) => log.notify.push([k, p]),
     now: () => now,
@@ -83,10 +85,56 @@ test("due: absent or older than 7 days; not within the week; not retried at once
   assert.equal(w2.due("/nonexistent/demo"), true);
 });
 
-test("a repo with no series file is never refreshed", async () => {
-  const m = make({ text: { v: null } });
-  await m.mk().sweep();
-  assert.equal(m.log.refresh.length, 0);
+test("R-metrics-093: a repo with no series file is measured by the sweep: update alone, no push", async () => {
+  const m = make({ text: { v: null }, onRefresh: (t) => { t.v = asText(slipping()); } });
+  const w = m.mk();
+  await w.sweep();
+  assert.deepEqual(m.log.only, [true], "update alone: nothing lands in the outbox unasked");
+  assert.ok(w.summaryFor("/nonexistent/demo"), "the chip has its value");
+  // The same series DOES push for a repo that was already measured (the test below).
+  assert.equal(m.log.notify.length, 0, "a first reading is no news");
+  await w.sweep();
+  assert.equal(m.log.refresh.length, 1, "not due again this week");
+  assert.equal(m.log.notify.length, 0, "and it is not news an hour later either");
+  // The weekly run stays `update` alone, across a restart too.
+  m.setNow(T0 + 100 * DAY + HEALTH_REFRESH_MS + 1);
+  const w2 = m.mk();
+  await w2.sweep();
+  assert.deepEqual(m.log.only, [true, true]);
+  // …until a person taps refresh.
+  w2.refreshed("/nonexistent/demo");
+  m.setNow(T0 + 100 * DAY + 3 * HEALTH_REFRESH_MS);
+  await w2.sweep();
+  assert.deepEqual(m.log.only, [true, true, false]);
+});
+
+test("R-metrics-093: no first measurement where it is declined or switched off; a failed one waits", async () => {
+  const no = make({ text: { v: null }, deps: { mayStart: () => false } });
+  await no.mk().sweep();
+  assert.equal(no.log.refresh.length, 0, "declined");
+  const off = make({ text: { v: null }, deps: { enabled: () => false } });
+  await off.mk().sweep();
+  assert.equal(off.log.refresh.length, 0, "switched off");
+  const bad = make({ text: { v: null }, refreshOk: false });
+  const w = bad.mk();
+  await w.sweep();
+  await w.sweep();
+  assert.equal(bad.log.refresh.length, 1);
+  assert.equal(w.summaryFor("/nonexistent/demo"), undefined, "absent, never 0");
+});
+
+test("R-metrics-093: the state dir is ignored locally, never through .gitignore", async () => {
+  const wt = tmp();
+  const git = (...a) => execFileSync("git", a, { cwd: wt, env: Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_"))) }).toString();
+  git("init", "-q");
+  assert.equal(await ensureStateDirIgnored(wt), true);
+  mkdirSync(join(wt, ".waterplane"));
+  writeFileSync(join(wt, ".waterplane", "repohealth.jsonl"), "x\n");
+  assert.equal(git("status", "--short"), "");
+  const once = readFileSync(join(wt, ".git/info/exclude"), "utf8");
+  assert.equal(await ensureStateDirIgnored(wt), true);
+  assert.equal(readFileSync(join(wt, ".git/info/exclude"), "utf8"), once, "written once");
+  assert.equal(await ensureStateDirIgnored(tmp()), false, "not a git repo");
 });
 
 test("one push per (week, kind), and not again after a restart", async () => {

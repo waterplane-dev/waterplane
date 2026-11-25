@@ -471,3 +471,7 @@ The release installs tile counts only real release installs and leaves out each 
 - asked: 2026-11-16
 - shipped: ab34ee29c
 
+### R-metrics-093 · shipped
+Every repo's health score shows on its card without setting anything up: the desktop takes a repo's first reading by itself (free, local), the way it already keeps it current weekly. Nothing lands in the repo's outbox or its git status from it, the first reading sends no notification, and a repo whose "Repo health series" offer was declined, or whose own unapproved engine would have to run, is left alone. A repo missing one of the readings the score is built from (no tests, no source files) is measured but shows no score.
+- asked: 2026-11-23 (owner)
+- shipped: host healthwatch.ts (`sweep`, `mayStart`), stateignore.ts; tests: packages/host/test/healthwatch.test.mjs

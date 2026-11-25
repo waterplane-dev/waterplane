@@ -9,7 +9,7 @@
  * the same `ackId`, and only a provably-new message gets a fresh one.
  */
 import {
-  adoptReferencedUploads, applyRelease, busySerialGroups, danglingUploadRefs, isLocalCommand, promptFingerprint,
+  adoptReferencedUploads, applyRelease, busySerialGroups, danglingUploadRefs, isLocalCommand, promptFingerprint, setsInPlace,
   queueIdleReason, roundDelay, MIN_TRY_MS, selectSendable, sendEligible, serialGroup, uploadAttemptWasted, TimeoutError,
   type ClientMessage, type SessionInfo,
 } from "@waterplane/shared";
@@ -447,8 +447,9 @@ export function sendFns(c: QueueCtx): SendFns {
      * already has the mechanism, the strip above the composer says it is waiting
      * and offers *send now* for the case where interrupting is the point. An
      * idle session takes it immediately, which is every ordinary use of it.
+     * `/fast on|off` opens no view and the CLI runs it mid-turn: never held.
      */
-    if (!holdUntilIdle && isLocalCommand(text)) {
+    if (!holdUntilIdle && isLocalCommand(text) && !setsInPlace(text)) {
       const s = sessions.find((x: SessionInfo) => x.id === id);
       const busy = !!s && (s.hooked ? !!s.turnActive : !!s.running && !s.idle);
       if (busy) {
@@ -746,7 +747,7 @@ export function sendFns(c: QueueCtx): SendFns {
     // null = refused (it names an image that will never arrive); the caller
     // must leave the text where it is rather than reporting a queued item.
     if (!guardUploadRefs(opts.text, opts.targetSessionId ?? opts.repoDir)) return null;
-    const ackId = newAckId();
+    const ackId = opts.ackId ?? newAckId();
     const offline = connRef.current.status !== "open";
     addOutbox({
       ackId, sessionId: opts.targetSessionId ?? opts.repoDir, cwd: opts.repoDir, text: opts.text,
@@ -763,6 +764,8 @@ export function sendFns(c: QueueCtx): SendFns {
       rescued: opts.rescued,
       offline, armed: !offline,
     });
+    // `queueOp`'s `track`, for an item a sheet waits on (`fireFate.ts`).
+    if (opts.track) noteFired(ackId);
     if (!offline) armLane(opts.targetSessionId ?? opts.repoDir);
     flushOutbox();
     return offline;

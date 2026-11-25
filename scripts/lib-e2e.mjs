@@ -144,3 +144,15 @@ export async function bootHost({ env = {}, quiet = false, tag = "e2e", home = fa
   }
   return { port, base: `http://127.0.0.1:${port}`, root, host, stop };
 }
+
+/**
+ * A desktop whose repos have all been met: their set-up page (`features/repoSetup`) is marked seen, so a tap on
+ * New session in a script whose subject is something else opens the session with no page over it.
+ */
+export async function setupPagesSeen(base) {
+  for (const t of (await (await fetch(`${base}/api/repos`)).json()).targets) {
+    if (!t.setupUnseen) continue;
+    const r = await fetch(`${base}/api/repos/${t.id}/optins/seen`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    if (!r.ok) throw new Error(`marking ${t.repoName}'s set-up page seen: ${r.status}`);
+  }
+}

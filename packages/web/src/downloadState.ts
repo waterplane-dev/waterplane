@@ -364,6 +364,25 @@ export function pullGone(r: Pick<PullRecord, "state" | "error">): boolean {
   return r.state === "failed" && /^http (404|410)\b/.test(r.error ?? "");
 }
 
+/**
+ * What "delete all" says before it deletes exactly these rows. Waiting rows
+ * lose what was fetched so far; a finished row whose file is not known to be in
+ * the phone's Downloads folder is the only copy here, and that is said as a
+ * count. Copies in that folder are never touched (`pulls.remove`).
+ */
+export function deleteAllLines(rows: readonly PullRecord[]): string[] {
+  const held = rows.filter((r) => r.state === "done" && !r.evicted);
+  const inFolder = held.filter((r) => r.savedPresent === true || (r.droppedAt && r.savedPresent !== false)).length;
+  const only = held.length - inFolder;
+  const partial = rows.filter((r) => r.state !== "done").length;
+  return [
+    ...(only ? [`${only === 1 ? "1 is" : `${only} are`} not known to be in this phone's Downloads folder: deleting drops this app's copy.`] : []),
+    ...(inFolder ? [`${inFolder === 1 ? "1 stays" : `${inFolder} stay`} in the Downloads folder.`] : []),
+    ...(partial ? [`${partial === 1 ? "1 is" : `${partial} are`} not finished: ${partial === 1 ? "it stops" : "they stop"}, and what was fetched so far is dropped.`] : []),
+    "Installed apps stay installed. Files on the desktop are not touched.",
+  ];
+}
+
 export function stripRows<R extends Pick<PullRecord, "state" | "local">>(records: readonly R[], auto: boolean): R[] {
   return records.filter((r) => r.state !== "done" && (auto || !!r.local || r.state === "downloading"));
 }

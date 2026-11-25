@@ -16,14 +16,14 @@ import { bootClock } from "./http.js";
 import type { IncomingMessage } from "node:http";
 import { existsSync } from "node:fs";
 import type { WebSocket, WebSocketServer } from "ws";
-import { PROTOCOL_VERSION, decode, isClientFrame, type SendStamp, logTag, envName, roleFromUserAgent } from "@waterplane/shared";
+import { PROTOCOL_VERSION, decode, deviceEndsAt, isClientFrame, type SendStamp, logTag, roleFromUserAgent } from "@waterplane/shared";
 import { WIRE, recordWireFrame } from "../wirerecord.js";
-import { requestPeerKind, isProxied } from "../net.js";
-import { checkRequestOrigin } from "../origin.js";
+import { requestPeerKind, isProxied, tlsServerName, unprovenName, unverifiedNameLine } from "../net.js";
+import { checkRequestOrigin, originHint } from "../origin.js";
 import { tokenFromRequest } from "../auth.js";
 import { lanIdentity } from "../lanid.js";
 import { updatePublicKey } from "../updatekey.js";
-import { lanTlsWelcome } from "../lantls.js";
+import { lanTlsExpiry, lanTlsWelcome } from "../lantls.js";
 import { welcomePrices } from "../pricefetch.js";
 import { hostName } from "../net.js";
 import { discoverTargets } from "../repos.js";
@@ -197,9 +197,9 @@ export function createWsOps(ctx: ServerCtx) {
       // A WebSocket is exempt from the same-origin policy, so without this any
       // web page open in a browser that can reach us could drive the daemon —
       // and the daemon spawns `claude`. Refuse anything not from our own origin.
-      const originOk = checkRequestOrigin(req.headers, { proxied: isProxied(req.headers) });
+      const originOk = checkRequestOrigin(req.headers, { proxied: isProxied(req.headers), tlsName: tlsServerName(req.socket) });
       if (!originOk.ok) {
-        console.warn(`${logTag} refused ws upgrade: ${originOk.reason}. If this is your own hostname, set ${envName("ALLOWED_HOSTS")}.`);
+        console.warn(`${logTag} refused ws upgrade: ${originOk.reason}. ${originHint(originOk)}`);
         try { ws.close(1008, "origin not allowed"); } catch { /* already closing */ }
         return;
       }
@@ -207,10 +207,12 @@ export function createWsOps(ctx: ServerCtx) {
       // Cookie (browser), else the `waterplane-tok.<tok>` subprotocol (the Android
       // shell, whose cross-site cookie is withheld) — `tokenFromRequest`.
       const tok = tokenFromRequest(req.headers);
-      const device = ctx.auth.deviceFor(tok, kind);
+      const device = ctx.auth.deviceFor(tok, kind, unprovenName(req.socket.remoteAddress, req.headers) !== null);
       // Gate untrusted (LAN, or Tailscale when that toggle is on) sockets: without
       // a valid token, tell the client it needs the password and drop the socket.
       if (ctx.auth.needsToken(kind) && !device) {
+        const said = unverifiedNameLine(req.socket.remoteAddress, req.headers);
+        if (said) console.warn(`${logTag} ${said}`);
         ctx.send(ws, { t: "authRequired", enabled: ctx.auth.isEnabled(), kind });
         try { ws.close(); } catch { /* already closing */ }
         return;
@@ -238,7 +240,7 @@ export function createWsOps(ctx: ServerCtx) {
       // socket landed on; `deviceId` only when this socket IS a ledger device.
       let hostId: string | undefined;
       try { hostId = lanIdentity(ctx.ROOT).hostId; } catch { /* unwritable root ⇒ absent, never a made-up id */ }
-      ctx.send(ws, { t: "welcome", protocol: PROTOCOL_VERSION, bootId: ctx.BOOT_ID, tailscaleIp: ip, tailscaleBin: tsBin, tailscaleDns: tsDns, httpsUrl, lanIps: boundLan, port: ctx.PORT, root: ctx.ROOT, tmux: true, clientKind: kind, auth: ctx.authStateFor(kind), hostId, hostName: hostName(), deviceId: device?.id, startedAt: bootClock.startedAt, readyAt: bootClock.readyAt, updateKey: updatePublicKey(ctx.ROOT), ...lanTlsWelcome(), ...welcomePrices() });
+      ctx.send(ws, { t: "welcome", protocol: PROTOCOL_VERSION, bootId: ctx.BOOT_ID, tailscaleIp: ip, tailscaleBin: tsBin, tailscaleDns: tsDns, httpsUrl, lanIps: boundLan, port: ctx.PORT, root: ctx.ROOT, tmux: true, clientKind: kind, auth: ctx.authStateFor(kind), hostId, hostName: hostName(), deviceId: device?.id, startedAt: bootClock.startedAt, readyAt: bootClock.readyAt, updateKey: updatePublicKey(ctx.ROOT), ...lanTlsWelcome(), ...lanTlsExpiry(req.socket), ...welcomePrices() });
       // Which binaries this host can drive, and what each of them can be ASKED.
       // It rides beside `welcome` rather than in the `hello` arm because it is a
       // fact about the HOST, like every field of that frame — and because the
@@ -278,6 +280,20 @@ export function createWsOps(ctx: ServerCtx) {
       // unanswered. That fires the close handler below, so the socket leaves
       // `clients` and stops counting as somebody watching its sessions.
       let missed = 0;
+      // A sign-in that ends by itself closes its socket when it does, as a revoke would.
+      const end = device ? deviceEndsAt(device) : null;
+      // The row ends by the wall clock, and a timer may fire early, or not count a suspended machine's
+      // hours: look again at least once a minute.
+      let ender: ReturnType<typeof setTimeout> | undefined;
+      const arm = (): void => {
+        if (end === null) return;
+        ender = setTimeout(() => {
+          if (Date.now() < end) { arm(); return; }
+          ctx.enforceAuth();
+        }, Math.min(60_000, Math.max(0, end - Date.now()) + 50));
+        ender.unref();
+      };
+      arm();
       ws.on("pong", () => { missed = 0; });
       const pinger = WS_PING_MS > 0 ? setInterval(() => {
         const tick = pingTick(missed);
@@ -289,8 +305,8 @@ export function createWsOps(ctx: ServerCtx) {
       // under the socket, 1001 is the phone backgrounding it. They look the same
       // from the app and mean opposite things about the link.
       // Its plugin streams end with it (cause "socket", nothing sent): the phone reopens on reconnect.
-      ws.on("close", (code: number) => { clearInterval(pinger); ctx.netstats.noteSocketClose(ws, code); ctx.linkLog.closed(ws, { role: ctx.wsRole.get(ws), code, device: device?.id }); ctx.clients.delete(ws); ctx.plugins.streams.socketGone(ws); ctx.recomputeWatched(); });
-      ws.on("error", () => { clearInterval(pinger); ctx.clients.delete(ws); ctx.plugins.streams.socketGone(ws); ctx.recomputeWatched(); });
+      ws.on("close", (code: number) => { clearInterval(pinger); clearTimeout(ender); ctx.netstats.noteSocketClose(ws, code); ctx.linkLog.closed(ws, { role: ctx.wsRole.get(ws), code, device: device?.id }); ctx.clients.delete(ws); ctx.plugins.streams.socketGone(ws); ctx.recomputeWatched(); });
+      ws.on("error", () => { clearInterval(pinger); clearTimeout(ender); ctx.clients.delete(ws); ctx.plugins.streams.socketGone(ws); ctx.recomputeWatched(); });
     });
   }
 

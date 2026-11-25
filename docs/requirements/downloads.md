@@ -86,3 +86,7 @@ The app's download speed is shown to the user.
 - asked: 2026-11-22
 - shipped: 8d0bcd8d5
 
+### R-downloads-019 · shipped
+Each list on the Downloads screen (waiting, and on this device) has a delete all button in its heading. It asks first, says how many are not known to be in the phone's Downloads folder, and removes every row listed there, installed builds included. Deleted rows do not come back from the desktop's queue.
+- asked: 2026-11-24
+- shipped: ebaef692e

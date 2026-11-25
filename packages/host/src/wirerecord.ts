@@ -24,9 +24,10 @@
  * - loud: turning it on prints a line on stderr at start, because the knob can
  *   come from any of the `.env` files `env.ts` reads, not only the shell.
  */
-import { closeSync, constants, fchmodSync, fstatSync, openSync, writeSync } from "node:fs";
+import { closeSync, constants, fchmodSync, fstatSync, ftruncateSync, openSync, readSync } from "node:fs";
 import { envName, logTag } from "@waterplane/shared";
 import { env } from "./env.js";
+import { writeAll, wroteBefore } from "./writeall.js";
 
 const FILE = env("WIRE_RECORD") ?? "";
 export const WIRE = FILE !== "";
@@ -56,7 +57,7 @@ function stop(why: string): null {
 
 function open(): number | null {
   try {
-    const f = openSync(FILE, constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | (constants.O_NOFOLLOW ?? 0), 0o600);
+    const f = openSync(FILE, constants.O_RDWR | constants.O_APPEND | constants.O_CREAT | (constants.O_NOFOLLOW ?? 0), 0o600);
     fd = f;
     const st = fstatSync(f);
     if (!st.isFile()) return stop(`${FILE} is not a regular file`);
@@ -93,13 +94,35 @@ function redactPath(path: string): string {
   return path.slice(0, q + 1) + params.join("&");
 }
 
+/**
+ * The whole line or none of it. A line the disk took part of would run into the next one, so it is taken
+ * back out and the recording STOPS: one with frames missing in the middle reads as whole and is not.
+ *
+ * Only what THIS write put there: another host may append to the same file, before our bytes or after them, and
+ * its lines are not ours to cut. So the cut is counted back from the end, and made only when the end still
+ * is our bytes; with another line behind them the torn one stays and the message says so.
+ */
+function append(f: number, buf: Buffer): boolean {
+  try { writeAll(f, buf); return true; } catch (e) {
+    const n = wroteBefore(e);
+    let cut = n === 0;
+    try {
+      const at = fstatSync(f).size - n;
+      const tail = Buffer.alloc(n);
+      if (n > 0 && at >= 0 && readSync(f, tail, 0, n, at) === n && tail.equals(buf.subarray(0, n))) { ftruncateSync(f, at); cut = true; }
+    } catch { /* the torn line stays */ }
+    stop(`a line could not be written (${(e as NodeJS.ErrnoException).code ?? (e as Error).message})${cut ? "" : ", and the part of it that was is still in the file"}`);
+    return false;
+  }
+}
+
 function write(line: Line): void {
   try {
     const f = fd === undefined ? open() : fd;
     if (f === null) return;
     const buf = Buffer.from(JSON.stringify(line) + "\n", "utf8");
     if (size + buf.length > CAP_BYTES) { stop(`the ${CAP_BYTES / 1024 / 1024} MB cap on ${FILE} is reached`); return; }
-    writeSync(f, buf);
+    if (!append(f, buf)) return;
     size += buf.length;
   } catch { /* a recording must never break the host */ }
 }

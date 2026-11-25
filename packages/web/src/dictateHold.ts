@@ -153,6 +153,20 @@ export function saidNothing(text: string): boolean {
   return !/[\p{L}\p{N}]/u.test(text);
 }
 
+/**
+ * What somebody else put onto the END of the box while the phone's recogniser
+ * was writing it — a picture's path, above all. That engine rewrites the whole
+ * box on every result, so without this the path it never saw was deleted by the
+ * next word. `writes` are its own last writes, newest last: a box equal to any
+ * of them is a render that has not caught up, not an edit. An edit anywhere but
+ * the end answers "", as before.
+ */
+export function appendedSince(box: string, writes: readonly string[]): string {
+  const last = writes[writes.length - 1] ?? "";
+  if (writes.includes(box) || !box.startsWith(last)) return "";
+  return box.slice(last.length);
+}
+
 /** Said ONCE per clip, when an attempt failed and the audio went into the hold:
  *  the point is that nothing was lost, which is the opposite of what the old
  *  "the host could not be reached" toast meant on this path. */

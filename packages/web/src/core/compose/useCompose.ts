@@ -56,6 +56,7 @@ import { secretAsk } from "../../secretAsk";
 import { isShellBackend } from "../../backendCaps";
 import { isLaterId } from "../queue/logic.ts";
 import type { QueueApi, SendApi } from "../send/useSend";
+import type { DictationGate } from "../queue/types.ts";
 
 type Ref<T> = { readonly current: T };
 /** `sendCompose`'s arguments, kept whole so an unread send resumes the same decision. */
@@ -88,6 +89,9 @@ export function useComposeDraft() {
    */
   const composeNow = useRef("");
   composeNow.current = compose;
+  /** Set by `useCompose`, read by the queue's upload finalizer — the draft is
+   *  made before the queue, the microphone after it. */
+  const dictationGate = useRef<DictationGate | null>(null);
   const composeRef = useRef<HTMLTextAreaElement>(null);
   // Recently-sent compose text, newest-last, for up/down history scrolling. Global,
   // capped, persisted. `histIdx` = position while browsing (-1 = live draft, not
@@ -149,7 +153,7 @@ export function useComposeDraft() {
 
   return {
     compose, setCompose, composeNow, composeRef, cmdHistory, histIdx, setHistIdx, histStash, clearArmed, setClearArmed,
-    composeFocused, setComposeFocused, snippetOpen, setSnippetOpen, pushHistory, insertCompose, growCompose,
+    composeFocused, setComposeFocused, snippetOpen, setSnippetOpen, pushHistory, insertCompose, growCompose, dictationGate,
   };
 }
 export type ComposeDraft = ReturnType<typeof useComposeDraft>;
@@ -362,7 +366,8 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
    */
   const voice = useVoice({
     read: () => composeNow.current,
-    write: (txt) => setCompose(txt),
+    // The mirror too: the next clip, or a picture's path, must land on these words, not under them.
+    write: (txt) => { composeNow.current = txt; setCompose(txt); },
     key: () => activeIdRef.current ?? "",
   });
 
@@ -646,17 +651,58 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
    * Phone-held and in memory only: a reload drops it, and then the words land
    * where they always did and wait for a person — never a send nobody chose.
    */
-  const [unread, setUnread] = useState<{ sid: string; base: string; args: SendArgs; landed: boolean | null } | null>(null);
+  const [unread, setUnread] = useState<{
+    token: object; sid: string; base: string; landed: boolean | null;
+    /** Answered *without the words*: goes only if they are still out. */
+    typedOnly?: boolean;
+    /** The send it resumes: the bar's own, or a picture's submit. */
+    resume: SendArgs | (() => void);
+  } | null>(null);
   useEffect(() => {
     if (!unread || unread.landed === null) return;
     setUnread(null);
     if (!active || active.id !== unread.sid) { showToast(DICTATION_SEND_TOAST.left); return; }
     if (!unread.landed) { showToast(DICTATION_SEND_TOAST.lost); return; }
-    if (compose.trim() === unread.base.trim()) { showToast(DICTATION_SEND_TOAST.empty); return; }
-    track("action:compose.dictation.sent");
-    sendCompose(...unread.args);
+    const came = compose.trim() !== unread.base.trim();
+    // They landed while the question was up: what it offered is no longer what is in the box.
+    if (unread.typedOnly && came) { showToast(DICTATION_SEND_TOAST.landed); return; }
+    if (!unread.typedOnly && !came) { showToast(DICTATION_SEND_TOAST.empty); return; }
+    if (!unread.typedOnly) track("action:compose.dictation.sent");
+    if (typeof unread.resume === "function") unread.resume(); else sendCompose(...unread.resume);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fires once per landing; `active`/`compose` are read as of that render on purpose
   }, [unread]);
+
+  /** The question, for both sends that can outrun a dictation. `base` is the box
+   *  as ASKED about — the words can land while the question is up. */
+  function askUnread(sid: string, base: string, resume: SendArgs | (() => void)) {
+    const picture = typeof resume === "function";
+    const phone = voice.listening && voice.engine === "browser";
+    const token = {};
+    void askChoice(dictationSendAsk({ typed: !!base.trim(), phone, why: voice.fallback, picture })).then((r) => {
+      if (!r) return;
+      if (r.alt) {
+        track("action:compose.dictation.typedonly");
+        setUnread({ token, sid, base, resume, landed: true, typedOnly: true });
+        return;
+      }
+      if (!r.ok) { track("action:compose.dictation.readfirst"); return; }
+      track(phone ? "action:compose.dictation.unread.phone" : "action:compose.dictation.unread");
+      setUnread({ token, sid, base, resume, landed: null });
+      showToast(DICTATION_SEND_TOAST.armed);
+      void voice.finish().then((ok) => setUnread((u) => (u?.token === token ? { ...u, landed: ok } : u)));
+    });
+  }
+  // A picture's submit (the annotator's Send & run, its when-free twin): the
+  // paths go into the box now, where they survive a reload, and the rest of
+  // the send waits for the answer. Already armed by a Send: that one takes them.
+  draft.dictationGate.current = ({ sid, box, go }) => {
+    if (!active || active.id !== sid || !(unread || voice.pending)) return false;
+    composeNow.current = box;
+    setCompose(box);
+    if (unread) { setUnread({ ...unread, base: box }); showToast(DICTATION_SEND_TOAST.joined); }
+    else askUnread(sid, box, go);
+    return true;
+  };
 
   function sendCompose(mode?: SendMode, pictureAsked = false, busyPick?: SendMode, pastBudget = false, budgetAsked = false, restartAsked = false, dictationAsked = false) {
     // A picture open on the annotator beside this box: ask whether it goes
@@ -693,18 +739,7 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
     }
     if (!dictationAsked && active && voice.pending) {
       const args: SendArgs = [mode, pictureAsked, busyPick, pastBudget, budgetAsked, restartAsked, true];
-      const phone = voice.listening && voice.engine === "browser";
-      const sid = active.id;
-      void askChoice(dictationSendAsk({ typed: !!compose.trim(), phone, why: voice.fallback })).then((r) => {
-        if (!r) return;
-        if (r.alt) { track("action:compose.dictation.typedonly"); sendCompose(...args); return; }
-        if (!r.ok) { track("action:compose.dictation.readfirst"); return; }
-        track(phone ? "action:compose.dictation.unread.phone" : "action:compose.dictation.unread");
-        const armed = { sid, base: composeNow.current, args, landed: null };
-        setUnread(armed);
-        showToast(DICTATION_SEND_TOAST.armed);
-        void voice.finish().then((ok) => setUnread((u) => (u === armed ? { ...u, landed: ok } : u)));
-      });
+      askUnread(active.id, compose, args);
       return;
     }
     if (!active || !compose) return;

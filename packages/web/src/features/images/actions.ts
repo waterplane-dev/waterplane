@@ -550,7 +550,7 @@ export {
 } from "./viewerActions";
 // The gallery / file tree / sweep writers live in galleryActions.ts; this file stays the one import point.
 export {
-  openGalleryFor, openOutboxFor, openGalleryForSend, openArtifact, downloadArtifact, closeGallery, insertFromGallery, liveSessionsIn, continueImageInSession, remarksToChat, openSweep, sweepFromGallery, setSweepScope, closeSweep, afterSweep, openBrowseFor, openBrowseAt, openGalleryHere, inActiveRepo, openBrowseHere, closeBrowse,
+  openGalleryFor, openOutboxFor, openGalleryForSend, openArtifact, downloadArtifact, closeGallery, insertFromGallery, liveSessionsIn, continueImageInSession, remarksToChat, openSweep, sweepFromGallery, setSweepScope, closeSweep, afterSweep, browseFromGallery, openBrowseFor, openBrowseAt, openGalleryHere, inActiveRepo, openBrowseHere, closeBrowse,
 } from "./galleryActions";
 
 // ── Boot ─────────────────────────────────────────────────────────────

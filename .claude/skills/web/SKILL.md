@@ -49,7 +49,7 @@ Steps ([full](../../../docs/notes/web-architecture.md#adding-a-feature-step-by-s
 - `Unavailable.tsx` — **what a row cannot do, as a sentence, never as a dimmed button** (CLAUDE.md); kit `Button`
   has **no disabled branch** (`ConfirmButton` forwards `disabled`: never for "not clickable"). Tests assert the REASON.
 - `Confirm.tsx` — "are you sure?", once (no `window.confirm`). `ConfirmButton` **disarms itself after `ARM_MS`**;
-  `<ConfirmHost />` mounts in `main.tsx`. `className` is the WHOLE class: `key…` renders via kit `Button`, else (`link-btn`) a raw `<button>`.
+  `<ConfirmHost />` mounts in `main.tsx`; Back answers "no". `className` is the WHOLE class: `key…` renders via kit `Button`, else (`link-btn`) a raw `<button>`.
 - `useRemoteResource.ts` — one host read, told honestly: cache seeded FIRST, live read second, and a
   `state`: `fresh`/`cached`(+age)/`loading`/`error`/`offline`. **The last two stay
   apart**; `offline` takes the SOCKET signal, not `navigator.onLine`. **`inflight` is a SIXTH fact, not a sixth state**: `loading` means *nothing to show yet*,

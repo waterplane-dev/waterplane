@@ -21,6 +21,7 @@ import { anyScheduledReply, scheduledRepliesBySession } from "../../scheduledRep
 import { clocksByRepo } from "../../clockCuts";
 import { baseName } from "../../format";
 import { isNativeShell } from "../../hostUrl";
+import { openInVscode } from "../../vscodeShell";
 import { api } from "../../api";
 import { track } from "../../usage";
 import { usePref } from "../prefs";
@@ -414,7 +415,10 @@ export function useLauncherModel(p: LauncherProps) {
    */
   function openFocusWindow(name: string) {
     if (isNativeShell()) { setFocusRepo(name); return; }
-    window.open(`${location.pathname}?repo=${encodeURIComponent(name)}`, "_blank");
+    const path = `${location.pathname}?repo=${encodeURIComponent(name)}`;
+    // Framed in an editor tab `window.open` is dead; hand the app's absolute URL to the frame's owner.
+    if (openInVscode(new URL(path, location.href).href)) return;
+    window.open(path, "_blank");
   }
   /** Drop the repo focus in place — this window becomes a normal all-repos view. */
   function clearFocus() {

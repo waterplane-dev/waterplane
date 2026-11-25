@@ -11,15 +11,16 @@ import { dirname } from "node:path";
 import { ASK_RULE_BACKENDS, ASK_RULES_STALE, SUGGESTED_ASK_RULES, type AskRulesReply, DICTATE_MAX_BYTES, DICTATE_MAX_SECONDS, envName, type HostSetupFixResult, type HostSetupReport, type RootInfo, type RootPostReply } from "@waterplane/shared";
 import { discoverTargets, findTarget, listTargets, plainFolders } from "../repos.js";
 import { countOutbox, outboxSeenAt, discoverArtifactsAsync, newOutboxPath, type ArtifactKind } from "../files.js";
-import { hostStat, takeScreenshot, setHostClipboard } from "../host.js";
+import { captureDesktop, hostStat, setHostClipboard } from "../host.js";
+import { screenshotToClipboard } from "../hostclip.js";
 import { transcribe } from "../dictate.js";
 import { dictateStatusWithSetup } from "../dictatesetup.js";
 import { ocrStatus, readImageLocal } from "../ocrlocal.js";
-import { cloneRepo, initFolder, newFolder, newRepo, newWorktree, type TemplateId } from "../scaffold.js";
+import { cloneRepo, initFolder, newFolder, newWorktree } from "../scaffold.js";
 import { changedCountsWithin, gitRunningIn } from "../git.js";
 import { buildFailedFor, gitFailuresFor } from "../attentionstore.js";
 import { listWriteTargets, setSecret } from "../secrets.js";
-import { setupPrefsStore } from "../setupprefs.js";
+import { madeRepoAnswer, setupPrefsStore } from "../setupprefs.js";
 import { repoNamesStore } from "../reponames.js";
 import { askRulesStore } from "../askrules.js";
 import { ASK_RULES_SCOPE, browserOriginRefusal, confirmGate } from "../confirmgate.js";
@@ -324,14 +325,24 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
     if (!target) return json(res, { error: "unknown repo" }, 404), true;
     let dest: ReturnType<typeof newOutboxPath>;
     try {
-      dest = newOutboxPath(target.worktreePath, "screenshot", ".png");
-      await takeScreenshot(dest.full);
+      dest = await captureDesktop((ext) => newOutboxPath(target.worktreePath, "screenshot", ext));
     } catch (e) {
       return json(res, { error: String((e as Error).message || e) }, 500), true;
     }
     let size = 0, mtime = Date.now(), ctime = mtime;
     try { const st = statSync(dest.full); size = st.size; mtime = st.mtimeMs; ctime = st.birthtimeMs > 0 ? st.birthtimeMs : st.mtimeMs; } catch { /* keep defaults */ }
     json(res, { file: { name: dest.name, relPath: dest.relPath, size, mtime, ctime } });
+    return true;
+  }),
+  // The same capture into the desktop's OWN clipboard (`hostclip.ts`): no repo, no file, no picture on
+  // the wire. POST for the reason above.
+  route("POST", "/api/host/screenshot/clipboard", async ({ res }) => {
+    try {
+      await screenshotToClipboard();
+    } catch (e) {
+      return json(res, { ok: false, error: String((e as Error).message || e) }, 500), true;
+    }
+    json(res, { ok: true });
     return true;
   }),
   // Push text from the phone onto the desktop host's system clipboard.
@@ -416,18 +427,6 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
     json(res, r, "error" in r ? 400 : 200);
     return true;
   }),
-  route("POST", "/api/repo", async ({ req, res }, ctx) => {
-    // `setup` is the field; `usmc` is what a client built before the rename still sends.
-    const { parent, name, setup, usmc: legacySetup, description, template } = await readJson(req);
-    const r = await newRepo(ctx.root, parent || ctx.root, String(name || ""), {
-      setup: (setup ?? legacySetup) !== false,
-      description: description ? String(description) : undefined,
-      // A template id is checked against `TEMPLATES` inside `newRepo` (unknown = refused in words).
-      ...(typeof template === "string" && template ? { template: template as TemplateId } : {}),
-    });
-    json(res, r, "error" in r ? 400 : 200);
-    return true;
-  }),
   // The name a person gave a repo to be SHOWN as. A label only (`reponames.ts`): it is set on
   // the clone's PRIMARY checkout, it moves no id, path or key, and `name: null` (or empty) puts
   // the folder's name back. A bad name is a 400 in words, stored as nothing. Not in `passive.ts`:
@@ -465,7 +464,7 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
     // The URL is checked (and the transports pinned) inside `cloneRepo`; a refusal is a sentence.
     const { parent, url, name } = await readJson(req);
     const r = await cloneRepo(ctx.root, parent || ctx.root, String(url || ""), name ? String(name) : undefined);
-    json(res, r, "error" in r ? 400 : 200);
+    json(res, madeRepoAnswer(r), "error" in r ? 400 : 200);
     return true;
   }),
   route("POST", "/api/worktree", async ({ req, res }, ctx) => {

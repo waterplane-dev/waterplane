@@ -6,7 +6,7 @@
 import { PromptPair } from "../../PromptPair";
 import { ContextSparkline, SpendSparkline } from "../../ContextGraph";
 import { useState } from "react";
-import { Archive, Ban, Bot, Camera, ChevronDown, ChevronRight, CircleCheck, Eye, History, RotateCw, Search, Trash2, X, XCircle } from "lucide-react";
+import { Archive, Ban, Bot, Camera, ChevronDown, ChevronRight, CircleCheck, Eye, History, RotateCw, Search, Star, Trash2, X, XCircle, ZapOff } from "lucide-react";
 import { branchLabel, repoShown, trimDefaultBranch } from "@waterplane/shared";
 import { ConfirmButton } from "../../Confirm";
 import { SessionName } from "../../SessionName";
@@ -23,11 +23,11 @@ import { countBadges } from "./SessionRow";
 import { matchesText } from "./model";
 import { Empty } from "../../Empty";
 import { CountChips, FilterBar, Row, RowTitle, RowSub, Tag } from "../../kit";
-import { FOLLOWUP_CLEAR, FlagIcon, FollowUpLine, followUpClass } from "../sessions/followUp";
+import { FOLLOWUP_CLEAR, FOLLOWUP_SET, FlagIcon, FollowUpLine, followUpClass } from "../sessions/followUp";
 import { BookmarkIcon } from "../sessions/bookmark";
 import {
-  closedCut, closedFilterWords, closedHeadline, closedKindWord, closedMeta, closedOutcome,
-  closedReason, closedSubtitle, isAutoClosed, type ClosedFilter,
+  CLOSED_FILTERS, CLOSED_FILTER_LABEL, closedCut, closedFilterWords, closedHeadline, closedKindWord, closedMeta, closedOutcome,
+  closedReason, closedSubtitle, isAutoClosed, type ClosedFilter, type ClosedFilterKey,
 } from "./closedRowWords";
 
 const ICON = 16;
@@ -41,7 +41,7 @@ export function ClosedRows({ p, m }: { p: LauncherProps; m: LauncherModel }) {
   const { attach } = p.term;
   const { closeSession } = p.verbs;
   const { repoForCwd, sessionRepo, visibleRecent, hiddenRecent, hiddenSessions, hiddenCount, showHidden, setShowHidden } = m;
-  // The one filter on this list — "closed automatically · N". Ephemeral, like
+  // The filters on this list (`CLOSED_FILTERS`). Ephemeral, like
   // the launcher's status filter: a cut that survived a reload would hide rows
   // with no visible cause.
   // A shell has no conversation to continue: `openCwd` itself turns a resume of
@@ -96,10 +96,11 @@ export function ClosedRows({ p, m }: { p: LauncherProps; m: LauncherModel }) {
     {foldOpen && (() => {
       // Sessions closed (incl. mis-tapped ×) whose conversation isn't already back open.
       if (!reopenable.length) return null;
-      const autoCount = reopenable.filter(isAutoClosed).length;
+      const countOf = (k: ClosedFilterKey) => closedCut(reopenable, k).length;
+      const chips = CLOSED_FILTERS.filter((k) => countOf(k) > 0);
       // A cut with nothing left in it falls back to the whole list rather
       // than an empty section with a chip that no longer exists.
-      const filter: ClosedFilter = closedFilter === "auto" && autoCount > 0 ? "auto" : null;
+      const filter: ClosedFilter = closedFilter && chips.includes(closedFilter) ? closedFilter : null;
       const shown = closedCut(reopenable, filter);
       const now = Date.now();
       return <>
@@ -124,14 +125,14 @@ export function ClosedRows({ p, m }: { p: LauncherProps; m: LauncherModel }) {
         </div>
         {/* Drawn only while there is something to cut to: a standing
             "closed automatically · 0" on every launcher is noise. */}
-        {autoCount > 0 && (
-          <CountChips className="annot-tools closed-chips" keys={["auto"] as const}
-            bucket={() => ({ count: autoCount })} label={() => "closed automatically"}
+        {chips.length > 0 && (
+          <CountChips className="annot-tools closed-chips" keys={chips}
+            bucket={(k) => ({ count: countOf(k) })} label={(k) => CLOSED_FILTER_LABEL[k]}
             active={filter} onPick={(k) => setClosedFilter(k)} />
         )}
         {filter && (
           <FilterBar onClear={() => setClosedFilter(null)} clearLabel="show all">
-            {closedFilterWords(shown.length, reopenable.length)}
+            {closedFilterWords(shown.length, reopenable.length, filter)}
           </FilterBar>
         )}
         {shown.map((c) => {
@@ -166,7 +167,7 @@ export function ClosedRows({ p, m }: { p: LauncherProps; m: LauncherModel }) {
                   {sub && <RowSub className="closed-folder">{sub}</RowSub>}
                   <RowSub className={`row-launch${backendMark(backends, c.launch?.backend) ? " row-foreign" : ""}`}>{launchLabel(c.launch ?? {}, backendMark(backends, c.launch?.backend), backends)}</RowSub>
                   {kind && <Tag className="closed-kind">{kind}</Tag>}
-                  {reason && reason.tone !== "auto" && <RowSub className={reason.tone === "note" ? "closed-note" : undefined}>{reason.text}</RowSub>}
+                  {reason && reason.tone !== "auto" && reason.tone !== "cut" && <RowSub className={reason.tone === "note" ? "closed-note" : undefined}>{reason.text}</RowSub>}
                   {isShell(c) && <RowSub>new shell here</RowSub>}
                 </span>
               </span>
@@ -175,6 +176,9 @@ export function ClosedRows({ p, m }: { p: LauncherProps; m: LauncherModel }) {
               <span className="row-gist">
                 {reason?.tone === "auto" && (
                   <span className="closed-line"><Tag className="closed-auto"><Bot size={12} /> {reason.text}</Tag></span>
+                )}
+                {reason?.tone === "cut" && (
+                  <span className="closed-line"><Tag className="closed-auto closed-cutoff"><ZapOff size={12} /> {reason.text}</Tag></span>
                 )}
                 {outcome && (
                   <RowSub className={`closed-line closed-outcome ${outcome.tone}`}>
@@ -219,17 +223,26 @@ export function ClosedRows({ p, m }: { p: LauncherProps; m: LauncherModel }) {
             <div className="row-acts">
               <span className="row-tags">{countBadges(repoForCwd(c.cwd), openGitFor)}</span>
               <span className="row-ctl">
-                {/* Marked read from here too — keyed on the CONVERSATION, which is
-                    what the desktop keeps the flag by; answered by a fresh list. */}
-                {c.followUp && (
-                  <button className={`row-act fu-btn${followUpClass(c.followUp)}`} data-hint="session.followup" aria-pressed
-                    title={`${FOLLOWUP_CLEAR} — the conversation stays where it is`}
+                {/* The open row's two marks (R-sessions-072), keyed on the CONVERSATION,
+                    which is what the desktop keeps them by; answered by a fresh list.
+                    No star from a host that never says (`starred` absent): it would
+                    ignore the tap. */}
+                {typeof c.starred === "boolean" && (
+                  <button className={`row-act${c.starred ? " starred" : ""}`} data-hint="session.star" aria-pressed={c.starred}
+                    title={c.starred ? "unstar (prima interest)" : "star — mark as prima interest to come back to"}
                     onClick={() => {
-                      track("action:session.followup.closed");
-                      liveSend({ t: "session.followup", id: c.claudeSessionId ?? c.id, on: false },
-                        "flag cleared", "no connection — the desktop didn't get that, the flag is still set");
-                    }}><FlagIcon on size={ICON} /></button>
+                      track("action:session.star.closed");
+                      liveSend({ t: "session.star", id: c.claudeSessionId ?? c.id, starred: !c.starred },
+                        c.starred ? "star removed" : "starred", `no connection — the desktop didn't get that, the star is ${c.starred ? "still set" : "not set"}`);
+                    }}><Star size={ICON} fill={c.starred ? "currentColor" : "none"} /></button>
                 )}
+                <button className={`row-act fu-btn${followUpClass(c.followUp)}`} data-hint="session.followup" aria-pressed={!!c.followUp}
+                  title={c.followUp ? `${FOLLOWUP_CLEAR} — the conversation stays where it is` : `${FOLLOWUP_SET} — a one-shot mark; reopening the session does not clear it`}
+                  onClick={() => {
+                    track("action:session.followup.closed");
+                    liveSend({ t: "session.followup", id: c.claudeSessionId ?? c.id, on: !c.followUp },
+                      c.followUp ? "flag cleared" : "flagged", `no connection — the desktop didn't get that, the flag is ${c.followUp ? "still set" : "not set"}`);
+                  }}><FlagIcon on={!!c.followUp} size={ICON} /></button>
                 {/* "Pick an older conversation" is claude's own `--resume`
                     list. A backend whose session ids are DISCOVERED rather
                     than minted, and whose conversations do not live beside

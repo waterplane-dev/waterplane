@@ -146,6 +146,10 @@ export interface ClosedSession {
   /** The conversation's follow-up flag, stamped by the host when it lists the
    *  closed stack (never persisted on the row — the flag store owns it). */
   followUp?: FollowUp;
+  /** The conversation's star, stamped the same way — on EVERY row, `false`
+   *  included: a boolean says this host can star a closed conversation
+   *  (`session.star` by conversation id), absent is an older host that cannot. */
+  starred?: boolean;
   /** The conversation's bookmark, stamped the same way (the bookmark store
    *  owns it; never persisted on the row). */
   bookmark?: Bookmark;
@@ -208,10 +212,17 @@ export interface ClosedSession {
  * - `limit`     — it exited at a usage limit; the host reopens it at the reset
  *                 when auto-continue is on (`resumedAs` once it has).
  *
+ * - `reboot`    — the desktop restarted while it was open: its record was last
+ *                 written before the machine came up, so its process is gone.
+ *                 Found at the next boot of the host.
+ * - `lost`      — its tmux session ended while the host was not running to see
+ *                 it, with no restart of the machine to explain it. Found at a
+ *                 later boot, so `closedAt` is when it was FOUND.
+ *
  * There is no "host shutdown" value: a daemon restart leaves tmux sessions
  * running (re-attached on boot).
  */
-export type ClosedBy = "you" | "replaced" | "auto-done" | "auto-slot" | "exited" | "limit";
+export type ClosedBy = "you" | "replaced" | "auto-done" | "auto-slot" | "exited" | "limit" | "reboot" | "lost";
 
 /**
  * How a session was opened:

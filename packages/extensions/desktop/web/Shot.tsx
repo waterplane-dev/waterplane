@@ -1,24 +1,39 @@
 /**
- * The screenshot button and its receipt. The button is drawn twice — in the toolbar row, and on the
- * picture in fullscreen, where the toolbar is hidden — and both run `takeDesktopShot` (state.ts).
+ * The two screenshot buttons and their receipt: the camera saves into the repo's outbox, the clipboard
+ * leaves the same picture in the desktop's own clipboard. Each is drawn twice — in the toolbar row, and
+ * on the picture in fullscreen, where the toolbar is hidden.
  * The receipt is a line in the picture's column, not a toast: in fullscreen the column sits above
  * the app's toast layer, so a toast would be said where nobody can see it.
  */
 import type { CSSProperties } from "react";
-import { Camera, ImageIcon, Loader2, X } from "lucide-react";
+import { Camera, ClipboardCopy, ImageIcon, Loader2, X } from "lucide-react";
 import { useStore } from "@waterplane/sdk";
-import { dropShotLine, openShot, shot, takeDesktopShot } from "./state.ts";
-import { SHOT, SHOT_TITLE } from "./words.ts";
+import { copyDesktopShot, dropShotLine, openShot, shot, takeDesktopShot } from "./state.ts";
+import { CLIP_SHOT, CLIP_SHOT_TITLE, SHOT, SHOT_TITLE } from "./words.ts";
 import { Button, Hint } from "@waterplane/kit";
 
 /** `worded`: the fullscreen float says "screenshot"; the toolbar's is the glyph alone (its row is full). */
 export function ShotButton({ worded, style }: { worded?: boolean; style?: CSSProperties }) {
   const s = useStore(shot);
-  const Icon = s.busy ? Loader2 : Camera;
+  const busy = s.busy === "file";
+  const Icon = busy ? Loader2 : Camera;
   return (
-    <Button style={style} title={SHOT_TITLE} aria-label={SHOT} aria-busy={s.busy}
+    <Button style={style} title={SHOT_TITLE} aria-label={SHOT} aria-busy={busy}
       onClick={() => void takeDesktopShot()}>
-      <Icon size={15} className={s.busy ? "spin" : undefined} />{worded ? ` ${SHOT}` : null}
+      <Icon size={15} className={busy ? "spin" : undefined} />{worded ? ` ${SHOT}` : null}
+    </Button>
+  );
+}
+
+/** Beside `ShotButton`, same `worded` rule. */
+export function ClipShotButton({ worded, style }: { worded?: boolean; style?: CSSProperties }) {
+  const s = useStore(shot);
+  const busy = s.busy === "clip";
+  const Icon = busy ? Loader2 : ClipboardCopy;
+  return (
+    <Button style={style} title={CLIP_SHOT_TITLE} aria-label={CLIP_SHOT} aria-busy={busy}
+      onClick={() => void copyDesktopShot()}>
+      <Icon size={15} className={busy ? "spin" : undefined} />{worded ? ` ${CLIP_SHOT}` : null}
     </Button>
   );
 }

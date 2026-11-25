@@ -27,8 +27,8 @@ export const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 /** The widest span the host folds in one read (`COST_WINDOW_MAX_MS`). */
 export const READ_MAX_MS = 35 * DAY_MS;
 
-/** Dollars as a person reads a budget: `$412`, `$2000`, `$0.48`. */
-export const usdWords = (n: number): string => (n >= 100 ? `$${Math.round(n)}` : fmtUsd(n));
+/** Dollars as a person reads a budget: `$412.00`, `$2,000.00`, `$0.48`. */
+export const usdWords = (n: number): string => fmtUsd(n);
 
 /** The cap on a dollar period, or null. */
 export function periodCap(budget: UsageBudget | null | undefined, id: string): number | null {

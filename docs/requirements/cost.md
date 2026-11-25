@@ -142,9 +142,9 @@ Fast mode is read correctly: the CLI's 'Fast mode unavailable' refusal reads as 
 - shipped: 50a71ac36
 
 ### R-cost-029 · shipped
-Dollar amounts are formatted one way everywhere: two decimals, so $0.50 never appears as $0.5000.
-- asked: 2026-11-19
-- shipped: baeb85e3c
+Dollar amounts are formatted one way everywhere, always with two decimals at every size, so $0.50 never appears as $0.5000 and $374.00 never as $374. Only an amount under a cent shows more digits, and chart axis ticks stay short.
+- asked: 2026-11-19, 2026-11-25
+- shipped: baeb85e3c, b76688ced
 
 ### R-cost-030 · shipped
 The token usage screen shows each repo's and model's list-price dollars on every span, including all-time and 90 days, even when counting in tokens, and the limit week lists each weekly window's cost in dollars next to the limit window.

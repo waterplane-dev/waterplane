@@ -13,7 +13,7 @@ import { api } from "../../api";
 import { core, useCore, useStore } from "../../sdk";
 import { browseAim, browseRepoId, flow, galleryCtx, sweepFor } from "./store";
 import {
-  afterSweep, annBatch, annotateUrlForSession, closeBrowse, closeGallery, closeSweep, continueImageInSession, insertFromGallery, liveSessionsIn,
+  afterSweep, annBatch, annotateUrlForSession, browseFromGallery, closeBrowse, closeGallery, closeSweep, continueImageInSession, insertFromGallery, liveSessionsIn,
   offerCollage, remarksToChat, setSweepScope, sweepFromGallery,
 } from "./actions";
 
@@ -41,7 +41,7 @@ export function GallerySheet() {
   const c = useCore();
   const ctx = useStore(galleryCtx);
   return <Gallery repoId={ctx?.repoId ?? c.world.activeRepo?.id ?? undefined} repos={c.world.visibleRepos}
-    initialScope={ctx?.scope} initialAllTime={ctx?.allTime} initialNew={ctx?.newCut}
+    initialScope={ctx?.scope} initialAllTime={ctx?.allTime} initialSince={ctx?.since} initialNew={ctx?.newCut}
     openFile={ctx?.openFile}
     onClose={closeGallery}
     onInsertPath={insertFromGallery}
@@ -54,6 +54,7 @@ export function GallerySheet() {
     // On "all repos" there is no single directory to clear, and that is the
     // scope somebody is on when the question is WHICH repo is fat.
     onSurvey={() => { c.say.track("overlay:storage"); c.nav.open("storage"); }}
+    onBrowse={browseFromGallery}
     onAnnotate={annotateUrlForSession}
     onCombine={combineFromGallery} />;
 }

@@ -10,7 +10,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isLocalCommand, slashForkTitle, startsNoTurn, worksUnannounced } from "../dist/slash.js";
+import { isLocalCommand, setsInPlace, slashForkTitle, startsNoTurn, worksUnannounced } from "../dist/slash.js";
 
 test("the usage view and both of the CLI's aliases for it are local", () => {
   // The CLI's own table is `{ name: "usage", aliases: ["cost", "stats"] }`,
@@ -143,4 +143,10 @@ test("/fork is not a view: the phone sends it at once rather than holding it", (
   // Forking leaves the source session alone, so a running turn has nothing to
   // be protected from — holding it until idle would only delay the new tab.
   assert.equal(isLocalCommand("/fork"), false);
+});
+
+test("/fast on|off is set in place and never held for the turn; its picker is", () => {
+  for (const c of ["/fast on", "/fast off", "  /fast  ON "]) assert.equal(setsInPlace(c), true, c);
+  for (const c of ["/fast", "/fast maybe", "/model opus", "/usage", "say /fast on"]) assert.equal(setsInPlace(c), false, c);
+  assert.equal(startsNoTurn("/fast on"), true, "still no turn to wait for");
 });

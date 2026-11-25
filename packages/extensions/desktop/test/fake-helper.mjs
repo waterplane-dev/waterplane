@@ -6,6 +6,7 @@
 //   FAKE_MODE=normal  frames every 30 ms once configured (a key first, then P-frames; JPEG = keys)
 //   FAKE_MODE=die     exits 7 after 300 ms, on its own
 //   FAKE_MODE=stubborn  ignores stop, EOF and SIGTERM (only SIGKILL ends it)
+//   FAKE_MODE=noscreen  answers a config with the error status of a missing Screen Recording grant
 //   FAKE_AX=1         reports Accessibility as granted
 //   FAKE_LAG=1        after a crop change, one more key OF THE OLD REGION comes out before the new
 //                     region starts (a key the core asked for itself, or a keyframeEverySec key, that
@@ -82,7 +83,9 @@ process.stdin.on("data", (d) => {
     note(m);
     if (m.t === "config") {
       if (want.seq === 0 || !sameCrop(want.crop, m.crop)) want = { seq: want.seq + 1, crop: m.crop ?? null };
-      cfg = m; wantKey = true; status("running"); startFrames();
+      cfg = m; wantKey = true;
+      if (MODE === "noscreen") { status("error", { reason: "Screen Recording is not granted to wp-desktop." }); continue; }
+      status("running"); startFrames();
     }
     else if (m.t === "keyframe") wantKey = true;
     else if (m.t === "bitrate") { if (cfg) cfg.bitrateKbps = m.kbps; status("running"); }

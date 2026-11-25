@@ -179,9 +179,10 @@ const PINS = [
     // server/bgrelay.ts (2026-11-14, bg-link-send WP2): `POST /api/relay`'s waitMs — how long one request waits for its ack — a new fact.
     // server/deliveries.ts (2026-11-11): the inbox hold's poll — a prompt waits for the picture it names — a new fact.
     //   MOVED (2026-11-12): the poll is `clock.sleep` on the injected `waitclock.ts` Clock (1 → 0), so a test runs it in virtual time.
+    // server/wsops.ts (2026-11-25, R-security-035): an open socket closes when the name sign-in behind it ends — a new fact.
     // sessions/drive.ts (2026-11-13): `waitReady`'s 150 ms poll is `clock.sleep` on the same Clock (1 → 0), threaded from the delivery.
     //   MOVED (2026-11-19, H2): apiretry 2, resume 1, wall 1, signinwait 1 → 0: the four recovery lanes arm through `sessions/timers.ts` on `clock.after`.
-    today: { "main.ts": 2, "server/clients.ts": 1, "server/http.ts": 1, "server/bgrelay.ts": 1, "sessions/boxread.ts": 3, "sessions/convid.ts": 4, "sessions/idlewatch.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 1, "sessions/sidechannel.ts": 1, "sessions/tmux.ts": 1, "sessions/turn.ts": 1, "sessions/agentpoll.ts": 1, "recover/recoverwrite.ts": 1, "recover/wavegate.ts": 2, "recover/authgate.ts": 2 },
+    today: { "main.ts": 2, "server/clients.ts": 1, "server/http.ts": 1, "server/bgrelay.ts": 1, "server/wsops.ts": 1, "sessions/boxread.ts": 3, "sessions/convid.ts": 4, "sessions/idlewatch.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 1, "sessions/sidechannel.ts": 1, "sessions/tmux.ts": 1, "sessions/turn.ts": 1, "sessions/agentpoll.ts": 1, "recover/recoverwrite.ts": 1, "recover/wavegate.ts": 2, "recover/authgate.ts": 2 },
   },
   {
     name: "summary spends (runSummaryTask calls)",
@@ -236,6 +237,7 @@ const PINS = [
     // apiretry.ts 1 → 3 (2026-10-28, R-connection-024): `netTurnSettled`, the late verdict on a
     // `checking` turn end and the halt stopping a rung — the work waiting on the turn is told.
     // apiretry.ts 0 → 1 (2026-10-27, R-connection-024): `SessionInfo.netRetry`, a new fact with its one emit.
+    // roster.ts 14 → 15 (2026-11-23, R-sessions-072): a star set on a CLOSED row re-sends the closed stack.
     // roster.ts 13 → 14 (2026-10-25, R-notifications-015): `followUpCleared` names the keys a cleared
     // flag leaves, closed sessions included, so their attention item resolves — a new fact, not a copy.
     // roster.ts 11 → 13 (2026-10-21, R-conversations-007): `bookmarkChanged` re-sends a live
@@ -243,7 +245,7 @@ const PINS = [
     // boxes.ts 6 → 7 (2026-10-21, backend v2 WP4): a typed answer the CLI never closed puts
     // `prompt.answerNote` on the box and re-sends `updated` once.
     re: /\b(?:this|core)\.emit\(\s*"/g, scope: SESSIONS,
-    today: { "sessions.ts": 7, "sessions/endsession.ts": 2, "sessions/boxes.ts": 1, "sessions/boxread.ts": 6, "sessions/budgetwatch.ts": 4, "sessions/convid.ts": 5, "sessions/drive.ts": 4, "sessions/idlewatch.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 2, "sessions/apiretry.ts": 3, "sessions/record.ts": 6, "sessions/ctxseries.ts": 2, "sessions/resume.ts": 6, "sessions/roster.ts": 14, "sessions/sidechannel.ts": 2, "sessions/signinwait.ts": 2, "sessions/turn.ts": 6, "sessions/agentpoll.ts": 2, "sessions/askwatch.ts": 4, "sessions/wall.ts": 17 },
+    today: { "sessions.ts": 7, "sessions/endsession.ts": 2, "sessions/boxes.ts": 1, "sessions/boxread.ts": 6, "sessions/budgetwatch.ts": 4, "sessions/convid.ts": 5, "sessions/drive.ts": 4, "sessions/idlewatch.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 2, "sessions/apiretry.ts": 3, "sessions/record.ts": 6, "sessions/ctxseries.ts": 2, "sessions/resume.ts": 6, "sessions/roster.ts": 15, "sessions/sidechannel.ts": 2, "sessions/signinwait.ts": 2, "sessions/turn.ts": 6, "sessions/agentpoll.ts": 2, "sessions/askwatch.ts": 4, "sessions/wall.ts": 17 },
     // turn.ts 10 → 11: `setCliSuggestion` is a NEW fact (the CLI's next-prompt proposal), its own emit, not a copy.
     // claude onto the sources seam (design §10): the pipe-live emit moved turn.ts → sidechannel.ts, and
     // UserPromptSubmit's idle-clear emit was the SAME line as `sourceTurn`'s started edge — one path now, one site.

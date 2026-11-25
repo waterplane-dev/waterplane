@@ -21,7 +21,7 @@ import { dropDeviceToken } from "../../deviceToken";
 import { useRemoteResource } from "../../useRemoteResource";
 import { useCore } from "../../sdk";
 import { openSettingsAt } from "../../settingsFocus";
-import { deviceRouteText, devicesEmptyText, revokeLines, seenAgo } from "./logic";
+import { deviceWhere, devicesEmptyText, revokeLines, seenAgo } from "./logic";
 import { Button, Row, RowTitle, RowSub, Hint } from "../../kit";
 import { SetLine } from "../../SettingsKit";
 
@@ -101,7 +101,7 @@ export function PairedDevicesSheet() {
               <Row kind="grow">
                 <RowTitle>{d.scope === "passive" ? <Baby size={12} /> : <Smartphone size={12} />} {d.name}{d.current ? " · this device" : ""}{d.scope === "passive" ? " · passive" : ""}</RowTitle>
                 <RowSub className="dim">
-                  paired {new Date(d.createdAt).toLocaleDateString()} · last seen {seenAgo(Math.max(0, now - d.lastSeenAt))} · {deviceRouteText(d.lastKind)}
+                  paired {new Date(d.createdAt).toLocaleDateString()} · last seen {seenAgo(Math.max(0, now - d.lastSeenAt))} · {deviceWhere(d, now)}
                 </RowSub>
               </Row>
               <div className="row-acts">

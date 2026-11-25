@@ -5,8 +5,8 @@
  * routes the same questions (`GET /api/usagenow`, `/api/usagelog`, `/api/tokenwindows`,
  * `/api/costwindow`, `/api/tokenstats/<id>`, `/api/localusage`).
  *
- * OFF until turned on (`waterplane.desktopUrl`): the extension's description promises no network
- * call but the Copilot one, and a loopback read is still a socket. Only a loopback URL is accepted
+ * OFF until turned on (`waterplane.desktopUrl`): the README's Privacy section promises no network
+ * call but those it names, and a loopback read is still a socket. Only a loopback URL is accepted
  * (127.0.0.1, ::1, localhost) — never a remote host, whatever the setting says — and the host's own
  * gate trusts loopback, so no token is sent or stored. Every failure is a SENTENCE the card that
  * asked draws; nothing here invents a reading the host did not give.

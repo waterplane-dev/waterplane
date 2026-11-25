@@ -272,6 +272,19 @@ export function closeWhenDoneSetting(raw: string | undefined | null): boolean {
   return raw === "1" || raw === "true";
 }
 
+/** The synced key the host reads for which apps may install by themselves. */
+export const INSTALL_ALLOW_KEY = lsKey("installAllow");
+
+/** Its package names off the raw synced string; `null` when no phone ever sent the list or it does
+ *  not read. Absent is not "none allowed". */
+export function installAllowSetting(raw: string | undefined | null): string[] | null {
+  if (!raw) return null;
+  try {
+    const v: unknown = JSON.parse(raw);
+    return Array.isArray(v) ? v.filter((s): s is string => typeof s === "string" && !!s) : null;
+  } catch { return null; }
+}
+
 export type SyncedSettingKey = (typeof SYNCED_SETTING_KEYS)[number];
 
 /**

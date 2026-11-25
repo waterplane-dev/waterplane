@@ -4,12 +4,12 @@ import { Button } from "../../kit/Button";
 import { dismissLoss, getLosses, lossSentence, subscribeLosses, type LossNotice } from "../../lossNotice";
 import { lsGet } from "../../storage";
 import { showToast } from "../../toast";
+import { copyText } from "../../api";
 
 async function copyKept(n: LossNotice): Promise<void> {
   const text = n.keptSlot ? lsGet(n.keptSlot) ?? "" : "";
   if (!text) { showToast("nothing kept aside to copy"); return; }
-  try { await navigator.clipboard.writeText(text); showToast("kept text copied"); }
-  catch { showToast("could not copy it from here"); }
+  showToast(await copyText(text) ? "kept text copied" : "could not copy it from here");
 }
 
 /**

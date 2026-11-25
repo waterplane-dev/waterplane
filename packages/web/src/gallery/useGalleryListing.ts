@@ -9,7 +9,7 @@ import { PAGE, THUMB_WARM, defaultSince, type GalleryProps, type Row, type Scope
 import { thumbForRow } from "./galleryUrls";
 
 /** The grid's listing: which tab, which cut, the rows, and every honest state of the fetch. */
-export function useGalleryListing({ repoId, repos, initialScope, initialAllTime, initialNew }: Pick<GalleryProps, "repoId" | "repos" | "initialScope" | "initialAllTime" | "initialNew">) {
+export function useGalleryListing({ repoId, repos, initialScope, initialAllTime, initialSince, initialNew }: Pick<GalleryProps, "repoId" | "repos" | "initialScope" | "initialAllTime" | "initialSince" | "initialNew">) {
   const singleRepo = !!repoId;
   const initScope = initialScope ?? (singleRepo ? "outbox" : "all");
   const [scope, setScope] = useState<Scope>(initScope);
@@ -22,7 +22,7 @@ export function useGalleryListing({ repoId, repos, initialScope, initialAllTime,
    *  UP, so the boundary file itself is never the one left out. */
   const newSecs = initialNew ? Math.max(1, Math.ceil((Date.now() - initialNew.since) / 1000)) : undefined;
   const [since, setSince] = useState<number | undefined>(
-    newSecs ?? (initialAllTime ? undefined : defaultSince(initScope)));
+    newSecs ?? (initialAllTime ? undefined : initialSince ?? defaultSince(initScope)));
   /** Still showing the cut we were opened on. Cleared by any other chip or tab,
    *  because from then on the list is the user's question and not the badge's. */
   const [onNewCut, setOnNewCut] = useState(!!newSecs);

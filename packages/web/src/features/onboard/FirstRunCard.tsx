@@ -1,27 +1,38 @@
 /**
  * The launcher's first-run card (`firstRunCard` decides): on a host that has never opened a
- * session, the ways in — build your first app, the repos already listed below it (a line with their
- * count, `existingReposLine`; a button only when there are none), try the demo. While a
+ * session, the ways in (`firstRunWays`): build your first app, the repos already listed below it (a
+ * line with their count, `existingReposLine`) or, with none, a new project, a clone, another code
+ * folder; try the demo. While a
  * job runs or waits on the person, the same place shows where it is and opens its checklist.
  */
-import { CircleDot, FolderOpen, Loader, OctagonAlert, PlayCircle, Rocket, X } from "lucide-react";
+import { CircleDot, FolderOpen, GitBranch, Loader, OctagonAlert, PlayCircle, Plus, Rocket, X } from "lucide-react";
 import { useCore } from "../../sdk";
 import { dismissFirstRun, openOnboard } from "./actions";
 import { useFirstRunDismissed, useOnboardJob } from "./store";
-import { existingReposLine, firstRunCard } from "./logic";
+import { existingReposLine, firstRunCard, firstRunWays } from "./logic";
 import { Button } from "../../kit";
 
-export function FirstRunCard({ repos, demo, onDemo }: { repos: number; demo: boolean; onDemo(): void }) {
+/** Which card the launcher shows now: the one place that decides, so a line under it can stand down. */
+export function useFirstRunWhich(demo: boolean) {
   const c = useCore();
   const job = useOnboardJob();
   const dismissed = useFirstRunDismissed();
-  const which = firstRunCard({
-    online: c.conn.status === "open",
-    sessions: c.world.sessions.length, recent: c.world.recent.length, closed: c.world.closed.length,
-    job, dismissed, demo,
-  });
+  return {
+    job,
+    which: firstRunCard({
+      online: c.conn.status === "open",
+      sessions: c.world.sessions.length, recent: c.world.recent.length, closed: c.world.closed.length,
+      job, dismissed, demo,
+    }),
+  };
+}
+
+export function FirstRunCard({ repos, demo, onDemo }: { repos: number; demo: boolean; onDemo(): void }) {
+  const c = useCore();
+  const { job, which } = useFirstRunWhich(demo);
   if (which === "none") return null;
   const reposLine = existingReposLine(repos);
+  const ways = firstRunWays(repos);
   if (which === "job" && job) {
     const stopped = job.state === "stopped";
     return (
@@ -44,11 +55,15 @@ export function FirstRunCard({ repos, demo, onDemo }: { repos: number; demo: boo
         {reposLine && <> {reposLine}</>}
       </div>
       <div className="onb-card-acts">
-        <button className="send onb-build" onClick={openOnboard}><Rocket size={16} /> Build your first app</button>
-        {!reposLine && (
-          <Button onClick={() => { dismissFirstRun(); c.say.toast("No repos under the host root yet: new, in the menu, makes one."); }}>
-            <FolderOpen size={16} /> Open an existing repo
-          </Button>
+        {ways.includes("build") && <button className="send onb-build" onClick={openOnboard}><Rocket size={16} /> Build your first app</button>}
+        {ways.includes("project") && (
+          <div className="onb-card-pair">
+            <Button onClick={() => c.nav.openNew("repo")}><Plus size={16} /> New project</Button>
+            <Button onClick={() => c.nav.openNew("clone")}><GitBranch size={16} /> Clone a repo</Button>
+          </div>
+        )}
+        {ways.includes("folder") && (
+          <Button onClick={() => c.nav.open("codefolder")}><FolderOpen size={16} /> Choose another folder</Button>
         )}
         <Button onClick={() => { c.say.track("action:onboard.demo"); onDemo(); }}>
           <PlayCircle size={16} /> Try the demo

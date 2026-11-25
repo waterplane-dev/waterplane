@@ -98,7 +98,7 @@ test("a session with no recorded prompts has no turns, no prompts and no lastAct
 test("a stack written by an older host reads back unchanged; a broken row is dropped, not the stack", () => {
   const old = { id: "o1", cwd: "/r", title: "myapp", closedAt: 9, claudeSessionId: "u", alive: false };
   const { r, root } = roster([old, { id: "bad" }]);
-  assert.deepEqual(r.listClosed(), [old]);
+  assert.deepEqual(r.listClosed(), [{ ...old, starred: false }], "only the star is stamped on it");
   rmSync(root, { recursive: true, force: true });
 });
 

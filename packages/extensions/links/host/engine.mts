@@ -13,20 +13,23 @@ import {
   type FoundLink, type LinkEnv, type LinksState, type PinnedLink, type PinnedView, type Probe,
 } from "../shared/wire.mjs";
 import {
-  assignProjects, localFound, parseHostingSites, parseLsofCwd, parseLsofListen, parseRunServices, parseServeStatus, servePortsInUse,
+  assignProjects, localFound, parseLsofCwd, parseLsofListen, parseServeStatus, servePortsInUse,
 } from "./parse.mjs";
-import { pool, type Runner } from "./run.mjs";
+import type { OptInAnswer } from "@waterplane/shared";
+import { scanCloud, type CloudScan } from "./cloudscan.mjs";
+import { firstLine, pool } from "./run.mjs";
 import type { RepoDir } from "./parse.mjs";
-import { REPO_RE, cleanLabel, isEnv, loadPins, savePins } from "./store.mjs";
+import { REPO_RE, cleanLabel, isEnv, loadCloudLook, loadPins, saveCloudLook, savePins } from "./store.mjs";
+import { loadSignIn, lookWith, type SignIn, type SignInRoots } from "./signin.mjs";
 
-export interface Roots {
+export interface Roots extends SignInRoots {
   root: string;
   file: string;
+  /** Where the last look with the sign-in command is kept. */
+  cloudFile: string;
   lsofBin: string;
   tailscaleBin: string | null;
-  gcloudBin: string | null;
   gitBin: string;
-  run: Runner;
   fetch: typeof fetch;
   now: () => number;
   selfPid: number;
@@ -34,16 +37,18 @@ export interface Roots {
 }
 
 const quoteBin = (b: string) => (/\s/.test(b) ? `"${b}"` : b);
-const firstLine = (s: string) => s.split("\n").map((l) => l.trim()).find(Boolean) ?? "";
 
 export interface Engine {
   state(): Promise<LinksState>;
   discover(o: { cloud?: boolean }): Promise<LinksState>;
+  lookSignIn(): Promise<LinksState>;
   probe(): Promise<LinksState>;
   pin(key: string): Promise<LinksState>;
   add(a: { label: unknown; url: unknown; repo?: unknown; env?: unknown }): Promise<LinksState>;
   edit(a: { id: unknown; label?: unknown; env?: unknown; repo?: unknown }): Promise<LinksState>;
   unpin(id: unknown): Promise<LinksState>;
+  /** Whether this repo has a pin — the Opt-ins card's answer. Reads the pins file only. */
+  optIn(repo: string | null): Promise<OptInAnswer>;
   /** Settles when every discovery started so far has finished (tests). */
   idle(): Promise<void>;
 }
@@ -51,7 +56,8 @@ export interface Engine {
 export function createEngine(r: Roots, changed: () => void): Engine {
   let local: FoundLink[] = [], cloud: FoundLink[] = [];
   let serve = new Map<number, string>();
-  let localAt: number | null = null, cloudAt: number | null = null;
+  let localAt: number | null = null, cloudAt: number | null = null, cloudTriedAt: number | null = null;
+  let signIn: SignIn | null = null, signInRun = false;
   let localRun: Promise<void> | null = null, cloudRun: Promise<void> | null = null;
   let localNotes: string[] = [], cloudNotes: string[] = [];
   const probes = new Map<string, Probe>();
@@ -124,42 +130,46 @@ export function createEngine(r: Roots, changed: () => void): Engine {
     return { byProject, bySite: assignProjects(hits, sites) };
   }
 
-  async function discoverCloud(): Promise<void> {
-    const notes: string[] = [];
-    if (!r.gcloudBin) { cloud = []; cloudNotes = ["No gcloud command on this desktop — deployed services are not looked for."]; cloudAt = r.now(); return; }
-    const pl = await r.run(r.gcloudBin, ["projects", "list", "--format=value(projectId)", "--quiet"], { timeoutMs: 30_000 });
-    const projects = pl.stdout.split("\n").map((s) => s.trim()).filter((s) => /^[a-z][a-z0-9-]{4,62}$/.test(s));
-    if (pl.code !== 0) notes.push(`gcloud did not list projects: ${firstLine(pl.stderr) || pl.error || "no reason given"}. Signed in? \`gcloud auth login\`.`);
-    const tok = projects.length ? await r.run(r.gcloudBin, ["auth", "print-access-token", "--quiet"], { timeoutMs: 20_000 }) : null;
-    const token = tok?.code === 0 ? firstLine(tok.stdout) : "";
-    const rows: FoundLink[] = [];
-    await pool(projects, 3, async (p) => {
-      const s = await r.run(r.gcloudBin!, ["run", "services", "list", `--project=${p}`, "--format=json", "--quiet"], { timeoutMs: 60_000 });
-      if (s.code === 0) rows.push(...parseRunServices(s.stdout, p));
-      else if (!/not been used|not enabled|SERVICE_DISABLED/i.test(s.stderr)) notes.push(`Cloud Run in ${p} did not answer: ${firstLine(s.stderr) || s.error || (s.timedOut ? "timed out after 60 s" : "no reason")}`);
-      if (!token) return;
-      try {
-        const res = await r.fetch(`https://firebasehosting.googleapis.com/v1beta1/projects/${encodeURIComponent(p)}/sites`, {
-          headers: { authorization: `Bearer ${token}`, "x-goog-user-project": p }, signal: AbortSignal.timeout(15_000),
-        });
-        if (res.ok) rows.push(...parseHostingSites(await res.text(), p));
-      } catch { /* hosting not set up, or unreachable: no row, said by its absence */ }
-    });
-    if (projects.length && !token) notes.push("gcloud gave no access token — Firebase Hosting sites are not looked for.");
+  async function take(scan: CloudScan, at: number): Promise<void> {
+    const rows = scan.rows;
     const ownSite = (row: FoundLink) => row.kind === "firebase" && row.label !== row.project;
     const sites = [...new Set(rows.filter(ownSite).map((row) => row.label))];
-    const own = projects.length ? await cloudRepos(projects, sites) : null;
+    const own = scan.projects.length ? await cloudRepos(scan.projects, sites) : null;
     for (const row of rows) row.repo = (ownSite(row) ? own?.bySite.get(row.label) : own?.byProject.get(row.project!)) ?? null;
     rows.sort((a, b) => (a.repo ?? "~").localeCompare(b.repo ?? "~") || a.key.localeCompare(b.key));
     cloud = rows;
-    cloudNotes = notes;
-    cloudAt = r.now();
+    cloudNotes = scan.notes;
+    cloudAt = at;
   }
+
+  /** The look that runs by itself: this desktop's own gcloud sign-in. It never runs the sign-in
+   *  command — it only finds out whether a person could. What an earlier look found stays when this one fails. */
+  async function discoverCloud(): Promise<void> {
+    await remembered();
+    if (!r.gcloudBin) { signIn = null; cloud = []; cloudNotes = ["No gcloud command on this desktop — deployed services are not looked for."]; cloudAt = r.now(); return; }
+    const scan = await scanCloud({ run: r.run, gcloudBin: r.gcloudBin, fetch: r.fetch }, null);
+    const named = scan.failed?.signIn ? await loadSignIn(r.signInFile) : null;
+    signIn = typeof named === "string" ? null : named;
+    if (!scan.failed) return take(scan, r.now());
+    cloudNotes = typeof named === "string" ? [named] : signIn ? [] : [`gcloud did not list projects: ${scan.failed.why}${scan.failed.signIn ? " Signed in? `gcloud auth login`." : ""}`];
+  }
+
+  async function discoverSignIn(s: SignIn): Promise<void> {
+    const scan = await lookWith(r, s);
+    if (typeof scan === "string") { cloudNotes = [scan]; return; }
+    if (scan.failed) { cloudNotes = [`gcloud did not list projects with ${s.name}: ${scan.failed.why}`]; return; }
+    await take(scan, r.now());
+    await saveCloudLook(r.cloudFile, { at: cloudAt!, rows: cloud }).catch((e: Error) => { cloudNotes = [...cloudNotes, `This look is not kept past a restart: ${e.message}`]; });
+  }
+
+  let recall: Promise<void> | null = null;
+  /** The last look with the sign-in command, read once, before anything could have replaced it. */
+  const remembered = (): Promise<void> => (recall ??= loadCloudLook(r.cloudFile).then((l) => { if (l && cloudAt == null) { cloud = l.rows; cloudAt = l.at; } }));
 
   const startLocal = () => (localRun ??= discoverLocal().catch((e) => { localNotes = [`Local discovery failed: ${(e as Error).message}`]; })
     .finally(() => { localRun = null; changed(); }));
-  const startCloud = () => (cloudRun ??= discoverCloud().catch((e) => { cloudNotes = [`Cloud discovery failed: ${(e as Error).message}`]; cloudAt = r.now(); })
-    .finally(() => { cloudRun = null; changed(); }));
+  const startCloud = () => (cloudRun ??= discoverCloud().catch((e) => { cloudNotes = [`Cloud discovery failed: ${(e as Error).message}`]; })
+    .finally(() => { cloudRun = null; cloudTriedAt = r.now(); changed(); }));
 
   function view(p: PinnedLink): PinnedView {
     const probe = probes.get(p.id) ?? null;
@@ -174,9 +184,11 @@ export function createEngine(r: Roots, changed: () => void): Engine {
 
   async function state(): Promise<LinksState> {
     const l = await loadPins(r.file);
+    await remembered();
     return {
       pinned: l.links.map(view), found: [...local, ...cloud], localAt, cloudAt,
       discovering: { local: !!localRun, cloud: !!cloudRun }, notes: [...l.problems, ...localNotes, ...cloudNotes], file: r.file,
+      ...(signIn ? { signIn: { name: signIn.name, looking: signInRun } } : {}),
     };
   }
 
@@ -214,7 +226,19 @@ export function createEngine(r: Roots, changed: () => void): Engine {
     state,
     async discover(o) {
       if (localRun || localAt == null || r.now() - localAt > LOCAL_FRESH_MS || o.cloud) void startLocal();
-      if (cloudRun || o.cloud || cloudAt == null || r.now() - cloudAt > CLOUD_FRESH_MS) void startCloud();
+      if (cloudRun || o.cloud || cloudTriedAt == null || r.now() - cloudTriedAt > CLOUD_FRESH_MS) void startCloud();
+      return state();
+    },
+    async lookSignIn() {
+      if (signInRun) return state();
+      await cloudRun; // a look of the desktop's own may be finding out that this one is not needed
+      const s = signIn;
+      if (!s) throw new Error("no sign-in command is named on this desktop, or gcloud is signed in by itself — look again");
+      if (!cloudRun) {
+        signInRun = true;
+        cloudRun = discoverSignIn(s).catch((e) => { cloudNotes = [`The look with ${s.name} failed: ${(e as Error).message}`]; })
+          .finally(() => { cloudRun = null; signInRun = false; cloudTriedAt = r.now(); changed(); });
+      }
       return state();
     },
     async probe() {
@@ -261,6 +285,13 @@ export function createEngine(r: Roots, changed: () => void): Engine {
       if (typeof id !== "string" || !PIN_ID_RE.test(id)) throw new Error("not a pin id");
       probes.delete(id);
       return mutate((links) => links.filter((p) => p.id !== id));
+    },
+    async optIn(repo) {
+      if (!repo) return { state: "unknown", detail: "This desktop does not list this repo, so its links could not be looked up." };
+      const l = await loadPins(r.file);
+      const n = l.links.filter((p) => p.repo === repo).length;
+      if (n) return { state: "on", detail: `${n} link${n === 1 ? " is" : "s are"} pinned for ${repo}.` };
+      return l.writable ? { state: "off", detail: `No link is pinned for ${repo}.` } : { state: "unknown", detail: l.problems[0] ?? "The pins could not be read." };
     },
     async idle() { await Promise.all([localRun, cloudRun]); },
   };

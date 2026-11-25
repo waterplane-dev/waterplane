@@ -254,7 +254,7 @@ test("a dollar ceiling holds at the cap and names its reset", () => {
   assert.equal(v.resumeAt, utc("2026-11-01T00:00:00Z"));
   const c = budgetCeilings(cfg, null, NOW, { month: 400 });
   assert.deepEqual(c, [{ which: "month", pct: 400, max: 400, resetAt: utc("2026-11-01T00:00:00Z"), unit: "usd" }]);
-  assert.match(budgetHoldText(c[0], NOW), /\$400 spent this month, over the \$400 budget/);
+  assert.match(budgetHoldText(c[0], NOW), /\$400\.00 spent this month, over the \$400\.00 budget/);
   // Releases at the reset: the caller's spend is for the NEW period.
   assert.equal(budgetVerdict(cfg, null, utc("2026-11-01T00:00:00Z"), { month: 3 }).blocked, false);
 });

@@ -34,6 +34,7 @@
  */
 import { useCallback, useEffect, useId, useState, type ReactNode } from "react";
 import { AlertTriangle, Info } from "lucide-react";
+import { useDialogStep } from "./backStep";
 import { Button } from "./kit/Button";
 
 /**
@@ -230,6 +231,8 @@ export function ConfirmHost() {
     emitAsk();
     a?.resolve(ok, keep, dismissed, alt);
   }, []);
+  // Back is the backdrop's answer, and the screen under the question stays.
+  useDialogStep(ask !== null, () => answer(false, false, true));
   if (!ask) return null;
   return (
     // The backdrop answers `false`, which is what a tap outside a destructive

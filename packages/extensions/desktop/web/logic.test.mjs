@@ -13,7 +13,7 @@ import { SETTING_GROUPS, SETTING_ROWS } from "../../../web/src/settingsIndex.ts"
 import { ROW_KEYS, cleanDraft, keyboardEvent, pressKey,rowKeyEvent, textEvents, toggleMod } from "./keys.ts";
 import { DEFAULT_CHOICE, FORCED_JPEG_FPS, cleanChoice, connectionType, fmtKbps, paramsFor, presetLine, startPreset } from "./quality.ts";
 import { addFrame, addInputs, addLatency, chipText, detailLines, latencyMs, newMeter, overCap, totalBytes } from "./stats.ts";
-import { ASK_ACCESS, GRANT_SCREEN, NOT_SERVING, REPLACED_LINE, TAKE_BACK, TURN_ON, availability, entryAvailability, controlBlock, controlSteps, stepsHead, noVideoSentence, partialSendLine, reopensBySelf, sentReceipt, shotReceipt, SHOT, SHOT_NO_REPO, SHOT_TITLE, streamLine, captureStopped, goneDisplay } from "./words.ts";
+import { ASK_ACCESS, GRANT_SCREEN, NOT_SERVING, REPLACED_LINE, TAKE_BACK, TURN_ON, availability, entryAvailability, controlBlock, controlSteps, stepsHead, noVideoSentence, partialSendLine, reopensBySelf, sentReceipt, shotReceipt, clipShotReceipt, CLIP_SHOT, CLIP_SHOT_TITLE, SHOT, SHOT_NO_REPO, SHOT_TITLE, streamLine, captureStopped, goneDisplay } from "./words.ts";
 
 // ── keys ────────────────────────────────────────────────────────────────────
 
@@ -300,6 +300,14 @@ test("the screenshot's receipt names the file by its full path, or says why ther
   assert.equal(shotReceipt({ error: "  " }, "myapp"), "No screenshot: no reason given.");
   assert.match(SHOT_NO_REPO, /\.claude\/outbox\//, "says where it would have gone");
   assert.ok(SHOT_TITLE.startsWith(SHOT), "the title opens with the word drawn on the button");
+});
+
+test("R-desktop-023: the clipboard screenshot says whose clipboard holds it, or why there is none", () => {
+  assert.match(clipShotReceipt(null), /in the desktop's clipboard/);
+  assert.equal(clipShotReceipt({ error: "could not create image from display." }), "No screenshot: could not create image from display.");
+  assert.equal(clipShotReceipt({ error: "" }), "No screenshot: no reason given.");
+  assert.ok(CLIP_SHOT_TITLE.startsWith(CLIP_SHOT), "the title opens with the word drawn on the button");
+  assert.match(CLIP_SHOT_TITLE, /not this device's/);
 });
 
 test("capture-stopped line: one full stop, whatever the helper ended with", () => {

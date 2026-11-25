@@ -2,7 +2,9 @@
  *  running the daemon. The phone uses these to peek at "what's going on there". */
 import os from "node:os";
 import { spawn } from "node:child_process";
-import type { HostStat } from "@waterplane/shared";
+import { writeFile } from "node:fs/promises";
+import { realpathSync } from "node:fs";
+import { PLUGIN_READER_NAME_RE, PLUGIN_SCREEN_CAPTURE_TIMEOUT_MS, type HostStat, type PluginScreenCapture, type PluginScreenStill } from "@waterplane/shared";
 import { execFileP as pexecFile } from "./proc.js";
 import { encodePs, isWsl, psQuote } from "./ocrlocal.js";
 import { windowsCpuNow } from "./wincpu.js";
@@ -126,6 +128,72 @@ export async function takeScreenshot(destPath: string): Promise<void> {
     throw new Error(`no screenshot tool (install gnome-screenshot/scrot/imagemagick): ${String(lastErr)}`);
   }
   throw new Error(`screenshot unsupported on ${process.platform}`);
+}
+
+/** Screen captures contributed by plugins (`api.screenCapture`), by name. Looked up at CALL time, so
+ *  one whose plugin was switched off takes nothing. */
+const CAPTURES = new Map<string, PluginScreenCapture>();
+
+/** Register a contributed screen capture. Throws a sentence on a bad or taken name. */
+export function registerScreenCapture(name: string, capture: PluginScreenCapture): () => void {
+  if (typeof name !== "string" || !PLUGIN_READER_NAME_RE.test(name)) {
+    throw new Error(`a screen capture name must be a short lowercase word (letters, digits, dashes); got ${JSON.stringify(name)}`);
+  }
+  if (CAPTURES.has(name)) throw new Error(`a screen capture called \`${name}\` already exists`);
+  if (typeof (capture as unknown as Record<string, unknown> | null)?.still !== "function") throw new Error(`the screen capture \`${name}\` has no still()`);
+  CAPTURES.set(name, capture);
+  return () => { if (CAPTURES.get(name) === capture) CAPTURES.delete(name); };
+}
+
+/** One contributed capture, asked once; a throw or a hang is a note. */
+async function askCapture(name: string, capture: PluginScreenCapture): Promise<PluginScreenStill> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    const r = await Promise.race([
+      capture.still(),
+      new Promise<PluginScreenStill>((res) => { timer = setTimeout(() => res({ note: `${name} did not answer in ${PLUGIN_SCREEN_CAPTURE_TIMEOUT_MS / 1000} s.` }), PLUGIN_SCREEN_CAPTURE_TIMEOUT_MS); }),
+    ]);
+    if (r && "jpeg" in r && r.jpeg?.byteLength) return r;
+    return { note: r && "note" in r && r.note ? r.note : `${name} gave no picture.` };
+  } catch (e) {
+    return { note: `${name}: ${String((e as Error).message || e)}` };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Why the core's own tool took no picture, for a person. macOS says only "could not create image
+ *  from display", whether the permission is missing or there is no display to read: named as the usual
+ *  reason, never as the reason. The grant is on the node BINARY, so a node upgrade loses it. */
+export function screenshotProblem(err: unknown, platform: NodeJS.Platform = process.platform, node: string = process.execPath): string {
+  const msg = String((err as Error)?.message || err).trim();
+  if (platform !== "darwin" || !/could not create image/i.test(msg)) return msg;
+  let real = node;
+  try { real = realpathSync(node); } catch { /* as given */ }
+  return `macOS gave the host no picture of the screen. The usual reason: Screen Recording is not granted to this node (${real}), and macOS forgets that grant when node is upgraded. On the Mac, open System Settings → Privacy & Security → Screen Recording and turn on node.`;
+}
+
+/**
+ * The desktop's screen into a new file: the core's own tool (a PNG), and only when that fails each
+ * contributed capture in turn (a JPEG), whose helper may hold the permission node lost. `newPath`
+ * makes the target per extension. Throws a sentence naming every reason.
+ */
+export async function captureDesktop<T extends { full: string }>(newPath: (ext: ".png" | ".jpg") => T, native: (dest: string) => Promise<void> = takeScreenshot): Promise<T> {
+  const png = newPath(".png");
+  try {
+    await native(png.full);
+    return png;
+  } catch (e) {
+    const why = [screenshotProblem(e)];
+    for (const [name, capture] of [...CAPTURES]) {
+      const r = await askCapture(name, capture);
+      if ("note" in r) { why.push(r.note); continue; }
+      const jpg = newPath(".jpg");
+      await writeFile(jpg.full, r.jpeg);
+      return jpg;
+    }
+    throw new Error(why.join(" "));
+  }
 }
 
 /** PowerShell 5.1: the primary display at its real pixel size, as a PNG at `winPath`. */

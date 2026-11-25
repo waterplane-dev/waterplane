@@ -13,6 +13,8 @@ export interface GalleryProps {
    *  outbox's 4h default — filtering it away is how a badge saying 42 opens on
    *  an empty grid. */
   initialAllTime?: boolean;
+  /** The time window (seconds) picked by hand before Back brought this gallery up again. */
+  initialSince?: number;
   /**
    * The badge's own EDGE and its number: open showing exactly the files it
    * counted, and say so.
@@ -61,6 +63,8 @@ export interface GalleryProps {
    * the question is *which* repo is holding the gigabytes.
    */
   onSurvey?: () => void;
+  /** The repo's whole file tree. `at` is the tab and cut on screen, which closing the tree returns to. */
+  onBrowse?: (at: { scope: Scope; since: number | undefined; onNewCut: boolean }) => void;
   onClose: () => void;
 }
 

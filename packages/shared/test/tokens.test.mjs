@@ -133,6 +133,9 @@ test("the pollution number is context PER TURN, not the share", () => {
   // A lean mean is not a promise that there are no monsters — the measured
   // distribution was 1.4% of conversations holding 76% of the tokens.
   assert.match(lean.contextNote, /not the norm here/);
+  // The distribution was measured on ONE desktop: a reader elsewhere is never told it is theirs.
+  assert.match(heavy.contextNote, /one desktop this was measured on/);
+  assert.doesNotMatch(heavy.contextNote, /this desktop/);
   assert.equal(heavy.posture !== "ordinary" && lean.posture !== "ordinary", true);
   // Whatever the posture, the sentence says it is a MEAN — the distribution it
   // comes out of is the most skewed measurement in this repo, and a reader who

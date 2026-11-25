@@ -113,3 +113,12 @@ The disk-space screen has a line in the launcher's "This desktop" menu, hidden w
 - asked: 2026-11-22
 - shipped: 07ad9b8a4
 
+### R-navigation-024 · shipped
+When gcloud is signed out on the desktop and a sign-in command (the vault's) is named there, the Links screen offers to look at the cloud with it. Only that tap asks for a fingerprint, once for all sign-ins; the found links and their age survive a host restart.
+- asked: 2026-11-24
+- shipped: extensions/links
+
+### R-navigation-025 · shipped
+Back (hardware, gesture, history) with something drawn over the screen closes that alone and the screen underneath stays: a confirm is answered "no", an ask dialog, a hint card, explain mode, the model wheel, the key list, the snippet picker, the hidden-strips list, the picture editor's toolbar settings and Change time close as their own way out does. A dialog holding typed words is not closed by Back or by a tap outside; it stays and says so. One Back is one step: a dialog that was answered, or a tab picked from the open-tabs list, leaves no extra step and never takes a second one (which left the app). The same after a reload, and for a Back pressed right after several dialogs were answered: it leaves the screen under them. A picker open while its pending session starts stays open over the session; Back closes the picker, the next one leaves the session. At first pairing the question about an unprotected address is shown instead of "pairing…" forever.
+- asked: 2026-11-25, 2026-11-25 (the review's lows)
+- shipped: 23f1dddac, 52fe4403c

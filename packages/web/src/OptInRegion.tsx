@@ -18,28 +18,31 @@
  *   untouched ones.
  * - **Nothing applies itself.** `fix` runs the host's existing idempotent
  *   setup fix (and shows what it said); `open` lands on the screen that does
- *   the job; `agent`/`schedule` SEED the Send sheet (`optInSeed.ts`) — words,
+ *   the job; `download` saves the repo's own download rule (the Apps screen's write, the rest of
+ *   the rule kept); `agent`/`schedule` SEED the Send sheet (`optInSeed.ts`) — words,
  *   repo, and for a schedule the clock, zone and model — and nothing is sent
  *   until the person sends it there.
  * - **A verb that cannot run is not drawn** — no repo, no send surface: the
  *   reason is a sentence (`CantInline`), never a dimmed button.
  * - A refusal from the desktop is printed as ITS sentence.
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
-  Activity, CalendarClock, Check, ChevronDown, ChevronRight, Compass, EyeOff, RefreshCw, RotateCcw, ScanEye, Send,
-  ToggleRight, Undo2, Wrench,
+  Check, ChevronDown, ChevronRight, Compass, EyeOff, RefreshCw, RotateCcw, ToggleRight, Undo2,
 } from "lucide-react";
 import { optInActiveWords, optInCut, optInDef } from "@waterplane/shared";
 import type {
-  ComplianceReport, OptInAction, OptInChoice, OptInReport, OptInRow, RepoTarget,
+  ComplianceReport, OptInChoice, OptInReport, OptInRow, RepoTarget,
 } from "@waterplane/shared";
 import { api } from "./api";
 import { track } from "./usage";
+import { OptInDoor, optInVerbIcon, turnDownloadsOn, untokened, useAskedDownloadRule } from "./optInActs";
+import { useOfflineGate } from "./kit/offlineGate";
 import { useRemoteResource } from "./useRemoteResource";
 import { Empty } from "./Empty";
 import { CantInline } from "./Unavailable";
 import { DEVICE_TZ, type SendSeed } from "./sendIntent";
+import { fixConfirmWords, fixNeedsConfirm } from "./setupRemedy";
 import {
   OPTINS_GUIDE, SEND_AGAIN_CONFIRM, STARTED_GUIDE, declinedHead, noOffersWords, optInSeed, optInSentWords, optInWalkSeed,
   startedHead, unfitHead, walkLabel, walkOffered,
@@ -49,16 +52,6 @@ import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
 
 const ICON = 16;
-
-/** One icon per meaning — the verb's glyph says what kind of tap it is. */
-function verbIcon(a: OptInAction) {
-  switch (a.kind) {
-    case "fix": return <Wrench size={14} />;
-    case "open": return a.to === "series" ? <Activity size={14} /> : <ScanEye size={14} />;
-    case "agent": return <Send size={14} />;
-    case "schedule": return <CalendarClock size={14} />;
-  }
-}
 
 export function OptInRegion({ repo, onSeed, onSeries, onChecklist }: {
   repo: RepoTarget | null;
@@ -70,7 +63,10 @@ export function OptInRegion({ repo, onSeed, onSeries, onChecklist }: {
   onChecklist?: (report: ComplianceReport) => void;
 }) {
   const repoId = repo?.id ?? "";
-  const res = useRemoteResource<OptInReport>(`optins:${repoId}`, () => api.optIns(repoId), { enabled: !!repoId });
+  /** The tokens of the report on screen, for a gated fix: in memory only. */
+  const tokens = useRef<OptInReport["confirm"]>(undefined);
+  const keepTokens = (r: OptInReport) => { tokens.current = r.confirm; return untokened(r); };
+  const res = useRemoteResource<OptInReport>(`optins:${repoId}`, () => api.optIns(repoId).then(keepTokens), { enabled: !!repoId });
   const report = res.data;
   /** The WRITE half: which id is in flight, and what the desktop said. */
   const [busy, setBusy] = useState<string | null>(null);
@@ -85,7 +81,7 @@ export function OptInRegion({ repo, onSeed, onSeries, onChecklist }: {
     setBusy(id); setError(null); setNotes([]);
     try {
       const r = await api.optInChoice(repoId, id, choice);
-      if (r.ok && r.report) res.set(r.report);
+      if (r.ok && r.report) res.set(keepTokens(r.report));
       else if (r.ok) res.reload({ quiet: true });
       else setError(r.error || "the desktop did not store it");
     } catch (e) {
@@ -100,12 +96,16 @@ export function OptInRegion({ repo, onSeed, onSeries, onChecklist }: {
     track("action:optins.fix");
     setBusy(id); setError(null); setNotes([]);
     try {
-      const r = await api.complianceFix(repoId, [fix]);
+      const r = await api.complianceFix(repoId, [fix], tokens.current?.[fix]);
       if (r.ok) {
         setNotes(r.notes ?? []);
         if (r.report) onChecklist?.(r.report);
         res.reload({ quiet: true });
-      } else setError(r.error || "the fix did not run");
+      } else {
+        setError(r.error || "the fix did not run");
+        // The confirm token may have expired under an open screen: this read mints the next one.
+        if (fixNeedsConfirm(fix)) res.reload({ quiet: true });
+      }
     } catch (e) {
       setError(String((e as Error).message || e));
     } finally {
@@ -118,6 +118,13 @@ export function OptInRegion({ repo, onSeed, onSeries, onChecklist }: {
   }
 
   const cut = optInCut(report?.rows ?? []);
+  const gate = useOfflineGate();
+  useAskedDownloadRule(repo?.worktreePath, cut.offered.concat(cut.started).some((r) => optInDef(r.id)!.action.kind === "download"));
+
+  function turnDownloadOn(r: RepoTarget) {
+    turnDownloadsOn(r);
+    setTimeout(() => res.reload({ quiet: true }), 1500);
+  }
 
   /** The primary verb for one card, by its action — or the sentence saying why it is not here. */
   function primary(row: OptInRow, again: boolean) {
@@ -125,20 +132,30 @@ export function OptInRegion({ repo, onSeed, onSeries, onChecklist }: {
     const a = def.action;
     const label = busy === row.id ? "working…" : def.verb;
     if (a.kind === "fix") {
-      return <Button onClick={() => void runFix(row.id, a.fix)}>{verbIcon(a)} {label}</Button>;
+      // Two taps, and the token this report was drawn with: the desktop refuses a gated fix without it.
+      if (fixNeedsConfirm(a.fix)) {
+        return (
+          <ConfirmButton confirm={<>{optInVerbIcon(a)} {fixConfirmWords(a.fix) ?? def.verb}</>} onConfirm={() => void runFix(row.id, a.fix)}>
+            {optInVerbIcon(a)} {label}
+          </ConfirmButton>
+        );
+      }
+      return <Button onClick={() => void runFix(row.id, a.fix)}>{optInVerbIcon(a)} {label}</Button>;
     }
-    if (a.kind === "open" && a.to === "series") {
-      return <Button onClick={() => { track("action:optins.series"); onSeries(); }}>{verbIcon(a)} {label}</Button>;
+    if (a.kind === "open") return <OptInDoor action={a} label={label} repo={repo} onSeries={onSeries} />;
+    if (a.kind === "download" && repo) {
+      if (row.partial) return <OptInDoor action={a} label="open downloads" repo={repo} onSeries={onSeries} />;
+      return <><Button onClick={gate.guard("turn this repo's downloads on", () => turnDownloadOn(repo))}>{optInVerbIcon(a)} {label}</Button>{gate.note}</>;
     }
     if (!repo || !onSeed) return <CantInline>No send surface here — open this repo from the launcher to send it.</CantInline>;
     if (again) {
       return (
         <ConfirmButton confirm={SEND_AGAIN_CONFIRM} onConfirm={() => seed(optInSeed(row.id, repo, DEVICE_TZ))}>
-          {verbIcon(a)} {label}
+          {optInVerbIcon(a)} {label}
         </ConfirmButton>
       );
     }
-    return <Button onClick={() => seed(optInSeed(row.id, repo, DEVICE_TZ))}>{verbIcon(a)} {label}</Button>;
+    return <Button onClick={() => seed(optInSeed(row.id, repo, DEVICE_TZ))}>{optInVerbIcon(a)} {label}</Button>;
   }
 
   /** One offer card; a started one says what became of it first. */

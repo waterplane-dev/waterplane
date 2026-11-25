@@ -102,5 +102,6 @@ test("fast mode: the cost warning quotes this model's fast card, and says so whe
   assert.equal(fastCommand(true), "/fast on");
   assert.match(fastText(undefined), /not known/);
   assert.match(fastText(false, "Fast mode requires usage credits"), /unavailable — the CLI says: Fast mode requires usage credits/);
+  assert.match(fastText(false, "Fast mode is not available"), /CLAUDE_CODE_DISABLE_FAST_MODE/);
   assert.match(fastText(false), /off — the CLI confirmed/);
 });

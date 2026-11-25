@@ -208,7 +208,7 @@ export function readInlineImages(
  *  name search wants the same answer — a phone looking for `api.ts` never means
  *  the fifty copies under `node_modules`. (The lazy per-directory listing
  *  SHOWS these; it just never walks them.) */
-export const SKIP_DIRS = new Set([".git", "node_modules", "build", "dist", ".dart_tool", "__pycache__", ".venv", "venv", ".next", "target"]);
+export const SKIP_DIRS = new Set([".git", "node_modules", "build", "dist", ".dart_tool", "__pycache__", ".venv", "venv", ".next", "target", ".gradle", ".kotlin"]);
 
 /**
  * Where agent worktrees live inside a repo (`EnterWorktree`, the Agent tool's

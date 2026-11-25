@@ -3,17 +3,18 @@
  *
  * The group floats over the top-right of the output, and the line it sits on
  * is sometimes the line you need to read. A grip at its left end moves the
- * whole group anywhere inside the terminal box; a double-tap puts it back.
+ * whole group anywhere on the session screen — over the header, the compose
+ * box, wherever it is least in the way; a double-tap puts it back.
  *
- * Stored as an OFFSET from the CSS anchor (`.term-zoom`'s top/right), not as
- * a position: the anchor already moves for typing room, and an offset rides
- * along with it instead of fighting it. Clamped to the parent box on every
- * drag and on resize, so a position saved on a wide screen can never park the
- * group off a narrow one — a control you cannot see is a control you cannot
- * drag back.
+ * It is drawn as a child of `.screen`, not of the terminal box: `.term-area`
+ * clips (on purpose) and paints below the compose box, so a child of it can
+ * never leave it. What stays in the terminal box is an empty ANCHOR
+ * (`.term-zoom-anchor`) that CSS moves for typing room and the connection
+ * banner, and that the box's own height rule hides; the group is drawn from
+ * where that anchor is. What a dropped place means: `cornerPlace.ts`.
  *
- * It is a `transform`, never a size or a flow change: the group exists so it
- * does not refit the PTY, and moving it must not either.
+ * It is absolutely placed, never a size or a flow change: the group exists so
+ * it does not refit the PTY, and moving it must not either.
  *
  * Pushing PAST the right edge folds the group instead (the owner's ask): the
  * group is anchored right, so it cannot travel further, and every button's
@@ -25,17 +26,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { LS, lsJson, lsSetJson } from "../../storage";
 import { foldCols, foldExcess } from "./cornerFold";
+import { drawnAt, EDGE, HOME, isFree, keepIn, placeFor, readPlace, type Box, type Home, type Place } from "./cornerPlace";
 
-export interface Offset { x: number; y: number }
-/** `cols` absent = unfolded (one row). */
-export interface Place extends Offset { cols?: number }
-const ZERO: Place = { x: 0, y: 0 };
 /** Assumed button pitch before one has been measured. */
 const STEP_FALLBACK = 40;
-/** Gap kept to the box's right edge — the CSS anchor's own `right: 8px`, so a
- *  drag (or a fold) never parks the group flush against the screen edge. */
-const EDGE = 8;
-/** How close to the box's right edge a finger can drag. */
+/** How close to the screen's right edge a finger can drag. */
 const FINGER = 16;
 /** Never fold faster than one column per this many px. */
 const MIN_STEP = 12;
@@ -46,116 +41,145 @@ const SLOP = 4;
  *  prevented. */
 const DOUBLE_MS = 350;
 
-function readSaved(): Place {
-  const v = lsJson<Partial<Place> | null>(LS.termCornerPos, null);
-  if (!v || !Number.isFinite(v.x) || !Number.isFinite(v.y)) return ZERO;
-  const cols = Number.isInteger(v.cols) && (v.cols as number) >= 1 ? v.cols : undefined;
-  return { x: v.x as number, y: v.y as number, ...(cols ? { cols } : {}) };
-}
+interface Frame { screen: Box; box: Box; home: Home | null }
+/** Under the finger: the group's right edge and top as asked for, unclamped. */
+interface Drag extends Home { cols?: number }
 
-/** `off` clamped so the element (currently drawn at `cur`) stays inside its parent. */
-function clampTo(el: HTMLElement, cur: Offset, off: Offset): Offset {
-  const parent = el.offsetParent as HTMLElement | null;
-  if (!parent) return off;
+/** `.screen` inside its padding: the always-on strips and the safe areas are in
+ *  that padding, and a group parked under one of them could not be reached. */
+function inner(el: HTMLElement): Box {
   const r = el.getBoundingClientRect();
-  const p = parent.getBoundingClientRect();
-  // Where the element would be with no offset at all.
-  const left0 = r.left - cur.x, top0 = r.top - cur.y;
-  const minX = p.left - left0, maxX = p.right - EDGE - (left0 + r.width);
-  const minY = p.top - top0, maxY = p.bottom - (top0 + r.height);
-  return {
-    x: Math.round(Math.min(Math.max(off.x, minX), Math.max(minX, maxX))),
-    y: Math.round(Math.min(Math.max(off.y, minY), Math.max(minY, maxY))),
-  };
+  const cs = getComputedStyle(el);
+  const px = (v: string) => parseFloat(v) || 0;
+  return { left: r.left + px(cs.paddingLeft), top: r.top + px(cs.paddingTop), right: r.right - px(cs.paddingRight), bottom: r.bottom - px(cs.paddingBottom) };
 }
 
-/** `onTap(true)` after a double-tap has put the group back, `onTap(false)` for a lone tap. */
-export function useCornerDrag(onTap: (wasReset: boolean) => void) {
+function measure(anchor: HTMLElement, screenEl: HTMLElement): Frame | null {
+  // The positioned box the anchor is in; none while it is not displayed, when only its absence matters.
+  const wrap = anchor.offsetParent ?? anchor.parentElement;
+  if (!wrap) return null;
+  const screen = inner(screenEl);
+  // No rects = `display: none`: the terminal is too short to carry the group.
+  const a = anchor.getClientRects()[0];
+  const home = a ? { right: a.right, top: a.top } : null;
+  // Typing room floats two header buttons over the top corner, above this
+  // group: its ceiling is then the home corner, which CSS puts under them.
+  const typing = document.documentElement.dataset.typing === "1";
+  return { screen: home && typing ? { ...screen, top: Math.max(screen.top, home.top) } : screen, box: wrap.getBoundingClientRect(), home };
+}
+
+/** `covered`: something is over the whole terminal box (the storm), so a group
+ *  that lives in it is not drawn. `onTap(true)` after a double-tap has put the
+ *  group back, `onTap(false)` for a lone tap. */
+export function useCornerDrag(covered: boolean, onTap: (wasReset: boolean) => void) {
   const ref = useRef<HTMLDivElement>(null);
-  const [off, setOff] = useState<Place>(readSaved);
-  const offRef = useRef(off);
-  offRef.current = off;
-  const drag = useRef<{ id: number; sx: number; sy: number; base: Offset; moved: boolean; n: number; step: number } | null>(null);
+  const anchor = useRef<HTMLElement>(null);
+  /** `.screen`, once mounted: the portal's target. */
+  const [host, setHost] = useState<HTMLElement | null>(null);
+  const [place, setPlace] = useState<Place>(() => readPlace(lsJson<unknown>(LS.termCornerPos, null)));
+  const [live, setLive] = useState<Drag | null>(null);
+  const drag = useRef<{ id: number; sx: number; sy: number; base: Home; moved: boolean; n: number; step: number } | null>(null);
   const lastTap = useRef(0);
   /** Average button pitch, measured while the group is one row. */
   const stepRef = useRef(STEP_FALLBACK);
+  const cols = (live ?? place).cols;
 
-  const reclamp = useCallback(() => {
-    const el = ref.current;
-    if (!el) return;
-    const c = clampTo(el, offRef.current, offRef.current);
-    if (c.x !== offRef.current.x || c.y !== offRef.current.y) setOff(c);
-  }, []);
-  // Again after a fold: a taller group may now hang past the bottom.
-  useLayoutEffect(reclamp, [reclamp, off.cols]);
+  const layout = useCallback(() => {
+    const el = ref.current, a = anchor.current;
+    const f = el && a && host ? measure(a, host) : null;
+    if (!el || !host || !f) return;
+    const off = !live && !isFree(place) && (covered || !f.home);
+    el.toggleAttribute("data-off", off);
+    if (off) return;
+    const size = el.getBoundingClientRect();
+    const at = live ? keepIn(live, size, f.screen) : drawnAt(place, size, f.home ?? f.screen, f.box, f.screen);
+    const h = host.getBoundingClientRect();
+    el.style.top = `${at.top - h.top - host.clientTop}px`;
+    el.style.right = `${h.right - host.clientLeft - at.right}px`;
+  }, [host, place, live, covered]);
+
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
+  useLayoutEffect(() => { setHost(anchor.current?.closest<HTMLElement>(".screen") ?? null); }, []);
+  // Every render: a button that came or went, and a header above that moved the
+  // terminal without resizing it, are both seen here.
+  useLayoutEffect(layout);
   useEffect(() => {
-    window.addEventListener("resize", reclamp);
-    return () => window.removeEventListener("resize", reclamp);
-  }, [reclamp]);
+    const el = ref.current, wrap = anchor.current?.closest(".term-wrap");
+    if (!el || !wrap || !host) return;
+    const run = () => layoutRef.current();
+    const ro = new ResizeObserver(run);
+    ro.observe(host); ro.observe(wrap); ro.observe(el);
+    // The banner moves the anchor without resizing anything; typing room is an attribute.
+    const mo = new MutationObserver(run);
+    mo.observe(wrap, { childList: true });
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-typing"] });
+    window.addEventListener("resize", run);
+    return () => { ro.disconnect(); mo.disconnect(); window.removeEventListener("resize", run); };
+  }, [host]);
 
   const onPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
     e.preventDefault(); // keeps focus in the compose box (`keepFocus`'s reason) and stops text selection
-    e.currentTarget.setPointerCapture(e.pointerId);
     const el = ref.current;
-    const n = el ? el.children.length : 0;
-    const cur = offRef.current;
-    const parent = el?.offsetParent as HTMLElement | null;
-    if (el && parent && n > 1 && !cur.cols) {
+    if (!el || !host) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const n = el.children.length;
+    const r = el.getBoundingClientRect();
+    if (n > 1 && !cols) {
       // The pitch is sized to the finger's REACH, not the buttons' width: the
       // fold has to reach one column with the finger at the screen edge, and
       // a pitch of one button left it stuck at two (the grip is on the left
       // end, so the overshoot a finger can make is shorter than the row).
-      const pr = parent.getBoundingClientRect().right;
-      const room = pr - EDGE - el.getBoundingClientRect().right; // travel before the edge stops it
-      const reach = pr - FINGER - e.clientX - room;
+      const edge = inner(host).right;
+      const room = edge - EDGE - r.right; // travel before the edge stops it
+      const reach = edge - FINGER - e.clientX - room;
       stepRef.current = Math.max(MIN_STEP, reach / (n - 0.5));
     }
     const step = stepRef.current;
-    // The drag runs on ONE virtual x: the real offset plus the overshoot the
+    // The drag runs on ONE virtual x: the real place plus the overshoot the
     // current fold stands for.
-    const cols = cur.cols ? Math.min(cur.cols, n) : n;
-    const base = { x: cur.x + foldExcess(n, cols, step), y: cur.y };
+    const base = { right: r.right + foldExcess(n, cols ? Math.min(cols, n) : n, step), top: r.top };
     drag.current = { id: e.pointerId, sx: e.clientX, sy: e.clientY, base, moved: false, n, step };
   };
   const onPointerMove = (e: ReactPointerEvent<HTMLElement>) => {
     const d = drag.current;
-    const el = ref.current;
-    if (!d || d.id !== e.pointerId || !el) return;
+    if (!d || d.id !== e.pointerId || !host) return;
     const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
     if (!d.moved && Math.hypot(dx, dy) < SLOP) return;
     d.moved = true;
-    const want = { x: d.base.x + dx, y: d.base.y + dy };
+    const right = d.base.right + dx, top = d.base.top + dy;
     // Right-anchored, so the right limit does not depend on the width: the
     // overshoot past it is what folds.
-    const parent = el.offsetParent as HTMLElement | null;
-    const maxX = parent ? parent.getBoundingClientRect().right - EDGE - (el.getBoundingClientRect().right - offRef.current.x) : want.x;
-    const cols = foldCols(d.n, want.x - maxX, d.step);
-    const c = clampTo(el, offRef.current, want);
-    setOff(cols < d.n ? { ...c, cols } : c);
+    const c = foldCols(d.n, right - (inner(host).right - EDGE), d.step);
+    setLive({ right, top, ...(c < d.n ? { cols: c } : {}) });
   };
   const onPointerUp = (e: ReactPointerEvent<HTMLElement>) => {
     const d = drag.current;
     if (!d || d.id !== e.pointerId) return;
     drag.current = null;
-    if (d.moved) { lsSetJson(LS.termCornerPos, offRef.current); return; }
+    if (d.moved) { drop(); return; }
     const now = Date.now();
-    if (now - lastTap.current < DOUBLE_MS) { lastTap.current = 0; reset(); onTap(true); return; }
+    if (now - lastTap.current < DOUBLE_MS) { lastTap.current = 0; keep(HOME); onTap(true); return; }
     lastTap.current = now;
     onTap(false);
   };
-  const onPointerCancel = () => { drag.current = null; };
-  const reset = () => { setOff(ZERO); lsSetJson(LS.termCornerPos, ZERO); };
+  const keep = (p: Place) => { setPlace(p); lsSetJson(LS.termCornerPos, p); };
+  /** What is DRAWN is what is kept: the finger may have gone past an edge. */
+  const drop = () => {
+    const el = ref.current, a = anchor.current;
+    const f = el && a && host ? measure(a, host) : null;
+    setLive(null);
+    if (!el || !f) return;
+    const r = el.getBoundingClientRect();
+    keep(placeFor({ right: Math.round(r.right), top: Math.round(r.top) }, r, f.home ?? f.screen,
+      f.home && !covered ? f.box : null, f.screen, live?.cols));
+  };
+  const onPointerCancel = () => { drag.current = null; setLive(null); };
 
-  const moved = off.x !== 0 || off.y !== 0;
-  const style: CSSProperties | undefined = moved || off.cols
-    ? {
-      ...(moved ? { transform: `translate(${off.x}px, ${off.y}px)` } : {}),
-      ...(off.cols ? { display: "grid", gridTemplateColumns: `repeat(${off.cols}, auto)` } : {}),
-    }
-    : undefined;
+  const style: CSSProperties | undefined = cols
+    ? { display: "grid", gridTemplateColumns: `repeat(${cols}, auto)` } : undefined;
   return {
-    ref,
-    style,
+    ref, anchor, host, style,
     handle: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel },
   };
 }

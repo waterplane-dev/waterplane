@@ -5,7 +5,7 @@
  * getter over either the bare keys (the active host) or its parked ones.
  */
 import { agoText } from "../../format.ts";
-import { parsePad, waitingTotal, type DeviceRow, type NotificationKind, type PairTarget, type PeerKind, type SavedHost, type WaitingAttention, type WaitingSummary } from "@waterplane/shared";
+import { deviceEndsAt, parsePad, waitingTotal, type DeviceRow, type NotificationKind, type PairTarget, type PeerKind, type SavedHost, type WaitingAttention, type WaitingSummary } from "@waterplane/shared";
 
 /** What "pair by code" opens on for a row: its own address, and its LAN address beside it for a phone
  *  with no tailnet (`pairAddressOf`). Both are the row's: nothing here came from a reply. */
@@ -191,6 +191,15 @@ export function deviceRouteText(kind: PeerKind | null): string {
     case "public": return "over a public address";
     default: return "route not recorded";
   }
+}
+
+/** How a row came in; a sign-in under a name only the network vouches for says the name and when it ends. */
+export function deviceWhere(row: Pick<DeviceRow, "lastKind" | "under" | "createdAt">, now: number): string {
+  const ends = deviceEndsAt(row);
+  if (ends === null) return deviceRouteText(row.lastKind);
+  const at = new Date(ends);
+  const day = at.toDateString() === new Date(now).toDateString() ? "" : `${at.toLocaleDateString([], { weekday: "short" })} `;
+  return `under the name ${row.under}, ends ${day}${at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
 
 /** `just now` · `4 min ago` · `3 h ago` · `2 d ago` — `agoText`, under the name this screen uses. */

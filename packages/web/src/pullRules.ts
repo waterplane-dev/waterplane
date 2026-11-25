@@ -28,9 +28,9 @@ export interface RuleConn {
  * patterns are typed words — so a rule this phone has not been told yet is ASKED for and the tap
  * says to come back, instead of saving a fresh default. The one implementation: the Downloads
  * feature's apps card and the extension's (`sdk/downloads.ts` `enableBuilds`) both call it.
- * Returns what happened, for the caller's test: `asked` or `saved`.
+ * Returns what happened: `asked`, `saved`, or `unsent` (no connection: the save did not go out).
  */
-export function enableBuildsRule(repoDir: string, done: string, conn: RuleConn, toast: (m: string) => void): "asked" | "saved" {
+export function enableBuildsRule(repoDir: string, done: string, conn: RuleConn, toast: (m: string) => void): "asked" | "saved" | "unsent" {
   const cur = cfgs.get().get(repoDir);
   if (!cur) {
     conn.liveAsk({ t: "pull.get", repoDir }, "no connection — the rule lives on the desktop");
@@ -39,6 +39,6 @@ export function enableBuildsRule(repoDir: string, done: string, conn: RuleConn, 
   }
   const config = { ...cur, enabled: true, builds: true };
   putCfg(repoDir, config);
-  conn.liveSend({ t: "pull.save", repoDir, config }, done, "no connection — the rule lives on the desktop and was not saved");
-  return "saved";
+  return conn.liveSend({ t: "pull.save", repoDir, config }, done, "no connection — the rule lives on the desktop and was not saved")
+    ? "saved" : "unsent";
 }

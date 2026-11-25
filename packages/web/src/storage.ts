@@ -144,7 +144,7 @@ export const KEY_SCOPE = {
   dataSaver: "device", bgFresh: "device", uploadScale: "device", netPulse: "device", netPulseWhen: "device", localRtBar: "device", unfoldToEnd: "device", repoSort: "device",
   upKbps: "host", netlog: "host", netTraffic: "host", netSync: "host", localRt: "host",
   // the session tab strip: its SHAPE is this screen's, its open counts are that host's sessions
-  sessionTabs: "device", sessionTabsPhone: "device", sessionTabsCount: "device", sessionTabsOrder: "device", sessionTabsLimit: "device", tabOpens: "host", tabFiles: "host",
+  sessionTabs: "device", sessionTabsPhone: "device", logoCount: "device", sessionTabsCount: "device", sessionTabsOrder: "device", sessionTabsLimit: "device", tabOpens: "host", tabFiles: "host",
   sessionTabsSync: "device", tabsSaverAsked: "device", tabOrderShared: "host", tabOpensShared: "host",
   // work in flight: that host's words, that host's queue
   outbox: "host", compose: "host", composeDrafts: "host", pendingAdopted: "host", lastAsks: "host", composeOutbox: "host", composeSheets: "host",
@@ -162,10 +162,10 @@ export const KEY_SCOPE = {
   snapCliHealth: "host", snapAt: "host", themeOverlay: "host", themeOverlayCss: "host", slashCache: "host", fileMtimes: "host", artMarks: "host", fileRemarks: "host", filesDir: "host",
   newImages: "host", cmdHistory: "host", usage: "host", notifSeen: "host",
   costNoticed: "host", agentNoticed: "host", spendNoticed: "host",
-  sessionOrder: "host", collapsedRepos: "host", sendMemory: "host", slotAskOff: "host", launchLast: "host", wheelHidden: "host",
+  sessionOrder: "host", collapsedRepos: "host", sendMemory: "host", slotAskOff: "host", launchLast: "host", newProjectPicks: "host", wheelHidden: "host",
   // how this phone is held and read
   toolbarOpen: "device", readMode: "device", cliMode: "device", termCostOpen: "device",
-  typingRoom: "device", hintChip: "device", termCornerPos: "device", wideSideW: "device", wideBesideW: "device", widePanelW: "device", sessChromeH: "device", agentListH: "device", launcherChromeH: "device", closeKbOnSend: "device", shortcutCard: "device", busySend: "device", btwToCli: "device", theme: "device", textScale: "device", iconScale: "device", termZoom: "device",
+  typingRoom: "device", hintChip: "device", termCornerPos: "device", wideSideW: "device", wideBesideW: "device", widePanelW: "device", sessChromeH: "device", agentListH: "device", outlineH: "device", launcherChromeH: "device", closeKbOnSend: "device", shortcutCard: "device", busySend: "device", btwToCli: "device", theme: "device", textScale: "device", iconScale: "device", termZoom: "device",
   readerZoom: "device", scrollZoom: "device", gitZoom: "device", gitExplainFoci: "device", gitExplainNote: "device", gitExplainLast: "device", textDumpWrap: "device", readerTableWrap: "device", closeCustomH: "device",
   schedPctLeft: "device", schedLeadMin: "device", closeBy: "device", closeKeepStar: "device", collageGap: "device",
   collageLabels: "device", toastLog: "device", hostedAck: "device", notifInfoNote: "device", whatsNewSeen: "device",

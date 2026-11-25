@@ -22,7 +22,7 @@ test("the Start sheet says the repo as it is shown, once — a shown name that i
 
 test("useLaunch.openRepo asks with the folder-named title (repoStartTitle), not a reworded one", () => {
   const src = readFileSync(new URL("./useLaunch.ts", import.meta.url), "utf8");
-  const open = src.slice(src.indexOf("function openRepo(t: RepoTarget)"), src.indexOf("function openRepoWith"));
+  const open = src.slice(src.indexOf("function openRepo(t: RepoTarget"), src.indexOf("function openRepoWith"));
   assert.match(open, /askLaunchFirst\(repoStartTitle\(t\),/);
   assert.doesNotMatch(open, /withShownName/);
 });

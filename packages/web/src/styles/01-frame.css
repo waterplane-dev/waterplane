@@ -56,6 +56,17 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
    strip and the first repo card (owner, 2026-11-19). The session header keeps its tight bar. */
 .topbar.launcher-top { padding-top: var(--sp-12); padding-bottom: var(--sp-12); }
 .brand { display: flex; align-items: center; gap: var(--sp-8); font-weight: var(--fw-semibold); flex: 0 0 auto; }
+/* The launcher's logo as the open-tabs button (`TabsLogo`): the mark is the front card of a small
+   stack, with the count centred on its bottom edge — neutral, because red is the bell's. */
+.logo-tabs { position: relative; display: block; flex: 0 0 auto; padding: 0; border: 0; border-radius: var(--r-8); background: none; color: inherit; font: inherit; cursor: pointer; }
+.logo-tabs.many { margin-right: var(--sp-4); } /* the back card's edge */
+.logo-tabs .logo { position: relative; box-shadow: 0 0 0 1px var(--panel); border-radius: var(--r-8); }
+.logo-tabs.many::before { content: ""; position: absolute; inset: 0; border: 1px solid var(--dim); border-radius: var(--r-8); background: var(--raise); opacity: .7; transform: translate(4px, -4px); }
+.logo-tabs::after { content: ""; position: absolute; inset: -4px; } /* the tap area: past 44px without growing the mark */
+.logo-tabs:active .logo, .logo-tabs[aria-expanded="true"] .logo { opacity: .75; }
+.brand .logo-tabs-n { position: absolute; left: 50%; bottom: -4px; transform: translateX(-50%); min-width: 18px; height: 18px; box-sizing: border-box; padding: 0 var(--sp-4);
+  border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--panel); color: var(--fg);
+  font-size: calc(var(--fs-11) * var(--ui-font, 1)); font-weight: var(--fw-bold); font-variant-numeric: tabular-nums; line-height: 16px; text-align: center; letter-spacing: 0; max-width: none; }
 /* The launcher menu's host row (features/hosts/HostMenuItem.tsx): a long
    desktop name ellipsizes instead of widening the row. */
 /* Settings → another desktop, without the app (features/hosts/HostsSettings.tsx). */
@@ -314,6 +325,9 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
    it carried the repo verbs too — seven 40px buttons left ~85px, and "Sessions &
    repos · 35 live in 15 repos" came out seven lines tall. */
 .section-head > :first-child { min-width: 0; flex: 1 1 12em; }
+/* A button beside a `.section` label keeps the label's own gutter: the head has none, so the button ended
+   on the screen's edge (Opt-ins' re-check). */
+.section-head:not(.section) > .section + .key { margin-inline: var(--gutter); }
 /* An opened `?` inside a head wraps to its own line; inset it like the `.section`
    label above it, or its prose runs flush against the screen edge. */
 .section-head > .explain-body { padding: 0 var(--sp-14) var(--sp-6); line-height: var(--lh-14); }
@@ -504,6 +518,7 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
    lines, not the live list's three: these rows are a shortlist to pick from. */
 .closed-line { flex: 0 0 100%; width: 100%; }
 .tag.closed-auto { color: var(--accent); border: 1px solid var(--accent); display: inline-flex; align-items: center; gap: var(--sp-4); padding: var(--sp-2) var(--sp-8); }
+.tag.closed-auto.closed-cutoff { color: var(--warn); border-color: var(--warn); }
 .tag.closed-kind { color: var(--muted); border: 1px solid var(--line); padding: 1px var(--sp-8); }
 .closed-note { color: var(--warn); }
 .closed-outcome { display: flex; align-items: flex-start; gap: var(--sp-4); }

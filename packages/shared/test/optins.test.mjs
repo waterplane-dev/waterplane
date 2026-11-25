@@ -4,7 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  OPT_INS, cleanOptInRow, optInActiveWords, optInCut, optInDef, optInMarkedIds, optInMarker, optInPrompt, optInRule, optInWalkPrompt,
+  BRAND, OPT_INS, OPT_IN_PICKS_FILE, OPT_IN_PICK_WHY_MAX, cleanOptInPicks, cleanOptInRow, installAllowSetting, optInKind, optInLookPrompt, optInActiveWords, optInCut, optInDef, optInMarkedIds, optInMarker, optInPrompt, optInRule, optInWalkPrompt,
 } from "../dist/index.js";
 
 test("ids are unique and every agent/schedule offer has a prompt carrying its marker", () => {
@@ -97,4 +97,40 @@ test("cleanOptInRow drops what it cannot read, never rounds", () => {
   assert.deepEqual(cleanOptInRow({ ...base, sent: { at: 7, status: "open" }, partial: true }), { ...base, sent: { at: 7, status: "open" }, partial: true });
   assert.deepEqual(cleanOptInRow({ ...base, sent: { at: 7, status: "soon" }, partial: "yes" }), base);
   assert.deepEqual(cleanOptInRow({ ...base, sent: { at: 0, status: "open" } }), base);
+});
+
+test("the Android offers are taps: no prompt, and the walk-through names them without posting them", () => {
+  const rows = ["apk-download", "apk-install", "local-ci"].map((id) => ({ id, relevant: true, state: "off", detail: "" }));
+  const p = optInWalkPrompt(rows, "demo");
+  assert.match(p, /- Android app: download by itself: /);
+  assert.match(p, /- Android app: install by itself: /);
+  assert.deepEqual(optInDef("apk-install").action, { kind: "open", to: "install" });
+});
+
+test("installAllowSetting: absent or unreadable is null, never an empty list", () => {
+  for (const raw of [undefined, null, "", "{", "{}"]) assert.equal(installAllowSetting(raw), null);
+  assert.deepEqual(installAllowSetting("[]"), []);
+  assert.deepEqual(installAllowSetting('["a.b",3,""]'), ["a.b"]);
+});
+
+test("the look prompt: read-only, one named file, only the offers drawn with a tick, and never an offer being sent", () => {
+  const p = optInLookPrompt(OPT_INS.map((d) => ({ id: d.id, relevant: true, state: "off", detail: "" })), "demo");
+  assert.match(p, /Set NONE of them up/);
+  assert.ok(p.includes(`${BRAND.stateDirName}/${OPT_IN_PICKS_FILE}`));
+  for (const d of OPT_INS) assert.equal(p.includes(`\`${d.id}\``), optInKind(d) !== "door", d.id);
+  assert.deepEqual(optInMarkedIds(p), []);
+  assert.equal(optInLookPrompt([], "demo"), null);
+  assert.equal(optInLookPrompt([{ id: "links", relevant: true, state: "off", detail: "" }], "demo"), null);
+});
+
+test("cleanOptInPicks drops unknown ids, bad rows and repeats; why is one capped line", () => {
+  const ok = { id: "local-ci", want: true, why: "has\n  tests" };
+  assert.deepEqual(cleanOptInPicks([
+    ok, { ...ok, want: false }, { id: "nope", want: true, why: "x" }, { id: "links", want: "yes", why: "x" },
+    { id: "links", want: true }, { id: "links", want: true, why: " \n" }, null, 4, "x",
+  ]), [{ id: "local-ci", want: true, why: "has tests" }]);
+  const long = cleanOptInPicks([{ ...ok, why: "w".repeat(999) }])[0].why;
+  assert.equal(long.length, OPT_IN_PICK_WHY_MAX);
+  assert.ok(long.endsWith("…"));
+  for (const x of [null, {}, "x", { picks: [] }]) assert.deepEqual(cleanOptInPicks(x), []);
 });
